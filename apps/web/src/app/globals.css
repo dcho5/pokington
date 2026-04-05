@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-500;
+  }
+}
+
+@layer components {
+  .felt-texture-overlay {
+    background-image:
+      repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.05) 2px, rgba(0,0,0,0.05) 4px),
+      radial-gradient(circle at center, rgba(255,255,255,0.05) 0%, transparent 70%);
+    @apply absolute inset-0 pointer-events-none mix-blend-overlay;
+  }
+
+  .felt-gradient-overlay {
+    @apply absolute inset-0 transition-opacity duration-700 ease-in-out;
+  }
+
+  .card-face {
+    @apply bg-white text-gray-900 border border-gray-200 rounded-lg shadow-md;
+  }
+
+  .card-face.red {
+    @apply text-red-600;
+  }
+
+  .active-seat {
+    @apply shadow-[0_0_20px_rgba(212,168,71,0.5)] border-yellow-500/50 scale-105 transition-all duration-300;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    opacity: 0;
+  }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Mobile: active player pulse ring — GPU-only (transform + opacity) */
+@keyframes pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.6; }
+  70%  { transform: scale(1.25); opacity: 0;   }
+  100% { transform: scale(1);   opacity: 0;   }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 1.5s ease-out infinite;
+  will-change: transform, opacity;
+  border: 2px solid rgba(239, 68, 68, 0.5);
+  border-radius: 9999px;
+}
+
+/* Mobile: hide scrollbar on opponent strip */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Action panel pulse when it's your turn — GPU-only (opacity) */
+.animate-action-pulse {
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  position: relative;
+}
+.animate-action-pulse::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  background: rgba(239, 68, 68, 0.15);
+  animation: action-pulse-opacity 2s ease-in-out infinite;
+  will-change: opacity;
+  pointer-events: none;
+}
+@keyframes action-pulse-opacity {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
+}
+
+/* Card deal-in animation */
+@keyframes deal-in {
+  0%   { opacity: 0; transform: scale(0.3) translateY(-20px); }
+  60%  { transform: scale(1.1) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.animate-deal-in {
+  animation: deal-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Community card stagger entrance — GPU only */
+@keyframes card-deal-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-card-deal-in {
+  animation: card-deal-in 0.35s ease-out both;
+  will-change: transform, opacity;
+}
+
+/* Card fold-out animation */
+@keyframes fold-out {
+  0%   { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.5) rotate(15deg) translateY(-30px); }
+}
+
+.animate-fold-out {
+  animation: fold-out 0.35s ease-in forwards;
+}
+
+/* Winner shimmer — GPU only (translateX), stops after 3 sweeps */
+@keyframes shimmer-sweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.animate-shimmer {
+  animation: shimmer-sweep 1.5s ease-in-out 3;
+  animation-delay: 0.3s;
+  will-change: transform;
+}
+
+/* Timer bar — GPU only (scaleX instead of width) */
+@keyframes timer-shrink {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0); }
+}
+
+/* Voting timer bar (30s) */
+.animate-voting-timer-shrink {
+  animation: timer-shrink 30s linear forwards;
+  will-change: transform;
+}
+.animate-timer-shrink {
+  animation: timer-shrink 30s linear forwards;
+  will-change: transform;
+}
+
+/* Poker chip pulse — scale (GPU) + drop-shadow glow via opacity on wrapper */
+@keyframes chip-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50%      { transform: scale(1.04); opacity: 1; }
+}
+.poker-chip-pulse {
+  animation: chip-pulse 3s ease-in-out infinite;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 4px 12px rgba(190,28,28,0.35));
+}
+
+/* Chip spin — 2D Z-axis rotation when it's someone's turn */
+@keyframes chip-spin {
+  from { transform: rotate(0deg);   opacity: 0.85; }
+  to   { transform: rotate(360deg); opacity: 0.85; }
+}
+.chip-spinning {
+  animation: chip-spin 1.6s linear infinite;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 4px 18px rgba(239,68,68,0.55));
+}
+
+@property --felt-color-top {
+  syntax: '<color>';
+  initial-value: #064e3b;
+  inherits: false;
+}
+
+@property --felt-color-bottom {
+  syntax: '<color>';
+  initial-value: #022c22;
+  inherits: false;
+}

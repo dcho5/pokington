@@ -1,0 +1,39 @@
+# Claude
+.claude/
+CLAUDE.md
+**/CLAUDE.md
+
+# Dependencies
+node_modules/
+
+# Build outputs
+.next/
+.turbo/
+dist/
+*.tsbuildinfo
+
+# Partykit
+.partykit/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Xcode / iOS
+apps/ios/**/*.xcuserstate
+apps/ios/**/xcuserdata/
+apps/ios/DerivedData/
+apps/ios/**/*.ipa
+apps/ios/**/*.dSYM.zip
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+.vercel
+.env*.local

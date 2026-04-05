@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "turbo": "latest"
+  }
+}
