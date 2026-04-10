@@ -24,4 +24,8 @@ export interface Player {
   winAnimationKey?: string | null;
   /** True when 7-2 game is live and this player can claim the bounty by showing their hand */
   sevenTwoEligible?: boolean;
+  /** How many hole cards this player has peeked at (0, 1, or 2) */
+  peekedCount?: number;
+  /** True when the player's browser tab is not visible (Page Visibility API) */
+  isAway?: boolean;
 }

@@ -3,6 +3,11 @@ import type { Card, Rank, Suit, GamePhase, LastAction } from "@pokington/shared"
 // Re-export shared types for convenience
 export type { Card, Rank, Suit, GamePhase, LastAction };
 
+// 7-2 bounty multiplier (in big blinds). 0 = off.
+export type SevenTwoBountyBB = 0 | 2 | 4 | 8 | 10;
+// Bomb pot ante (in big blinds).
+export type BombPotAnteBB = 2 | 4 | 8 | 10;
+
 // ── Engine-internal player ──
 export interface EnginePlayer {
   id: string;
@@ -49,7 +54,7 @@ export interface GameState {
   runCount: 1 | 2 | 3;   // resolved run count (1 = default)
   runResults: RunResult[]; // per-run boards + winners, populated at showdown
   // 7-2 Offsuit side game (table-level, set before first hand)
-  sevenTwoBountyBB: 0 | 1 | 2 | 3;  // 0 = off; N = N × bigBlind per player
+  sevenTwoBountyBB: SevenTwoBountyBB;  // 0 = off; N = N × bigBlind per player
   sevenTwoBountyTrigger: {           // non-null at showdown when bounty fires
     winnerId: string;
     perPlayer: number;               // cents collected from each player
@@ -60,11 +65,11 @@ export interface GameState {
   communityCards2: Card[];
   isBombPot: boolean;
   bombPotVote: {
-    anteBB: 1 | 2 | 3 | 4 | 5;
+    anteBB: BombPotAnteBB;
     proposedBy: string;
     votes: Record<string, boolean>;
   } | null;
-  bombPotNextHand: { anteBB: 1 | 2 | 3 | 4 | 5 } | null;
+  bombPotNextHand: { anteBB: BombPotAnteBB } | null;
   bombPotCooldown: string[]; // player IDs who proposed this orbit
 }
 
@@ -99,17 +104,17 @@ export type GameEvent =
     }
   | { type: "VOTE_RUN"; playerId: string; count: 1 | 2 | 3 }
   | { type: "RESOLVE_VOTE" }  // force-resolve with current votes (timer expired)
-  | { type: "SET_SEVEN_TWO_BOUNTY"; bountyBB: 0 | 1 | 2 | 3 } // pre-game config only
+  | { type: "SET_SEVEN_TWO_BOUNTY"; bountyBB: SevenTwoBountyBB } // pre-game config only
   | { type: "SHOW_CARDS"; playerId: string }   // voluntary card reveal at showdown
   | { type: "SET_HOLE_CARDS"; playerId: string; cards: [Card, Card] } // debug: force a player's hole cards
-  | { type: "PROPOSE_BOMB_POT"; playerId: string; anteBB: 1 | 2 | 3 | 4 | 5 }
+  | { type: "PROPOSE_BOMB_POT"; playerId: string; anteBB: BombPotAnteBB }
   | { type: "VOTE_BOMB_POT"; playerId: string; approve: boolean };
 
 // ── Initial (empty) state factory ──
 export function createInitialState(
   tableName: string,
   blinds: { small: number; big: number },
-  options?: { sevenTwoBountyBB?: 0 | 1 | 2 | 3 }
+  options?: { sevenTwoBountyBB?: SevenTwoBountyBB }
 ): GameState {
   return {
     phase: "waiting",

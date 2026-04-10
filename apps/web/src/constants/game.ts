@@ -17,12 +17,14 @@ export const BLIND_OPTIONS = [
 /** 7-2 offsuit bounty multiplier options. */
 export const BOUNTY_OPTIONS = [
   "Off",
-  "1x BB",
   "2x BB",
-  "3x BB",
   "4x BB",
-  "5x BB",
+  "8x BB",
+  "10x BB",
 ] as const;
+
+/** Cent values corresponding 1-to-1 with BOUNTY_OPTIONS (index 0 = off). */
+export const BOUNTY_VALUES = [0, 2, 4, 8, 10] as const;
 
 /**
  * Returns the three standard buy-in preset amounts (in dollars)

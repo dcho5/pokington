@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_MOBILE as ACTION_BADGE } from "lib/actionColors";
+import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
 import type { Player } from "types/player";
 import type { Card } from "@pokington/shared";
 
@@ -238,6 +239,26 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
           </div>
           </motion.div>
 
+          {player.isAway && (
+            <div className="absolute -top-1 -left-1 w-[20px] h-[20px] rounded-full bg-yellow-600/90 border border-yellow-400/50 flex items-center justify-center z-20 shadow-lg">
+              <span className="text-[8px] font-black text-white">Z</span>
+            </div>
+          )}
+
+          {/* Peek indicator */}
+          {(player.hasCards ?? false) && !isFolded && (() => {
+            const pc = player.peekedCount ?? 0;
+            const bgClass =
+              pc === 0 ? "bg-gray-700/80 border-gray-500/40" :
+              pc === 1 ? "bg-amber-600/90 border-amber-400/50" :
+              "bg-emerald-600/90 border-emerald-400/50";
+            return (
+              <div className={`absolute -top-1 -left-1 w-[18px] h-[18px] rounded-full border flex items-center justify-center z-20 shadow-lg ${bgClass}`}>
+                <PeekEyeIcon count={pc} size={10} strokeWidth={2.5} className={pc === 0 ? "text-white opacity-50" : "text-white"} />
+              </div>
+            );
+          })()}
+
           {isDealer && (
             <div className="absolute -bottom-0.5 -right-0.5 w-[16px] h-[16px] rounded-full bg-white dark:bg-gray-800 border border-red-500 flex items-center justify-center z-20 shadow">
               <span className="text-[7px] font-black text-red-600">D</span>
@@ -334,4 +355,4 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   );
 };
 
-export default PlayerBubble;
+export default React.memo(PlayerBubble);

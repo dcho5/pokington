@@ -6,6 +6,16 @@ import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_DESKTOP as ACTION_COLORS } from "lib/actionColors";
 import type { Player } from "types/player";
 import Card from "components/poker/Card";
+import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
+
+/** Three-state peek eye: 0 = closed (gray), 1 = half (amber), 2+ = full (emerald). */
+function PeekEye({ count, size = 14 }: { count: number; size?: number }) {
+  const colorClass =
+    count === 0 ? "text-gray-400 dark:text-gray-600 opacity-40" :
+    count === 1 ? "text-amber-500 opacity-70" :
+    "text-emerald-500";
+  return <PeekEyeIcon count={count} size={size} className={colorClass} />;
+}
 
 /** Two mini card backs indicating a player has been dealt cards */
 function MiniCardIndicator({ visible, folded }: { visible: boolean; folded: boolean }) {
@@ -161,7 +171,7 @@ const Seat: React.FC<SeatProps> = ({
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 10 }}
               animate={{
-                opacity: player.isFolded ? 0.4 : 1,
+                opacity: player.isFolded ? 0.4 : player.isAway ? 0.55 : 1,
                 scale: 1,
                 y: 0,
               }}
@@ -231,7 +241,17 @@ const Seat: React.FC<SeatProps> = ({
                 />
               )}
 
+              {/* Peek indicator — shows how many cards this player has looked at */}
+              {(player.hasCards ?? false) && !player.isFolded && !isYou && !player.holeCards && (
+                <div className="flex items-center gap-0.5 mt-0.5">
+                  <PeekEye count={player.peekedCount ?? 0} size={14} />
+                </div>
+              )}
+
               <div className="flex items-center gap-1.5 mb-1 w-full justify-center">
+                {player.isAway && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 bg-yellow-500/20 text-yellow-400 font-bold uppercase tracking-wide border border-yellow-500/30" title="Away">Away</span>
+                )}
                 <span className={`text-sm font-bold truncate ${
                   player.isFolded ? "text-gray-400 dark:text-gray-600" :
                   isYou ? "text-red-600 dark:text-red-500" :
@@ -325,4 +345,4 @@ const Seat: React.FC<SeatProps> = ({
   );
 };
 
-export default Seat;
+export default React.memo(Seat);

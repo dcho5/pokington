@@ -1,4 +1,4 @@
-import type { GameState, EnginePlayer, GameEvent, WinnerInfo, RunResult, SidePot } from "@pokington/engine";
+import type { GameState, EnginePlayer, GameEvent, WinnerInfo, RunResult, SidePot, SevenTwoBountyBB } from "@pokington/engine";
 import type { Card, GamePhase } from "@pokington/shared";
 
 // Re-export so consumers only need to import from one place
@@ -28,14 +28,47 @@ export function toPublicGameState(state: GameState): PublicGameState {
 // ── Client → Server messages ──
 export type ClientMessage =
   | { type: "AUTH"; userId: string }
-  | { type: "CONFIGURE"; tableName: string; blinds: { small: number; big: number }; sevenTwoBountyBB: 0 | 1 | 2 | 3 }
+  | { type: "CONFIGURE"; tableName: string; blinds: { small: number; big: number }; sevenTwoBountyBB: SevenTwoBountyBB }
   | { type: "GAME_EVENT"; event: GameEvent }
-  | { type: "REVEAL_CARD"; cardIndex: 0 | 1 };
+  | { type: "REVEAL_CARD"; cardIndex: 0 | 1 }
+  | { type: "SET_TIMER"; enabled: boolean }
+  | { type: "SET_AWAY"; away: boolean }
+  | { type: "PEEK_CARD"; cardIndex: 0 | 1 }
+  | { type: "QUEUE_LEAVE" };
+
+// ── Session ledger ──
+
+export interface LedgerEntry {
+  playerId: string;
+  name: string;
+  buyIns: number[];      // one entry per SIT_DOWN (cents)
+  cashOuts: number[];    // one entry per STAND_UP (cents)
+  isSeated: boolean;
+  currentStack: number;  // live stack if seated; 0 if not
+}
+
+export interface LedgerRow {
+  playerId: string;
+  name: string;
+  totalBuyIn: number;
+  totalCashOut: number;  // realized cashOuts + currentStack
+  net: number;           // totalCashOut - totalBuyIn
+  isSeated: boolean;
+}
+
+export interface PayoutInstruction {
+  fromPlayerId: string;
+  fromName: string;
+  toPlayerId: string;
+  toName: string;
+  amount: number;        // cents
+}
 
 // ── Server → Client messages ──
 export type ServerMessage =
   | { type: "WELCOME"; yourUserId: string; isCreator: boolean }
   | { type: "STATE"; state: PublicGameState }
   | { type: "PRIVATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]> }
-  | { type: "ROOM_META"; creatorUserId: string | null; connectedUserIds: string[] }
+  | { type: "ROOM_META"; creatorUserId: string | null; connectedUserIds: string[]; turnTimerEnabled: boolean; awayPlayerIds: string[]; peekedCounts: Record<string, number> }
+  | { type: "LEDGER"; entries: LedgerEntry[] }
   | { type: "ERROR"; code: string; message: string };

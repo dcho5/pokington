@@ -1,16 +1,17 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useLayoutEffect } from "react";
 import { useIsPortrait } from "hooks/useIsPortrait";
 import MobileTableLayout from "./mobile/MobileTableLayout";
 import DesktopTableLayout from "./desktop/DesktopTableLayout";
 import type { Card as CardType } from "@pokington/shared";
-import type { RunResult, WinnerInfo, GameState } from "@pokington/engine";
+import type { RunResult, WinnerInfo, GameState, SevenTwoBountyBB, BombPotAnteBB } from "@pokington/engine";
 import type { Player } from "types/player";
 export type { Player };
 
 export interface TableLayoutProps {
   onSitDown: (seatIndex: number, name?: string, buyInCents?: number) => void;
+  onStandUp?: () => void;
   players?: Player[];
   dealerIndex?: number;
   tableName?: string;
@@ -39,6 +40,7 @@ export interface TableLayoutProps {
   isFirstBet?: boolean;
   handNumber?: number;
   viewerStack?: number;
+  viewerCurrentBet?: number;
   showdownCountdown?: number | null;
   turnStartedAt?: number | null;
   isAdmin?: boolean;
@@ -58,14 +60,15 @@ export interface TableLayoutProps {
   runDealStartedAt?: number | null;
   showNextHand?: boolean;
   // 7-2 Offsuit side game
-  sevenTwoBountyBB?: 0 | 1 | 2 | 3;
+  sevenTwoBountyBB?: SevenTwoBountyBB;
   sevenTwoAnnouncement?: { winnerName: string; perPlayer: number; total: number } | null;
   sevenTwoBountyTrigger?: { winnerId: string; perPlayer: number; totalCollected: number } | null;
   canShowCards?: boolean;
   onRevealCard?: (cardIndex: 0 | 1) => void;
   myRevealedCardIndices?: Set<0 | 1>;
+  sevenTwoEligible?: boolean;
   voluntaryShownPlayerIds?: string[];
-  onSetSevenTwoBounty?: (bountyBB: 0 | 1 | 2 | 3) => void;
+  onSetSevenTwoBounty?: (bountyBB: SevenTwoBountyBB) => void;
   // Bomb pot
   bombPotVote?: GameState["bombPotVote"];
   bombPotNextHand?: GameState["bombPotNextHand"];
@@ -73,85 +76,74 @@ export interface TableLayoutProps {
   communityCards2?: CardType[];
   bombPotCooldown?: string[];
   bombPotAnnouncement?: { anteBB: number; anteCents: number } | null;
-  onProposeBombPot?: (anteBB: 1 | 2 | 3 | 4 | 5) => void;
+  onProposeBombPot?: (anteBB: BombPotAnteBB) => void;
   onVoteBombPot?: (approve: boolean) => void;
+  onPeekCard?: (index: 0 | 1) => void;
+  onQueueLeave?: () => void;
+  leaveQueued?: boolean;
 }
 
 const TOTAL_SEATS = 10;
 
+/* Reference dimensions for uniform scaling (desktop only) — content is laid
+   out at this fixed size then CSS-transformed to fill the actual 16:9
+   container, so every element scales proportionally on resize. */
+const DESKTOP_REF_W = 2560;
+const DESKTOP_REF_H = 1440;  // 2560 × 9/16
+
 const TableLayout: React.FC<TableLayoutProps> = (props) => {
   const isPortrait = useIsPortrait();
+  // Desktop-only: scale wrapper refs + ResizeObserver
+  const containerRef = useRef<HTMLDivElement>(null);
+  const scaleRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (isPortrait) return; // mobile fills viewport natively — no scaling
+    const container = containerRef.current;
+    const wrapper = scaleRef.current;
+    if (!container || !wrapper) return;
+    const update = () => {
+      wrapper.style.transform = `scale(${container.offsetWidth / DESKTOP_REF_W})`;
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [isPortrait]);
 
   if (isPortrait) {
+    // Mobile: fill the full viewport — no bezels, no scale wrapper.
+    // The flex-1 community-cards zone in MobileTableLayout stretches
+    // to absorb extra height on taller devices.
     return (
-      <MobileTableLayout
-        onSitDown={props.onSitDown}
-        players={props.players}
-        dealerIndex={props.dealerIndex}
-        tableName={props.tableName}
-        blinds={props.blinds}
-        pot={props.pot}
-        smallBlindIndex={props.smallBlindIndex}
-        bigBlindIndex={props.bigBlindIndex}
-        communityCards={props.communityCards}
-        holeCards={props.holeCards}
-        handStrength={props.handStrength}
-        totalSeats={TOTAL_SEATS}
-        phase={props.phase}
-        winners={props.winners}
-        onFold={props.onFold}
-        onCheck={props.onCheck}
-        onCall={props.onCall}
-        onRaise={props.onRaise}
-        onStartHand={props.onStartHand}
-        callAmount={props.callAmount}
-        minRaise={props.minRaise}
-        canCheck={props.canCheck}
-        canRaise={props.canRaise}
-        canAllIn={props.canAllIn}
-        onAllIn={props.onAllIn}
-        isYourTurn={props.isYourTurn}
-        currentActorName={props.currentActorName}
-        isFirstBet={props.isFirstBet}
-        handNumber={props.handNumber}
-        viewerStack={props.viewerStack}
-        showdownCountdown={props.showdownCountdown}
-        turnStartedAt={props.turnStartedAt}
-        isAdmin={props.isAdmin}
-        timerEnabled={props.timerEnabled}
-        onToggleTimer={props.onToggleTimer}
-        runItVotes={props.runItVotes}
-        onVoteRun={props.onVoteRun}
-        runAnnouncement={props.runAnnouncement}
-        votingStartedAt={props.votingStartedAt}
-        viewerCanVote={props.viewerCanVote}
-        showNextHand={props.showNextHand}
-        isRunItBoard={props.isRunItBoard}
-        runResults={props.runResults}
-        knownCardCount={props.knownCardCount}
-        runDealStartedAt={props.runDealStartedAt}
-        runCount={props.runCount}
-        sevenTwoBountyBB={props.sevenTwoBountyBB}
-        sevenTwoAnnouncement={props.sevenTwoAnnouncement}
-        sevenTwoBountyTrigger={props.sevenTwoBountyTrigger}
-        canShowCards={props.canShowCards}
-        onRevealCard={props.onRevealCard}
-        myRevealedCardIndices={props.myRevealedCardIndices}
-        voluntaryShownPlayerIds={props.voluntaryShownPlayerIds}
-        onSetSevenTwoBounty={props.onSetSevenTwoBounty}
-        bombPotVote={props.bombPotVote}
-        bombPotNextHand={props.bombPotNextHand}
-        isBombPotHand={props.isBombPotHand}
-        communityCards2={props.communityCards2}
-        bombPotCooldown={props.bombPotCooldown}
-        bombPotAnnouncement={props.bombPotAnnouncement}
-        onProposeBombPot={props.onProposeBombPot}
-        onVoteBombPot={props.onVoteBombPot}
-      />
+      <div className="fixed inset-0 bg-gray-950 overflow-hidden flex items-center justify-center">
+        {/* Inner container: minimum 10:16 aspect (portrait 16:10). Stretches taller on narrow phones. */}
+        <div
+          className="relative w-full h-full overflow-hidden"
+          style={{ maxWidth: "calc(100dvh * 10 / 16)" }}
+        >
+        <MobileTableLayout {...props} totalSeats={TOTAL_SEATS} />
+        </div>
+      </div>
     );
   }
 
-  return <DesktopTableLayout {...props} />;
+  return (
+    <div className="flex items-center justify-center h-dvh w-screen bg-gray-950">
+      <div
+        ref={containerRef}
+        className="relative overflow-hidden"
+        style={{
+          width: "min(100vw, calc(100dvh * 16 / 9))",
+          height: "min(100dvh, calc(100vw * 9 / 16))",
+        }}
+      >
+        <div ref={scaleRef} style={{ position: "relative", width: DESKTOP_REF_W, height: DESKTOP_REF_H, transformOrigin: "top left" }}>
+          <DesktopTableLayout {...props} />
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default TableLayout;

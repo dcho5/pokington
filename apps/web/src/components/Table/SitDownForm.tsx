@@ -20,14 +20,20 @@ export default function SitDownForm({
   variant = "dialog",
 }: SitDownFormProps) {
   const presets = getBuyInPresets(bigBlindCents);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("pokington_player_name") ?? "";
+  });
   const [buyIn, setBuyIn] = useState(presets[1].dollars.toFixed(2));
 
   const canConfirm = name.trim().length > 0 && parseFloat(buyIn || "0") > 0;
 
   const handleConfirm = () => {
     const cents = Math.round(parseFloat(buyIn || "0") * 100);
-    if (name.trim() && cents > 0) onConfirm(name.trim(), cents);
+    if (name.trim() && cents > 0) {
+      localStorage.setItem("pokington_player_name", name.trim());
+      onConfirm(name.trim(), cents);
+    }
   };
 
   // ── Shared form body ──
@@ -101,13 +107,13 @@ export default function SitDownForm({
     return (
       <>
         <motion.div
-          className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40"
+          className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onDismiss}
         />
-        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
           <motion.div
             className="w-full max-w-sm rounded-2xl bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/50 dark:border-white/[0.06] shadow-2xl p-6 pointer-events-auto"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -141,14 +147,14 @@ export default function SitDownForm({
   return (
     <>
       <motion.div
-        className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40"
+        className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onDismiss}
       />
       <motion.div
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl
+        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl
           bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl
           border-t border-gray-200/50 dark:border-white/[0.06]
           px-4 pt-4"

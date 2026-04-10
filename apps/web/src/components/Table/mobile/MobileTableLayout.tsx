@@ -9,6 +9,7 @@ import ActionBar from "./ActionBar";
 import SitDownForm from "../SitDownForm";
 import BombPotVotingPanel from "../BombPotVotingPanel";
 import BombPotSheet from "./BombPotSheet";
+import LedgerSheet from "./LedgerSheet";
 import PokerChip from "components/poker/PokerChip";
 import { formatCents } from "lib/formatCents";
 import { MobileWinnerChips } from "./MobileWinnerChips";
@@ -16,76 +17,9 @@ import { MobileSevenTwoBountyChips } from "./MobileSevenTwoBountyChips";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
 import WinnerBanner from "../WinnerBanner";
 import type { Player } from "types/player";
-import type { Card } from "@pokington/shared";
-import type { RunResult, GameState } from "@pokington/engine";
+import type { TableLayoutProps } from "../TableLayout";
 
-interface MobileTableLayoutProps {
-  onSitDown: (seatIndex: number, name?: string, buyInCents?: number) => void;
-  players?: Player[];
-  dealerIndex?: number;
-  tableName?: string;
-  blinds?: { small: number; big: number };
-  pot?: number;
-  smallBlindIndex?: number;
-  bigBlindIndex?: number;
-  communityCards?: Card[];
-  holeCards?: [Card, Card] | null;
-  handStrength?: string | null;
-  totalSeats?: number;
-  phase?: string;
-  winners?: { playerId: string; amount: number; hand: string }[] | null;
-  onFold?: () => void;
-  onCheck?: () => void;
-  onCall?: () => void;
-  onRaise?: (amount: number) => void;
-  onStartHand?: () => void;
-  callAmount?: number;
-  minRaise?: number;
-  canCheck?: boolean;
-  canRaise?: boolean;
-  canAllIn?: boolean;
-  onAllIn?: () => void;
-  isYourTurn?: boolean;
-  currentActorName?: string;
-  isFirstBet?: boolean;
-  handNumber?: number;
-  viewerStack?: number;
-  showdownCountdown?: number | null;
-  turnStartedAt?: number | null;
-  isAdmin?: boolean;
-  timerEnabled?: boolean;
-  onToggleTimer?: (enabled: boolean) => void;
-  runItVotes?: Record<string, 1 | 2 | 3>;
-  onVoteRun?: (count: 1 | 2 | 3) => void;
-  runAnnouncement?: 1 | 2 | 3 | null;
-  votingStartedAt?: number | null;
-  viewerCanVote?: boolean;
-  showNextHand?: boolean;
-  // Run-it
-  isRunItBoard?: boolean;
-  runResults?: RunResult[];
-  knownCardCount?: number;
-  runDealStartedAt?: number | null;
-  runCount?: 1 | 2 | 3;
-  // 7-2 Offsuit side game
-  sevenTwoBountyBB?: 0 | 1 | 2 | 3;
-  sevenTwoAnnouncement?: { winnerName: string; perPlayer: number; total: number } | null;
-  sevenTwoBountyTrigger?: { winnerId: string; perPlayer: number; totalCollected: number } | null;
-  canShowCards?: boolean;
-  onRevealCard?: (cardIndex: 0 | 1) => void;
-  myRevealedCardIndices?: Set<0 | 1>;
-  voluntaryShownPlayerIds?: string[];
-  onSetSevenTwoBounty?: (bountyBB: 0 | 1 | 2 | 3) => void;
-  // Bomb pot
-  bombPotVote?: GameState["bombPotVote"];
-  bombPotNextHand?: GameState["bombPotNextHand"];
-  isBombPotHand?: boolean;
-  communityCards2?: Card[];
-  bombPotCooldown?: string[];
-  bombPotAnnouncement?: { anteBB: number; anteCents: number } | null;
-  onProposeBombPot?: (anteBB: 1 | 2 | 3 | 4 | 5) => void;
-  onVoteBombPot?: (approve: boolean) => void;
-}
+type MobileTableLayoutProps = TableLayoutProps & { totalSeats?: number };
 
 function computeMobileChipAngle(
   isYourTurn: boolean,
@@ -150,6 +84,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   canShowCards = false,
   onRevealCard,
   myRevealedCardIndices,
+  sevenTwoEligible = false,
   onSetSevenTwoBounty,
   bombPotVote = null,
   bombPotNextHand: _bombPotNextHand = null,
@@ -158,23 +93,24 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   bombPotCooldown = [],
   bombPotAnnouncement = null,
   onProposeBombPot,
+  onPeekCard,
   onVoteBombPot,
+  onStandUp,
+  onQueueLeave,
+  leaveQueued,
 }) => {
   const [selectedEmptySeat, setSelectedEmptySeat] = useState<number | null>(null);
   const [bombPotSheetOpen, setBombPotSheetOpen] = useState(false);
+  const [ledgerOpen, setLedgerOpen] = useState(false);
 
+  // Reset scroll position after keyboard dismisses (e.g. after SitDownForm).
+  // On mobile, the virtual keyboard shifts the viewport upward; when it
+  // closes the scroll offset can stick, causing the y-axis shift bug.
   useEffect(() => {
-    const originalOverflow = document.body.style.overflow;
-    const originalOverscroll = document.body.style.overscrollBehavior;
-
-    document.body.style.overflow = "hidden";
-    document.body.style.overscrollBehavior = "none";
-
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      document.body.style.overscrollBehavior = originalOverscroll;
-    };
-  }, []);
+    if (selectedEmptySeat === null) {
+      window.scrollTo(0, 0);
+    }
+  }, [selectedEmptySeat]);
 
   const youPlayer = players.find((p) => p != null && p.isYou) ?? null;
   const isRunItDealing = isRunItBoard && runDealStartedAt != null && runAnnouncement == null;
@@ -208,16 +144,16 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   );
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden overscroll-none bg-gray-100 dark:bg-gray-950 transition-colors duration-500">
+    <div className="absolute inset-0 overflow-hidden overscroll-none bg-gray-100 dark:bg-gray-950 transition-colors duration-500">
       {/*
        * Z-INDEX MANIFEST — MobileTableLayout
-       * z-[80]  Run-it announcement (fixed, pointer-events-none)
-       * z-[76]  Bomb pot announcement (fixed, pointer-events-none)
-       * z-[75]  7-2 announcement (fixed, pointer-events-none)
+       * z-[80]  Run-it announcement (absolute, pointer-events-none)
+       * z-[76]  Bomb pot announcement (absolute, pointer-events-none)
+       * z-[75]  7-2 announcement (absolute, pointer-events-none)
        * z-[70]  Show/Muck buttons + Bomb pot voting panel
-       * z-[65]  Winner banner (fixed, pointer-events-none)
-       * z-[55]  Floating bomb pot button (bottom-right)
-       * z-50    Sheets: RaiseSheet / FoldConfirmSheet / SitDownForm / BombPotSheet
+       * z-[65]  Winner banner (absolute, pointer-events-none)
+       * z-[55]  Floating bomb pot button (right) + ledger button (left)
+       * z-50    Sheets: RaiseSheet / FoldConfirmSheet / SitDownForm / BombPotSheet / LedgerSheet
        * z-40    Sheet backdrops
        * z-30    TableHeader
        * z-10    Active-player OpponentStrip cell (showdown card stacking)
@@ -226,7 +162,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
        */}
       {/* Ambient glow */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[80vw] h-[40dvh] bg-red-500/5 dark:bg-red-600/10 blur-[80px] rounded-full" style={{ willChange: "auto" }} />
+        <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[40%] bg-red-500/5 dark:bg-red-600/10 blur-[80px] rounded-full" style={{ willChange: "auto" }} />
       </div>
 
       {/* Winner chips animation overlay */}
@@ -267,15 +203,24 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        {/* Zone 1: Opponents */}
-        <div className="flex-shrink-0">
+        {/* Zone 1: Opponents — pt-7 gives showdown cards room above bubbles without clipping under nav bar */}
+        <div className="flex-shrink-0 pt-7">
           <OpponentStrip
             players={opponents}
             dealerIndex={dealerIndex}
             smallBlindIndex={smallBlindIndex}
             bigBlindIndex={bigBlindIndex}
             emptySeats={emptySeats}
-            onEmptySeatTap={(seatIndex) => setSelectedEmptySeat(seatIndex)}
+            onEmptySeatTap={(seatIndex) => {
+              // If already seated during waiting phase, move seat via onSitDown
+              // (which triggers changeSeat). Otherwise open the SitDownForm.
+              const isWaiting = !phase || phase === "waiting";
+              if (youPlayer && isWaiting) {
+                onSitDown(seatIndex);
+              } else {
+                setSelectedEmptySeat(seatIndex);
+              }
+            }}
           />
         </div>
 
@@ -308,18 +253,60 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           </div>
         )}
 
-        {/* Zone 3: Chip + Hand */}
+        {/* Zone 3: Chip (flanked by bomb pot + ledger buttons) + Hand */}
         <div className="flex-shrink-0">
           <AnimatePresence>
             {!isRunItDealing && (
               <motion.div
-                className="flex justify-center pb-1"
+                className="flex items-center justify-center gap-4 pb-1"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.4 }}
               >
+                {/* Bomb pot button (left of chip) */}
+                <div className="w-10 flex justify-end">
+                  <AnimatePresence>
+                    {!bombPotVote && !_bombPotNextHand && youPlayer?.id && !bombPotCooldown.includes(youPlayer.id) && (
+                      <motion.button
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 24 }}
+                        whileTap={{ scale: 0.88 }}
+                        onClick={() => setBombPotSheetOpen(true)}
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-lg shadow-xl"
+                        style={{
+                          background: "rgba(99,102,241,0.22)",
+                          border: "1px solid rgba(99,102,241,0.4)",
+                          backdropFilter: "blur(8px)",
+                        }}
+                      >
+                        💣
+                      </motion.button>
+                    )}
+                  </AnimatePresence>
+                </div>
+
                 <PokerChip size={38} glowAngle={chipGlowAngle} />
+
+                {/* Ledger button (right of chip) */}
+                <div className="w-10 flex justify-start">
+                  <motion.button
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    whileTap={{ scale: 0.88 }}
+                    onClick={() => setLedgerOpen(true)}
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm shadow-xl"
+                    style={{
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    💰
+                  </motion.button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>
@@ -331,6 +318,13 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             canRevealToOthers={canShowCards}
             revealedToOthersIndices={myRevealedCardIndices}
             onRevealToOthers={onRevealCard}
+            sevenTwoEligible={sevenTwoEligible}
+            onPeekCard={onPeekCard}
+            onStandUp={onStandUp}
+            onQueueLeave={onQueueLeave}
+            leaveQueued={leaveQueued}
+            phase={phase}
+            currentBet={youPlayer?.currentBet ?? 0}
           />
         </div>
 
@@ -342,6 +336,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             callAmount={callAmount}
             pot={pot}
             stack={youPlayer?.stack ?? 0}
+            currentBet={youPlayer?.currentBet ?? 0}
             minRaise={minRaise}
             bigBlind={blinds?.big ?? 25}
             canCheck={canCheck}
@@ -379,7 +374,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       {/* 7-2 announcement overlay */}
       <AnimatePresence>
         {sevenTwoAnnouncement && (
-          <div className="fixed inset-0 flex items-start justify-center z-[75] pointer-events-none pt-[30%]">
+          <div className="absolute inset-0 flex items-start justify-center z-[75] pointer-events-none pt-[30%]">
             <SevenTwoAnnouncement
               winnerName={sevenTwoAnnouncement.winnerName}
               perPlayer={sevenTwoAnnouncement.perPlayer}
@@ -394,7 +389,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       {/* Run-it announcement overlay */}
       <AnimatePresence>
         {runAnnouncement != null && (
-          <div className="fixed inset-0 flex items-center justify-center z-[80] pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center z-[80] pointer-events-none">
             <motion.div
               initial={{ opacity: 0, scale: 0.7, y: -16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -415,7 +410,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       {/* Bomb pot voting panel overlay */}
       <AnimatePresence>
         {bombPotVote && (
-          <div className="fixed inset-0 flex items-center justify-center z-[70] pointer-events-none">
+          <div className="absolute inset-0 flex items-center justify-center z-[70] pointer-events-none">
             <div className="pointer-events-auto px-4 w-full max-w-xs">
               <BombPotVotingPanel
                 vote={bombPotVote}
@@ -434,7 +429,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       {/* Bomb pot announcement overlay */}
       <AnimatePresence>
         {bombPotAnnouncement && (
-          <div className="fixed inset-0 flex items-center justify-center z-[76] pointer-events-none pt-[20%]">
+          <div className="absolute inset-0 flex items-center justify-center z-[76] pointer-events-none pt-[20%]">
             <motion.div
               initial={{ opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -456,35 +451,18 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Floating bomb pot button — bottom-right, above ActionBar */}
       <AnimatePresence>
-        {!bombPotVote && !_bombPotNextHand && youPlayer?.id && !bombPotCooldown.includes(youPlayer.id) && (
-          <motion.button
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 400, damping: 24 }}
-            whileTap={{ scale: 0.88 }}
-            onClick={() => setBombPotSheetOpen(true)}
-            className="fixed z-[55] w-12 h-12 rounded-full flex items-center justify-center text-xl shadow-xl"
-            style={{
-              top: "40%",
-              right: "12px",
-              transform: "translateY(-50%)",
-              background: "rgba(99,102,241,0.22)",
-              border: "1px solid rgba(99,102,241,0.4)",
-              backdropFilter: "blur(8px)",
-            }}
-          >
-            💣
-          </motion.button>
-        )}
+        {ledgerOpen && <LedgerSheet onDismiss={() => setLedgerOpen(false)} />}
       </AnimatePresence>
 
       <AnimatePresence>
         {bombPotSheetOpen && (
           <BombPotSheet
             bigBlind={blinds?.big ?? 25}
+            minPlayerStack={players.reduce((min, p) => {
+              if (p == null || (p.stack ?? 0) <= 0) return min;
+              return min === undefined ? p.stack : Math.min(min, p.stack);
+            }, undefined as number | undefined)}
             onConfirm={(anteBB) => { onProposeBombPot?.(anteBB); setBombPotSheetOpen(false); }}
             onDismiss={() => setBombPotSheetOpen(false)}
           />
@@ -495,7 +473,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       <AnimatePresence>
         {phase === "showdown" && !isRunItBoard && winners && winners.length > 0 && (
           <motion.div
-            className="fixed z-[65] left-4 right-4 pointer-events-none"
+            className="absolute z-[65] left-4 right-4 pointer-events-none"
             style={{ bottom: "calc(env(safe-area-inset-bottom) + 180px)" }}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}

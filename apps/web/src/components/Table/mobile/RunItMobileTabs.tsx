@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Card from "components/poker/Card";
 import { deriveRunAnimation } from "lib/runAnimation";
+import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
 import type { RunResult } from "@pokington/engine";
 
 const CARD_COUNT = 5;
@@ -20,7 +21,6 @@ export default function RunItMobileTabs({
   runDealStartedAt,
   handNumber,
 }: RunItMobileTabsProps) {
-  const [, tick] = useState(0);
   const { currentRun, revealedCount } = deriveRunAnimation(
     runDealStartedAt,
     knownCardCount,
@@ -28,12 +28,7 @@ export default function RunItMobileTabs({
   );
   const totalRuns = runResults.length;
   const animationComplete = currentRun === totalRuns - 1 && revealedCount === CARD_COUNT;
-
-  useEffect(() => {
-    if (animationComplete) return;
-    const id = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(id);
-  }, [animationComplete]);
+  useRunAnimationTicker(runDealStartedAt, knownCardCount, totalRuns, !animationComplete);
 
   const [viewingRun, setViewingRun] = useState(0);
   const prevViewingRun = useRef(0);
@@ -128,7 +123,7 @@ export default function RunItMobileTabs({
       </div>
 
       {/* ── Board area ── */}
-      <div className="relative w-full max-w-[300px] flex flex-col items-center">
+      <div className="relative w-full flex flex-col items-center">
 
         {/* Ghost layer — previous run peeking behind */}
         {ghostRun !== null && (

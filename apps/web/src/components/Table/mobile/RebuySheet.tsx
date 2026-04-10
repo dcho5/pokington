@@ -43,12 +43,12 @@ export default function RebuySheet({ playerName, bigBlindCents, onRebuy, onLeave
     return (
       <>
         <motion.div
-          className="fixed inset-0 z-40 bg-black/50"
+          className="absolute inset-0 z-40 bg-black/50"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         />
-        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
           <motion.div
             className="w-full max-w-sm rounded-2xl bg-gray-950/98 backdrop-blur-xl border border-white/[0.08] shadow-2xl p-6 pointer-events-auto"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -95,13 +95,13 @@ export default function RebuySheet({ playerName, bigBlindCents, onRebuy, onLeave
   return (
     <>
       <motion.div
-        className="fixed inset-0 z-40 bg-black/60"
+        className="absolute inset-0 z-40 bg-black/60"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
       />
       <motion.div
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl
+        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl
           bg-gray-950/98 backdrop-blur-xl
           border-t border-white/[0.06]
           px-4 pt-4"

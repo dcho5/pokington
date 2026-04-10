@@ -27,6 +27,8 @@ function PeelCard({
   canRevealToOthers,
   isRevealedToOthers,
   onRevealToOthers,
+  sevenTwoEligible,
+  onPeekCard,
 }: {
   card?: CardType;
   height: number;
@@ -35,6 +37,8 @@ function PeelCard({
   canRevealToOthers?: boolean;
   isRevealedToOthers?: boolean;
   onRevealToOthers?: () => void;
+  sevenTwoEligible?: boolean;
+  onPeekCard?: () => void;
 }) {
   const width = Math.round((height * 5) / 7);
 
@@ -80,6 +84,7 @@ function PeelCard({
     if (target === 1 && !hasRevealedRef.current) {
       hasRevealedRef.current = true;
       onRevealChange?.(true);
+      onPeekCard?.();
     }
   }
 
@@ -138,8 +143,32 @@ function PeelCard({
     snapTo(progressRef.current > 0.4 ? 1 : 0);
   }
 
+  const showBountyGlow = sevenTwoEligible && canRevealToOthers && !isRevealedToOthers;
+
   return (
     <div style={{ width, height, position: "relative", flexShrink: 0 }} className="rounded-xl shadow-2xl">
+      {/* 7-2 bounty glow — pulsing gold ring encouraging reveal */}
+      {showBountyGlow && (
+        <div
+          className="absolute inset-[-3px] rounded-xl pointer-events-none z-20"
+          style={{
+            boxShadow: "0 0 0 2px rgba(234,179,8,0.9), 0 0 18px rgba(234,179,8,0.6), 0 0 40px rgba(234,179,8,0.25)",
+            animation: "bounty-glow-pulse 1.2s ease-in-out infinite",
+          }}
+        />
+      )}
+
+      {/* "Can reveal" subtle glow ring — at showdown with reveal available */}
+      {canRevealToOthers && !isRevealedToOthers && !showBountyGlow && (
+        <div
+          className="absolute inset-[-2px] rounded-xl pointer-events-none z-20"
+          style={{
+            boxShadow: "0 0 0 1.5px rgba(99,102,241,0.6), 0 0 10px rgba(99,102,241,0.25)",
+            animation: "reveal-hint-pulse 2s ease-in-out infinite",
+          }}
+        />
+      )}
+
       {/* Revealed-to-others glow ring */}
       <div
         ref={revealGlowRef}
@@ -186,15 +215,17 @@ function PeelCard({
         </span>
       </div>
 
-      {/* "Tap to show" hint — appears when face-up and reveal is available */}
+      {/* "Tap to show" / "Tap to claim" hint — appears when face-up and reveal is available */}
       {canRevealToOthers && !isRevealedToOthers && (
         <div
           ref={revealHintRef}
           className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none z-10 transition-opacity duration-200"
           style={{ opacity: 0 }}
         >
-          <span className="text-[8px] text-green-400/90 font-black tracking-widest uppercase whitespace-nowrap">
-            tap to show
+          <span className={`text-[8px] font-black tracking-widest uppercase whitespace-nowrap ${
+            sevenTwoEligible ? "text-yellow-400" : "text-green-400/90"
+          }`}>
+            {sevenTwoEligible ? "claim bounty" : "tap to show"}
           </span>
         </div>
       )}
@@ -215,6 +246,10 @@ interface HoleCardsProps {
   revealedToOthersIndices?: Set<0 | 1>;
   /** Called when player taps a face-up card to reveal it to others */
   onRevealToOthers?: (index: 0 | 1) => void;
+  /** True when player holds 7-2 offsuit and can claim bounty by revealing */
+  sevenTwoEligible?: boolean;
+  /** Called when player peeks at a card (card fully revealed locally) */
+  onPeekCard?: (index: 0 | 1) => void;
 }
 
 const HoleCards: React.FC<HoleCardsProps> = ({
@@ -226,6 +261,8 @@ const HoleCards: React.FC<HoleCardsProps> = ({
   canRevealToOthers = false,
   revealedToOthersIndices,
   onRevealToOthers,
+  sevenTwoEligible = false,
+  onPeekCard,
 }) => {
   const [card0Revealed, setCard0Revealed] = useState(false);
   const [card1Revealed, setCard1Revealed] = useState(false);
@@ -249,6 +286,8 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           canRevealToOthers={canRevealToOthers}
           isRevealedToOthers={revealedToOthersIndices?.has(0) ?? false}
           onRevealToOthers={() => onRevealToOthers?.(0)}
+          sevenTwoEligible={sevenTwoEligible}
+          onPeekCard={() => onPeekCard?.(0)}
         />
       </div>
       <div className="animate-card-deal-in" style={{ animationDelay: "0.1s" }}>
@@ -260,6 +299,8 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           canRevealToOthers={canRevealToOthers}
           isRevealedToOthers={revealedToOthersIndices?.has(1) ?? false}
           onRevealToOthers={() => onRevealToOthers?.(1)}
+          sevenTwoEligible={sevenTwoEligible}
+          onPeekCard={() => onPeekCard?.(1)}
         />
       </div>
     </div>

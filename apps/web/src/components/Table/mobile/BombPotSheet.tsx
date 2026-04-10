@@ -2,20 +2,22 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { formatCents } from "lib/formatCents";
+import type { BombPotAnteBB } from "@pokington/engine";
 
 interface BombPotSheetProps {
-  onConfirm: (anteBB: 1 | 2 | 3 | 4 | 5) => void;
+  onConfirm: (anteBB: BombPotAnteBB) => void;
   onDismiss: () => void;
   bigBlind: number;
+  minPlayerStack?: number;
 }
 
-const MULTIPLIERS = [1, 2, 3, 4, 5] as const;
+const MULTIPLIERS = [2, 4, 8, 10] as const;
 
-const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBlind }) => {
+const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBlind, minPlayerStack }) => {
   return (
     <>
       <motion.div
-        className="fixed inset-0 z-40 bg-black/30"
+        className="absolute inset-0 z-40 bg-black/30"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -23,7 +25,7 @@ const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBl
       />
 
       <motion.div
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl backdrop-blur-xl border-t border-white/[0.06] px-4 pt-4"
+        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl backdrop-blur-xl border-t border-white/[0.06] px-4 pt-4"
         style={{
           background: "rgba(3,7,18,0.97)",
           paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)",
@@ -49,21 +51,27 @@ const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBl
 
         {/* Multiplier buttons */}
         <div className="flex gap-2 mt-4">
-          {MULTIPLIERS.map((n) => (
-            <motion.button
-              key={n}
-              whileTap={{ scale: 0.94 }}
-              onClick={() => { onConfirm(n); onDismiss(); }}
-              className="flex-1 h-[76px] rounded-2xl flex flex-col items-center justify-center gap-1"
-              style={{
-                background: "rgba(99,102,241,0.12)",
-                border: "1px solid rgba(99,102,241,0.3)",
-              }}
-            >
-              <span className="text-2xl font-black text-indigo-200">{n}×</span>
-              <span className="text-[10px] text-indigo-400 font-bold">{formatCents(n * bigBlind)}</span>
-            </motion.button>
-          ))}
+          {MULTIPLIERS.map((n) => {
+            const anteCents = n * bigBlind;
+            const disabled = minPlayerStack !== undefined && anteCents >= minPlayerStack;
+            return (
+              <motion.button
+                key={n}
+                whileTap={disabled ? undefined : { scale: 0.94 }}
+                disabled={disabled}
+                onClick={() => { if (!disabled) { onConfirm(n); onDismiss(); } }}
+                className="flex-1 h-[76px] rounded-2xl flex flex-col items-center justify-center gap-1"
+                style={{
+                  background: disabled ? "rgba(99,102,241,0.04)" : "rgba(99,102,241,0.12)",
+                  border: `1px solid ${disabled ? "rgba(99,102,241,0.1)" : "rgba(99,102,241,0.3)"}`,
+                  opacity: disabled ? 0.35 : 1,
+                }}
+              >
+                <span className="text-2xl font-black text-indigo-200">{n}×</span>
+                <span className="text-[10px] text-indigo-400 font-bold">{formatCents(anteCents)}</span>
+              </motion.button>
+            );
+          })}
         </div>
       </motion.div>
     </>

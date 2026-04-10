@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import PokerChip from "components/poker/PokerChip";
 import CreateTableCard from "components/home/CreateTableCard";
 import JoinTableCard from "components/home/JoinTableCard";
-import { BLIND_OPTIONS, BOUNTY_OPTIONS, BLIND_CENTS } from "constants/game";
+import { BLIND_OPTIONS, BOUNTY_OPTIONS, BLIND_CENTS, BOUNTY_VALUES } from "constants/game";
 
 export default function HomePage() {
   const router = useRouter();
@@ -16,7 +16,7 @@ export default function HomePage() {
   const handleCreate = useCallback(() => {
     const code = Math.random().toString(36).slice(2, 8).toUpperCase();
     const blinds = BLIND_CENTS[blindIdx] ?? BLIND_CENTS[0];
-    const sevenTwoBountyBB = Math.min(bountyIdx, 3) as 0 | 1 | 2 | 3;
+    const sevenTwoBountyBB = BOUNTY_VALUES[bountyIdx] ?? 0;
     sessionStorage.setItem(`table_config_${code}`, JSON.stringify({
       tableName: tableName.trim() || `Table ${code}`,
       blinds,

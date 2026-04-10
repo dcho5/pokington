@@ -1,5 +1,6 @@
 "use client";
-import React from "react";
+import React, { useState } from "react";
+import { motion } from "framer-motion";
 import Card from "components/poker/Card";
 import RunItMobileTabs from "./RunItMobileTabs";
 import type { Card as CardType } from "@pokington/shared";
@@ -20,6 +21,84 @@ interface CommunityCardsProps {
   handNumber?: number;
 }
 
+function BombPotBoards({ communityCards, communityCards2, handNumber }: {
+  communityCards?: CardType[];
+  communityCards2?: CardType[];
+  handNumber: number;
+}) {
+  const [activeBoard, setActiveBoard] = useState(0);
+  const boards = [communityCards, communityCards2 && communityCards2.length > 0 ? communityCards2 : null].filter(Boolean) as CardType[][];
+
+  return (
+    <div className="flex flex-col items-center gap-2.5 w-full">
+      {boards.length > 1 && (
+        <div
+          className="flex gap-1 p-[3px] rounded-full"
+          style={{
+            background: "rgba(255,255,255,0.05)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          {boards.map((_, b) => {
+            const isActive = b === activeBoard;
+            return (
+              <motion.button
+                key={b}
+                onClick={() => setActiveBoard(b)}
+                whileTap={{ scale: 0.93 }}
+                transition={{ type: "spring", stiffness: 400, damping: 22 }}
+                className="relative px-3.5 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors duration-200"
+                style={{
+                  color: isActive ? "#fff" : "rgba(255,255,255,0.35)",
+                  background: isActive ? "linear-gradient(135deg, #ef4444, #b91c1c)" : "transparent",
+                  boxShadow: isActive ? "0 0 14px rgba(239,68,68,0.45)" : "none",
+                }}
+              >
+                Board {b + 1}
+              </motion.button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="relative w-full">
+        {/* Ghost layer — inactive board peeking behind */}
+        {boards.length > 1 && (
+          <div
+            className="absolute inset-0 pointer-events-none flex gap-[2%]"
+            style={{
+              transform: "scale(0.93) translateY(14px)",
+              opacity: 0.15,
+              filter: "blur(0.5px)",
+              transformOrigin: "top center",
+              zIndex: 0,
+            }}
+          >
+            {Array.from({ length: CARD_COUNT }, (_, i) => (
+              <div key={i} className="flex-1 aspect-[5/7]">
+                <Card card={boards[1 - activeBoard]?.[i]} className="w-full h-full rounded-xl" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="relative flex gap-[2%] w-full" style={{ zIndex: 1, filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.55))" }}>
+          {Array.from({ length: CARD_COUNT }, (_, i) => (
+            <div
+              key={`${handNumber}-bomb-b${activeBoard}-${i}`}
+              className="flex-1 aspect-[5/7] animate-card-deal-in"
+              style={{ animationDelay: `${i * 0.08}s` }}
+            >
+              <Card card={boards[activeBoard]?.[i]} className="w-full h-full rounded-xl shadow-xl" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const CommunityCards: React.FC<CommunityCardsProps> = ({
   communityCards,
   communityCards2,
@@ -32,6 +111,10 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
   handNumber = 0,
 }) => {
   const showRunItBoard = isRunItBoard && runDealStartedAt != null && runAnnouncement == null;
+  // During the "Running it N times!" announcement the engine has already dealt
+  // the full board, but we should only show the cards that were known before
+  // the all-in — the rest stay face-down until RunItMobileTabs takes over.
+  const isRunItAnnouncing = isRunItBoard && runAnnouncement != null;
 
   return (
     <div className="relative flex flex-col items-center w-full px-2 min-h-0">
@@ -44,56 +127,30 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
           handNumber={handNumber}
         />
       ) : isBombPot ? (
-        <div className="flex flex-col items-center gap-1 w-full px-2">
-          <div className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Board 1</div>
-          <div className="flex justify-center gap-1.5 w-full max-w-[320px]">
-            {Array.from({ length: CARD_COUNT }, (_, i) => (
+        <BombPotBoards
+          communityCards={communityCards}
+          communityCards2={communityCards2}
+          handNumber={handNumber}
+        />
+      ) : (
+        <div className="flex justify-center gap-[2%] w-full">
+          {Array.from({ length: CARD_COUNT }, (_, i) => {
+            const card = isRunItAnnouncing && i >= knownCardCount
+              ? undefined
+              : communityCards?.[i];
+            return (
               <div
-                key={i}
+                key={card ? `${handNumber}-card-${i}-shown` : `${handNumber}-card-${i}`}
                 className="flex-1 animate-card-deal-in"
                 style={{ animationDelay: `${i * 0.08}s` }}
               >
                 <Card
-                  card={communityCards?.[i]}
+                  card={card}
                   className="w-full aspect-[5/7] rounded-xl shadow-2xl"
                 />
               </div>
-            ))}
-          </div>
-          {communityCards2 && communityCards2.length > 0 && (
-            <>
-              <div className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mt-1">Board 2</div>
-              <div className="flex justify-center gap-1.5 w-full max-w-[320px]">
-                {Array.from({ length: CARD_COUNT }, (_, i) => (
-                  <div
-                    key={i}
-                    className="flex-1 animate-card-deal-in"
-                    style={{ animationDelay: `${i * 0.08}s` }}
-                  >
-                    <Card
-                      card={communityCards2?.[i]}
-                      className="w-full aspect-[5/7] rounded-xl shadow-2xl"
-                    />
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      ) : (
-        <div className="flex justify-center gap-[2%] w-full">
-          {Array.from({ length: CARD_COUNT }, (_, i) => (
-            <div
-              key={communityCards?.[i] ? `${handNumber}-card-${i}-shown` : `${handNumber}-card-${i}`}
-              className="flex-1 animate-card-deal-in"
-              style={{ animationDelay: `${i * 0.08}s` }}
-            >
-              <Card
-                card={communityCards?.[i]}
-                className="w-full aspect-[5/7] rounded-xl shadow-2xl"
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

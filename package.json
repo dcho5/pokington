@@ -1,5 +1,7 @@
 {
+  "name": "pokington",
   "private": true,
+  "packageManager": "pnpm@10.28.0",
   "devDependencies": {
     "typescript": "^5.0.0",
     "turbo": "latest"

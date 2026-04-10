@@ -2,12 +2,13 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import PokerChip from "components/poker/PokerChip";
+import type { SevenTwoBountyBB } from "@pokington/engine";
 
 interface TableHeaderProps {
   tableName?: string;
   smallBlind?: number;
   bigBlind?: number;
-  sevenTwoBountyBB?: 0 | 1 | 2 | 3;
+  sevenTwoBountyBB?: SevenTwoBountyBB;
 }
 
 const TableHeader: React.FC<TableHeaderProps> = ({
@@ -20,7 +21,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
 
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-4
+      className="absolute top-0 left-0 right-0 z-30 flex items-center justify-between px-4
         bg-white/85 dark:bg-[rgba(3,7,18,0.85)]
         border-b border-gray-200/50 dark:border-white/[0.06]
         backdrop-blur-md"
@@ -31,7 +32,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
     >
       {/* Left: back + table name */}
       <button
-        onClick={() => router.back()}
+        onClick={() => router.push("/")}
         className="flex items-center gap-2 min-w-[44px] min-h-[44px] -ml-2 px-2 rounded-xl"
         aria-label="Go back"
       >

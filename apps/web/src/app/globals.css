@@ -3,6 +3,14 @@
 @tailwind utilities;
 
 @layer base {
+  /* Hide scrollbar globally — mobile uses overscroll for pull-to-refresh
+     but content always fits the viewport so no scrollbar should appear. */
+  html {
+    scrollbar-width: none;          /* Firefox */
+  }
+  html::-webkit-scrollbar {
+    display: none;                  /* Chrome / Safari */
+  }
   body {
     @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-500;
   }
@@ -170,6 +178,18 @@
   syntax: '<color>';
   initial-value: #064e3b;
   inherits: false;
+}
+
+/* 7-2 bounty glow pulse on hole cards — gold ring */
+@keyframes bounty-glow-pulse {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+
+/* Generic reveal-hint pulse on hole cards — subtle indigo */
+@keyframes reveal-hint-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.9; }
 }
 
 @property --felt-color-bottom {

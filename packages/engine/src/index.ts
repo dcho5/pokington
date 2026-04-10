@@ -10,6 +10,8 @@ export type {
   WinnerInfo,
   RunResult,
   SidePot,
+  SevenTwoBountyBB,
+  BombPotAnteBB,
   Card,
   Rank,
   Suit,

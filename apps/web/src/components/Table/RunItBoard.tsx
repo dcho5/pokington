@@ -1,8 +1,9 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { motion } from "framer-motion";
 import Card from "components/poker/Card";
 import { deriveRunAnimation } from "lib/runAnimation";
+import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
 import type { RunResult } from "@pokington/engine";
 
 const CARD_COUNT = 5;
@@ -16,8 +17,8 @@ interface RunItBoardProps {
   compact?: boolean;
 }
 
-const DESKTOP_CARD = "w-[68px] h-[95px] lg:w-[84px] lg:h-[118px]";
-const DESKTOP_GAP = "gap-2 lg:gap-3";
+const DESKTOP_CARD = "w-[72px] h-[100px] lg:w-[96px] lg:h-[136px]";
+const DESKTOP_GAP = "gap-3 lg:gap-5";
 const MOBILE_CARD = "flex-1";
 const MOBILE_GAP = "gap-[2%]";
 
@@ -28,7 +29,6 @@ export default function RunItBoard({
   handNumber,
   compact = false,
 }: RunItBoardProps) {
-  const [, tick] = useState(0);
   const { currentRun, revealedCount } = deriveRunAnimation(
     runDealStartedAt,
     knownCardCount,
@@ -36,12 +36,7 @@ export default function RunItBoard({
   );
   const totalRuns = runResults.length;
   const animationComplete = currentRun === totalRuns - 1 && revealedCount === CARD_COUNT;
-
-  useEffect(() => {
-    if (animationComplete) return;
-    const id = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(id);
-  }, [animationComplete]);
+  useRunAnimationTicker(runDealStartedAt, knownCardCount, totalRuns, !animationComplete);
 
   return (
     <div className="flex flex-col items-center gap-2 w-full">
@@ -90,16 +85,17 @@ export default function RunItBoard({
                   (isCurrent && i < revealedCount);
 
                 return (
-                  <div key={i} className={`${compact ? MOBILE_CARD : DESKTOP_CARD} relative aspect-[5/7]`}>
+                  <div key={i} className={`${compact ? MOBILE_CARD : DESKTOP_CARD} relative aspect-[5/7]`} style={{ perspective: 600 }}>
                     {isRevealed ? (
                       <motion.div
                         className="absolute inset-0"
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
+                        initial={{ rotateY: 90, opacity: 0 }}
+                        animate={{ rotateY: 0, opacity: 1 }}
                         transition={{
-                          duration: 0.28,
+                          type: "spring",
+                          stiffness: 300,
+                          damping: 25,
                           delay: newCardIdx * 0.08,
-                          ease: "easeOut",
                         }}
                       >
                         <Card

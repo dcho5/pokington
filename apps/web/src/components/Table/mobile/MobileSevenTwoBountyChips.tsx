@@ -60,7 +60,7 @@ export const MobileSevenTwoBountyChips: React.FC<MobileSevenTwoBountyChipsProps>
   if (chips.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-40" aria-hidden>
+    <div className="absolute inset-0 pointer-events-none z-40" aria-hidden>
       <AnimatePresence>
         {chips.map(({ id, src, delay, chipKey }) => {
           const dx = winnerPos.x - src.x;

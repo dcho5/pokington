@@ -469,6 +469,12 @@ export function gameReducer(
       if (playerList.length < 2) return prevState;
       if (state.phase !== "waiting" && state.phase !== "showdown") return prevState;
 
+      // When transitioning from showdown, clear sitOutUntilBB for all players
+      // so that rebuyers are immediately eligible for the next hand.
+      if (state.phase === "showdown") {
+        for (const p of playerList) p.sitOutUntilBB = false;
+      }
+
       // Eligible = not sitting out waiting for BB
       const eligiblePlayers = playerList.filter((p) => !p.sitOutUntilBB);
       if (eligiblePlayers.length < 2) return prevState;
@@ -477,7 +483,7 @@ export function gameReducer(
         p.holeCards = null;
         p.currentBet = 0;
         p.totalContribution = 0;
-        p.isFolded = false;
+        p.isFolded = p.sitOutUntilBB;
         p.isAllIn = false;
         p.lastAction = null;
       }

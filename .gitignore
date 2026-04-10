@@ -1,39 +1,48 @@
-# Claude
+# --- Pokington Specific ---
+# Ignore the generated standalone folder (this was your 'stale' culprit)
+apps/web/.next/
+# Local debug logs from launch_poker.sh
+*.log
+frontend_tunnel.log
+backend_tunnel.log
+frontend.log
+engine.log
+
+# --- Claude / AI ---
 .claude/
 CLAUDE.md
 **/CLAUDE.md
 
-# Dependencies
+# --- Dependencies & Build ---
 node_modules/
-
-# Build outputs
-.next/
 .turbo/
 dist/
+lib/
+out/
 *.tsbuildinfo
 
-# Partykit
+# --- Partykit ---
 .partykit/
 
-# Environment
+# --- Environment & Secrets ---
 .env
 .env.local
 .env.*.local
+.env.development.local
+.env.production.local
 
-# OS
+# --- OS & System ---
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
 
-# Xcode / iOS
+# --- Xcode / iOS ---
 apps/ios/**/*.xcuserstate
 apps/ios/**/xcuserdata/
 apps/ios/DerivedData/
 apps/ios/**/*.ipa
 apps/ios/**/*.dSYM.zip
 
-# Logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
+# --- Vercel ---
 .vercel
-.env*.local

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ANNOUNCE_DELAY_S, getRunTimings } from "components/Table/desktop/WinnerChipsAnimation";
 import { deriveRunAnimation } from "lib/runAnimation";
+import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
 
 const CHIP_DURATION_S = 2.4;
 // Buffer to account for per-winner chip stagger (0.35s each in WinnerChipsAnimation)
@@ -15,11 +16,6 @@ const NORMAL_LAND_MS = (0.4 + CHIP_DURATION_S + WINNER_STAGGER_BUFFER_S) * 1000;
  *
  * For non-run-it showdowns: returns 0 or 1.
  * For run-it showdowns:     returns 0..runCount.
- *
- * Timing is derived from `showdownStartedAt` (when the phase entered "showdown"),
- * which matches the WinnerChipsAnimation component's mount time. This makes the
- * formula uniform across both the direct all-in path and the voting path:
- *   Run r lands at: showdownStartedAt + (ANNOUNCE_DELAY_S + r * runIntervalS + chipStartS + CHIP_DURATION_S) * 1000
  */
 export function useSettledRunsCount(
   phase: string,
@@ -28,34 +24,58 @@ export function useSettledRunsCount(
   knownCardCount: number,
   runCount: number,
 ): number {
-  const [, tick] = useState(0);
+  const [settled, setSettled] = useState(0);
 
   useEffect(() => {
-    if (phase !== "showdown") return;
-    const id = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(id);
-  }, [phase]);
+    if (phase !== "showdown" || showdownStartedAt == null) {
+      setSettled(0);
+      return;
+    }
 
-  if (phase !== "showdown" || showdownStartedAt == null) return 0;
+    const elapsed = Date.now() - showdownStartedAt;
 
-  const elapsed = Date.now() - showdownStartedAt;
+    if (!isRunItBoard) {
+      // Single-run: one transition at NORMAL_LAND_MS
+      if (elapsed >= NORMAL_LAND_MS) {
+        setSettled(1);
+        return;
+      }
+      const delay = NORMAL_LAND_MS - elapsed;
+      const id = setTimeout(() => setSettled(1), delay);
+      return () => clearTimeout(id);
+    }
 
-  if (!isRunItBoard) {
-    return elapsed >= NORMAL_LAND_MS ? 1 : 0;
-  }
+    // Multi-run: compute all landing times, schedule timeouts for future ones
+    const { chipStartS, runIntervalS } = getRunTimings(knownCardCount);
+    const landTimes: number[] = [];
+    for (let r = 0; r < runCount; r++) {
+      landTimes.push(
+        (ANNOUNCE_DELAY_S + r * runIntervalS + chipStartS + CHIP_DURATION_S + WINNER_STAGGER_BUFFER_S) * 1000
+      );
+    }
 
-  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount);
-  let settled = 0;
-  for (let r = 0; r < runCount; r++) {
-    const landMs = (ANNOUNCE_DELAY_S + r * runIntervalS + chipStartS + CHIP_DURATION_S + WINNER_STAGGER_BUFFER_S) * 1000;
-    if (elapsed >= landMs) settled = r + 1;
-  }
+    // Count already-settled runs
+    let alreadySettled = 0;
+    for (const t of landTimes) {
+      if (elapsed >= t) alreadySettled++;
+    }
+    setSettled(alreadySettled);
+
+    // Schedule timeouts for future transitions
+    const timeoutIds: ReturnType<typeof setTimeout>[] = [];
+    for (let r = alreadySettled; r < runCount; r++) {
+      const delay = landTimes[r] - elapsed;
+      timeoutIds.push(setTimeout(() => setSettled(r + 1), delay));
+    }
+
+    return () => timeoutIds.forEach(clearTimeout);
+  }, [phase, showdownStartedAt, isRunItBoard, knownCardCount, runCount]);
+
   return settled;
 }
 
 /**
  * Returns the run index and revealed card count currently visible on the RunItBoard.
- * Ticks every 100ms so React re-renders stay in sync with the card-deal animation.
  */
 export function useCurrentRun(
   phase: string,
@@ -64,15 +84,10 @@ export function useCurrentRun(
   knownCardCount: number,
   runCount: number,
 ): { currentRun: number; revealedCount: number } {
-  const [, tick] = useState(0);
+  const enabled = phase === "showdown" && isRunItBoard && runDealStartedAt != null;
+  useRunAnimationTicker(runDealStartedAt, knownCardCount, runCount, enabled);
 
-  useEffect(() => {
-    if (phase !== "showdown" || !isRunItBoard || runDealStartedAt == null) return;
-    const id = setInterval(() => tick((n) => n + 1), 100);
-    return () => clearInterval(id);
-  }, [phase, isRunItBoard, runDealStartedAt]);
-
-  if (phase !== "showdown" || !isRunItBoard || runDealStartedAt == null) {
+  if (!enabled || runDealStartedAt == null) {
     return { currentRun: 0, revealedCount: knownCardCount };
   }
   return deriveRunAnimation(runDealStartedAt, knownCardCount, runCount);

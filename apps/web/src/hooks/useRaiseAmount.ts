@@ -5,6 +5,7 @@ interface UseRaiseAmountOpts {
   stack: number;
   pot: number;
   bigBlind: number;
+  currentBet?: number;
 }
 
 export interface RaisePreset {
@@ -12,13 +13,14 @@ export interface RaisePreset {
   value: number;
 }
 
-export function useRaiseAmount({ minRaise, stack, pot, bigBlind }: UseRaiseAmountOpts) {
-  const increment = Math.max(1, Math.round((bigBlind > 0 ? bigBlind : 25) / 5));
+export function useRaiseAmount({ minRaise, stack, pot, bigBlind, currentBet = 0 }: UseRaiseAmountOpts) {
+  const increment = Math.max(1, bigBlind > 0 ? bigBlind : 25);
   // When stack < minRaise, the only valid raise is a full all-in (stack itself).
-  const lowerBound = Math.min(minRaise, stack);
+  const allInTotal = currentBet + stack;
+  const lowerBound = Math.min(minRaise, allInTotal);
   const [amount, setAmountRaw] = useState(lowerBound);
 
-  const clamp = (v: number) => Math.max(lowerBound, Math.min(stack, v));
+  const clamp = (v: number) => Math.max(lowerBound, Math.min(allInTotal, v));
   const setAmount = (v: number) => setAmountRaw(clamp(v));
 
   const presets: RaisePreset[] = [
@@ -26,8 +28,8 @@ export function useRaiseAmount({ minRaise, stack, pot, bigBlind }: UseRaiseAmoun
     { label: "½ Pot", value: Math.floor(pot * 0.5) },
     { label: "¾ Pot", value: Math.floor(pot * 0.75) },
     { label: "Pot", value: pot },
-    { label: "All-in", value: stack },
+    { label: "All-in", value: allInTotal },
   ];
 
-  return { amount, setAmount, increment, lowerBound, presets, clamp };
+  return { amount, setAmount, increment, lowerBound, presets, clamp, allInTotal };
 }

@@ -11,7 +11,7 @@ interface DealerButtonProps {
 
 const DealerButton: React.FC<DealerButtonProps> = ({ seatIndex, totalSeats, geometry }) => {
   const { x, y } = computeSeatCoords(seatIndex, totalSeats, geometry);
-  const orbitFactor = 0.72;
+  const orbitFactor = 0.82;
 
   return (
     <motion.div

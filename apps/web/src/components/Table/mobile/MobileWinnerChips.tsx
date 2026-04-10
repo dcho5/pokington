@@ -8,10 +8,11 @@ import type { WinnerInfo } from "@pokington/engine";
 const CHIP_DURATION_S = 2.4;
 
 // Approximate viewport fractions for each layout zone
-const POT_X_FRAC = 0.50;  // center of screen horizontally
-const POT_Y_FRAC = 0.38;  // roughly center of the CommunityCards zone
-const OPP_Y_FRAC = 0.12;  // OpponentStrip center row
-const YOU_Y_FRAC = 0.76;  // HandPanel / viewer area
+const POT_X_FRAC = 0.50;   // center of screen horizontally
+const POT_Y_FRAC = 0.38;   // roughly center of the CommunityCards zone
+const OPP_Y_FRAC = 0.14;   // OpponentStrip row 1 center (accounts for extra pt-7 padding)
+const OPP_ROW2_Y_FRAC = 0.24; // OpponentStrip row 2 center
+const YOU_Y_FRAC = 0.76;   // HandPanel / viewer area
 
 interface MobileWinnerChipsProps {
   winners: WinnerInfo[];
@@ -38,19 +39,40 @@ export const MobileWinnerChips: React.FC<MobileWinnerChipsProps> = ({
 
   // Seated non-null players
   const seated = players.filter((p): p is NonNullable<typeof p> => p != null);
-  // Opponents sorted by seatIndex for column assignment
-  const opponents = seated.filter((p) => !p.isYou).sort((a, b) => a.seatIndex - b.seatIndex);
+
+  // Build all non-viewer columns (occupied + empty) sorted by seatIndex —
+  // mirrors the merged items list that OpponentStrip uses for column assignment.
+  const allNonViewerCols = players
+    .map((p, i) => ({ seatIndex: i, id: p?.id ?? null, isViewer: p?.isYou ?? false }))
+    .filter((item) => !item.isViewer)
+    .sort((a, b) => a.seatIndex - b.seatIndex);
 
   function getPlayerPx(playerId: string): { x: number; y: number } | null {
     const p = seated.find((s) => s.id === playerId);
     if (!p) return null;
     if (p.isYou) return { x: vpW * 0.5, y: vpH * YOU_Y_FRAC };
-    const idx = opponents.findIndex((o) => o.id === playerId);
-    if (idx < 0) return null;
-    // Map up to 5 opponents per row; use column 0-4 spread across screen width
-    const col = idx % 5;
-    const x = vpW * ((col + 0.5) / 5);
-    return { x, y: vpH * OPP_Y_FRAC };
+
+    // Row 1: first 5 columns
+    const row1 = allNonViewerCols.slice(0, 5);
+    const col = row1.findIndex((item) => item.id === playerId);
+    if (col >= 0) {
+      return { x: vpW * ((col + 0.5) / 5), y: vpH * OPP_Y_FRAC };
+    }
+
+    // Row 2: left half (cols 0–1), gap (col 2 = viewer gap), right half (cols 3–4)
+    const row2 = allNonViewerCols.slice(5);
+    const row2Left = row2.slice(0, Math.ceil(row2.length / 2));
+    const row2Right = row2.slice(Math.ceil(row2.length / 2));
+    const colLeft = row2Left.findIndex((item) => item.id === playerId);
+    if (colLeft >= 0) {
+      return { x: vpW * ((colLeft + 0.5) / 5), y: vpH * OPP_ROW2_Y_FRAC };
+    }
+    const colRight = row2Right.findIndex((item) => item.id === playerId);
+    if (colRight >= 0) {
+      return { x: vpW * ((colRight + 3 + 0.5) / 5), y: vpH * OPP_ROW2_Y_FRAC };
+    }
+
+    return null;
   }
 
   function buildRunChips(
@@ -95,7 +117,7 @@ export const MobileWinnerChips: React.FC<MobileWinnerChipsProps> = ({
   if (chips.length === 0) return null;
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-40" aria-hidden>
+    <div className="absolute inset-0 pointer-events-none z-40" aria-hidden>
       <AnimatePresence>
         {chips.map(({ winner, delay, chipKey }) => {
           const dest = getPlayerPx(winner.playerId);

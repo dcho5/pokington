@@ -9,10 +9,8 @@ import { useIsPortrait } from "hooks/useIsPortrait";
 import { evaluateBest } from "@pokington/engine";
 import { getRunTimings, ANNOUNCE_DELAY_S } from "components/Table/desktop/WinnerChipsAnimation";
 import { useSettledRunsCount, useCurrentRun } from "hooks/useSettledRunsCount";
-import DebugPanel from "./DebugPanel";
 
 export default function TablePageClient({ code }: { code: string }) {
-  const store = useGameStore();
   const isPortrait = useIsPortrait();
   const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const [showdownCountdown, setShowdownCountdown] = useState<number | null>(null);
@@ -20,28 +18,24 @@ export default function TablePageClient({ code }: { code: string }) {
 
   // Connect to the PartyKit room for this table code
   useEffect(() => {
-    store.connect(code);
-    return () => store.disconnect();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    useGameStore.getState().connect(code);
+    return () => useGameStore.getState().disconnect();
   }, [code]);
 
-  // Auto next hand: 5-second countdown at showdown.
-  // For multi-run, delay the countdown until all chip animations finish landing.
-  // Single run chips land at ~2.8s; multi-run last chip = (runCount-1)*4.0 + 3.6s.
-  // We wait for that, then show the 5s countdown.
-  const phase = store.getPhase();
-  const handNumber = store.getHandNumber();
-  const runCount = store.getRunCount();
+  const phase = useGameStore((s) => s.gameState.phase);
+  const handNumber = useGameStore((s) => s.gameState.handNumber);
+  const runCount = useGameStore((s) => s.gameState.runCount) as 1 | 2 | 3;
+
+  const viewingSeat = useGameStore((s) => s.viewingSeat);
+  const isRunItBoardEarly = useGameStore((s) => s.isRunItBoard);
+  const showdownStartedAtEarly = useGameStore((s) => s.showdownStartedAt);
+  const knownCardCountEarly = useGameStore((s) => s.knownCardCountAtRunIt);
 
   // Show rebuy prompt when the viewing player runs out of chips — but only after
   // all runs have fully settled (chips landed), not at the moment they go all-in.
-  const viewerStack = store.getViewerStack();
-  const viewingPlayer = store.getViewingPlayer();
-  const viewingSeat = store.viewingSeat;
-  // Hoist these early so the rebuy effect can gate on them.
-  const isRunItBoardEarly = store.isRunItBoard;
-  const showdownStartedAtEarly = store.showdownStartedAt;
-  const knownCardCountEarly = store.knownCardCountAtRunIt;
+  const viewerStack = useGameStore((s) => s.getViewerStack());
+  const viewingPlayer = useGameStore((s) => s.getViewingPlayer());
+  const viewerCurrentBet = viewingPlayer?.currentBet ?? 0;
   const settledRunCountEarly = useSettledRunsCount(
     phase,
     isRunItBoardEarly,
@@ -49,30 +43,41 @@ export default function TablePageClient({ code }: { code: string }) {
     knownCardCountEarly,
     runCount,
   );
+  // Cache player info when rebuy sheet opens so it survives the auto-kick on next hand start.
+  const [rebuyInfo, setRebuyInfo] = useState<{ name: string; seat: number } | null>(null);
   useEffect(() => {
     const allSettled = settledRunCountEarly >= runCount;
     if (phase === "showdown" && viewerStack === 0 && viewingPlayer !== null && allSettled) {
+      setRebuyInfo({ name: viewingPlayer.name, seat: viewingSeat });
       setShowRebuySheet(true);
     }
-    if (phase !== "showdown") {
+    // Close the sheet when the player successfully buys back in (stack > 0).
+    if (showRebuySheet && viewerStack > 0) {
       setShowRebuySheet(false);
+      setRebuyInfo(null);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, viewerStack, viewingPlayer?.id, settledRunCountEarly]);
 
   const handleRebuy = useCallback(
     (buyInCents: number) => {
-      if (!viewingPlayer) return;
-      store.sitDown(viewingSeat, viewingPlayer.name, buyInCents);
+      // Use cached info if the player was auto-kicked (viewingPlayer is null).
+      const name = viewingPlayer?.name ?? rebuyInfo?.name;
+      const seat = viewingPlayer ? viewingSeat : rebuyInfo?.seat ?? viewingSeat;
+      if (!name) return;
+      useGameStore.getState().sitDown(seat, name, buyInCents);
       setShowRebuySheet(false);
+      setRebuyInfo(null);
     },
-    [store, viewingSeat, viewingPlayer]
+    [viewingSeat, viewingPlayer, rebuyInfo]
   );
 
   const handleLeave = useCallback(() => {
-    store.standUp();
+    // If already auto-kicked, just close the sheet — no need to stand up again.
+    if (viewingPlayer) useGameStore.getState().standUp();
     setShowRebuySheet(false);
-  }, [store]);
+    setRebuyInfo(null);
+  }, [viewingPlayer]);
   useEffect(() => {
     if (phase !== "showdown") {
       setShowdownCountdown(null);
@@ -115,63 +120,83 @@ export default function TablePageClient({ code }: { code: string }) {
     };
   }, [phase, handNumber, runCount]);
 
-  const players = store.getPlayers();
-  const holeCards = store.getHoleCards();
-  const communityCards = store.getCommunityCards();
-  const pot = store.getTotalPotWithBets();
-  const winners = store.getWinners();
-  const isYourTurn = store.isViewerTurn();
-  const callAmount = store.getCallAmount();
-  const minRaise = store.getMinRaise();
-  const checkable = store.canCheck();
-  const raiseable = store.canRaise();
-  const canAllIn = store.canAllIn();
-  const turnStartedAt = store.turnStartedAt;
-  const votingStartedAt = store.votingStartedAt;
+  const players = useGameStore((s) => s.getPlayers());
+  const holeCards = useGameStore((s) => s.myHoleCards);
+  const communityCards = useGameStore((s) => s.gameState.communityCards);
+  const pot = useGameStore((s) => s.getTotalPotWithBets());
+  const winners = useGameStore((s) => s.gameState.winners);
+  const isYourTurn = useGameStore((s) => s.isViewerTurn());
+  const callAmount = useGameStore((s) => s.getCallAmount());
+  const minRaise = useGameStore((s) => s.getMinRaise());
+  const checkable = useGameStore((s) => s.canCheck());
+  const raiseable = useGameStore((s) => s.canRaise());
+  const canAllIn = useGameStore((s) => s.canAllIn());
+  const turnStartedAt = useGameStore((s) => s.turnStartedAt);
+  const votingStartedAt = useGameStore((s) => s.votingStartedAt);
 
-  const tableNotFound = store.tableNotFound;
-  const isAdmin = store.isCreator;
-  const connectionStatus = store.connectionStatus;
-  const timerEnabled = store.turnTimerEnabled;
-  const viewerIsFolded = store.getViewingPlayer()?.isFolded ?? true;
+  const tableNotFound = useGameStore((s) => s.tableNotFound);
+  const isAdmin = useGameStore((s) => s.isCreator);
+  const connectionStatus = useGameStore((s) => s.connectionStatus);
+  const timerEnabled = useGameStore((s) => s.turnTimerEnabled);
+  const viewerIsFolded = viewingPlayer?.isFolded ?? true;
   const isRunItBoard = isRunItBoardEarly;
   const knownCardCount = knownCardCountEarly;
-  const runItVotes = store.getRunItVotes();
-  const runResults = store.getRunResults();
-  const runAnnouncement = store.runAnnouncement;
-  const runDealStartedAt = store.runDealStartedAt;
-  const sevenTwoBountyBB = store.getSevenTwoBountyBB();
-  const sevenTwoAnnouncement = store.sevenTwoAnnouncement;
-  const sevenTwoBountyTrigger = store.getSevenTwoBountyTrigger();
-  const voluntaryShownPlayerIds = store.getVoluntaryShownPlayerIds();
-  const bombPotVote = store.getBombPotVote();
-  const bombPotNextHand = store.getBombPotNextHand();
-  const isBombPotHand = store.isBombPotHand();
-  const communityCards2 = store.getCommunityCards2();
-  const bombPotCooldown = store.getBombPotCooldown();
-  const bombPotAnnouncement = store.bombPotAnnouncement;
-  const gs = store.gameState;
-  const currentActorId = gs.needsToAct[0] ?? null;
-  const currentActorName = currentActorId ? gs.players[currentActorId]?.name : undefined;
+  const runItVotes = useGameStore((s) => s.gameState.runItVotes);
+  const runResults = useGameStore((s) => s.gameState.runResults);
+  const runAnnouncement = useGameStore((s) => s.runAnnouncement);
+  const runDealStartedAt = useGameStore((s) => s.runDealStartedAt);
+  const sevenTwoBountyBB = useGameStore((s) => s.gameState.sevenTwoBountyBB);
+  const sevenTwoAnnouncement = useGameStore((s) => s.sevenTwoAnnouncement);
+  const sevenTwoBountyTrigger = useGameStore((s) => s.gameState.sevenTwoBountyTrigger);
+  const voluntaryShownPlayerIds = useGameStore((s) => s.gameState.voluntaryShownPlayerIds);
+  const bombPotVote = useGameStore((s) => s.gameState.bombPotVote);
+  const bombPotNextHand = useGameStore((s) => s.gameState.bombPotNextHand);
+  const isBombPotHand = useGameStore((s) => s.gameState.isBombPot);
+  const communityCards2 = useGameStore((s) => s.gameState.communityCards2);
+  const bombPotCooldown = useGameStore((s) => s.gameState.bombPotCooldown);
+  const bombPotAnnouncement = useGameStore((s) => s.bombPotAnnouncement);
+  const streetSweeping = useGameStore((s) => s.streetSweeping);
+  const myRevealedCardIndices = useGameStore((s) => s.myRevealedCardIndices);
+  const dealerSeatIndex = useGameStore((s) => s.gameState.dealerSeatIndex);
+  const tableName = useGameStore((s) => s.gameState.tableName);
+  const blinds = useGameStore((s) => s.gameState.blinds);
+  const smallBlindIndex = useGameStore((s) => s.gameState.smallBlindSeatIndex);
+  const bigBlindIndex = useGameStore((s) => s.gameState.bigBlindSeatIndex);
+  const isFirstBet = useGameStore((s) => s.isFirstBet());
+  const currentActorId = useGameStore((s) => s.gameState.needsToAct[0] ?? null);
+  const currentActorName = useGameStore((s) => {
+    const id = s.gameState.needsToAct[0];
+    return id ? s.gameState.players[id]?.name : undefined;
+  });
 
   const handleSitDown = useCallback(
     (seatIndex: number, name?: string, buyInCents?: number) => {
       if (name && buyInCents) {
-        store.sitDown(seatIndex, name, buyInCents);
+        useGameStore.getState().sitDown(seatIndex, name, buyInCents);
       } else {
-        setSelectedSeat(seatIndex);
+        // If the player is already seated and the game hasn't started,
+        // move them to the new seat without reopening the sit-down dialog.
+        const store = useGameStore.getState();
+        const phase = store.gameState.phase;
+        const isSeated = store.myPlayerId && store.gameState.players[store.myPlayerId];
+        const isWaiting = !phase || phase === "waiting";
+        if (isSeated && isWaiting) {
+          store.changeSeat(seatIndex);
+        } else {
+          setSelectedSeat(seatIndex);
+        }
       }
     },
-    [store]
+    []
   );
 
   const confirmSitDown = useCallback(
     (name: string, buyInCents: number) => {
       if (selectedSeat === null) return;
-      store.sitDown(selectedSeat, name, buyInCents);
+      useGameStore.getState().sitDown(selectedSeat, name, buyInCents);
       setSelectedSeat(null);
     },
-    [selectedSeat, store]
+    [selectedSeat]
   );
 
   // Route raise through allIn() when the amount is below the legal raise threshold.
@@ -180,21 +205,21 @@ export default function TablePageClient({ code }: { code: string }) {
   // action in that case is an all-in shove, dispatched via the dedicated all-in action.
   const handleRaise = useCallback(
     (totalAmount: number) => {
-      const { gameState } = store;
+      const { gameState } = useGameStore.getState();
       const actorId = gameState.needsToAct[0];
       const actor = actorId ? gameState.players[actorId] : null;
       if (!actor || actor.stack === 0) return;
       const threshold = gameState.roundBet + gameState.lastLegalRaiseIncrement;
       if (gameState.isBlindIncomplete && totalAmount <= gameState.blinds.big) {
-        store.raise(totalAmount); // completion — engine handles it
+        useGameStore.getState().raise(totalAmount); // completion — engine handles it
       } else if (totalAmount >= threshold) {
-        store.raise(totalAmount);
+        useGameStore.getState().raise(totalAmount);
       } else {
         // Amount is under the legal raise threshold — treat as all-in shove
-        store.allIn();
+        useGameStore.getState().allIn();
       }
     },
-    [store]
+    []
   );
 
   // Show cards mechanic + 7-2 eligibility (computed before displayPlayers map)
@@ -204,8 +229,7 @@ export default function TablePageClient({ code }: { code: string }) {
   const canShowCards =
     phase === "showdown" &&
     viewingPlayer !== null &&
-    !voluntaryShownPlayerIds.includes(viewingPlayer.id) &&
-    (viewerIsFolded || isUncontestedHand);
+    !voluntaryShownPlayerIds.includes(viewingPlayer.id);
   const isSoleUncontestedWinner =
     isUncontestedHand &&
     winners?.length === 1 &&
@@ -225,7 +249,7 @@ export default function TablePageClient({ code }: { code: string }) {
   // Deferred stack display: stacks stay at $0 for all-in players until their winning chips land
   const { currentRun, revealedCount } = useCurrentRun(phase, isRunItBoard, runDealStartedAt, knownCardCount, runCount);
   const settledRunCount = settledRunCountEarly;
-  const displayPlayers = phase === "showdown"
+  const displayPlayers = useMemo(() => phase === "showdown"
     ? players.map((p) => {
         if (!p) return p;
         let pending = 0;
@@ -292,7 +316,8 @@ export default function TablePageClient({ code }: { code: string }) {
         if (p.isYou && sevenTwoEligible) return { ...withWin, sevenTwoEligible: true };
         return withWin;
       })
-    : players;
+    : players,
+  [phase, players, settledRunCount, isRunItBoard, runResults, winners, currentRun, revealedCount, holeCards, sevenTwoEligible, runCount]);
 
   // Progressive pot: during showdown, start at the original total and decrease by 1/N per settled run.
   // state.pot is zeroed by the engine at showdown entry, so we reconstruct from runResults/winners.
@@ -301,7 +326,7 @@ export default function TablePageClient({ code }: { code: string }) {
     let totalPot: number;
     if (isRunItBoard && runResults.length > 0) {
       totalPot = runResults.reduce(
-        (sum, run) => sum + run.winners.reduce((s, w) => s + w.amount, 0),
+        (sum, run) => sum + (run.winners ?? []).reduce((s, w) => s + w.amount, 0),
         0,
       );
     } else if (winners && winners.length > 0) {
@@ -310,9 +335,9 @@ export default function TablePageClient({ code }: { code: string }) {
       return 0;
     }
     let settledAmount = 0;
-    if (isRunItBoard) {
-      for (let r = 0; r < settledRunCount; r++) {
-        settledAmount += runResults[r].winners.reduce((s, w) => s + w.amount, 0);
+    if (isRunItBoard && runResults.length > 0) {
+      for (let r = 0; r < settledRunCount && r < runResults.length; r++) {
+        settledAmount += (runResults[r]?.winners ?? []).reduce((s, w) => s + w.amount, 0);
       }
     } else if (settledRunCount > 0) {
       settledAmount = totalPot;
@@ -353,41 +378,42 @@ export default function TablePageClient({ code }: { code: string }) {
       <TableLayout
         onSitDown={handleSitDown}
         players={displayPlayers as any}
-        dealerIndex={gs.dealerSeatIndex}
-        tableName={gs.tableName}
-        blinds={gs.blinds}
+        dealerIndex={dealerSeatIndex}
+        tableName={tableName}
+        blinds={blinds}
         pot={displayPot}
-        smallBlindIndex={gs.smallBlindSeatIndex}
-        bigBlindIndex={gs.bigBlindSeatIndex}
+        smallBlindIndex={smallBlindIndex}
+        bigBlindIndex={bigBlindIndex}
         communityCards={communityCards}
         holeCards={holeCards}
         handStrength={handStrength}
         phase={phase}
         winners={winners}
-        onFold={store.fold}
-        onCheck={store.check}
-        onCall={store.call}
+        onFold={useGameStore.getState().fold}
+        onCheck={useGameStore.getState().check}
+        onCall={useGameStore.getState().call}
         onRaise={handleRaise}
-        onAllIn={store.allIn}
+        onAllIn={useGameStore.getState().allIn}
         canAllIn={canAllIn}
-        onStartHand={store.startHand}
+        onStartHand={useGameStore.getState().startHand}
         callAmount={callAmount}
         minRaise={minRaise}
         canCheck={checkable}
         canRaise={raiseable}
         isYourTurn={isYourTurn}
         currentActorName={currentActorName}
-        isFirstBet={store.isFirstBet()}
-        handNumber={store.getHandNumber()}
+        isFirstBet={isFirstBet}
+        handNumber={handNumber}
         viewerStack={viewerStack}
+        viewerCurrentBet={viewerCurrentBet}
         showdownCountdown={showdownCountdown}
         turnStartedAt={turnStartedAt}
         isAdmin={isAdmin}
-        streetSweeping={store.streetSweeping}
+        streetSweeping={streetSweeping}
         timerEnabled={timerEnabled}
-        onToggleTimer={store.setTurnTimerEnabled}
+        onToggleTimer={useGameStore.getState().toggleTimer}
         runItVotes={runItVotes}
-        onVoteRun={store.voteRun}
+        onVoteRun={useGameStore.getState().voteRun}
         runResults={runResults}
         runCount={runCount}
         runAnnouncement={runAnnouncement}
@@ -401,18 +427,23 @@ export default function TablePageClient({ code }: { code: string }) {
         sevenTwoAnnouncement={sevenTwoAnnouncement}
         sevenTwoBountyTrigger={sevenTwoBountyTrigger}
         canShowCards={canShowCards}
-        onRevealCard={store.revealCard}
-        myRevealedCardIndices={store.myRevealedCardIndices}
+        sevenTwoEligible={sevenTwoEligible}
+        onRevealCard={useGameStore.getState().revealCard}
+        onPeekCard={useGameStore.getState().peekCard}
+        myRevealedCardIndices={myRevealedCardIndices}
         voluntaryShownPlayerIds={voluntaryShownPlayerIds}
-        onSetSevenTwoBounty={store.setSevenTwoBounty}
+        onSetSevenTwoBounty={useGameStore.getState().setSevenTwoBounty}
         bombPotVote={bombPotVote}
         bombPotNextHand={bombPotNextHand}
         isBombPotHand={isBombPotHand}
         communityCards2={communityCards2}
         bombPotCooldown={bombPotCooldown}
         bombPotAnnouncement={bombPotAnnouncement}
-        onProposeBombPot={store.proposeBombPot}
-        onVoteBombPot={store.voteBombPot}
+        onProposeBombPot={useGameStore.getState().proposeBombPot}
+        onVoteBombPot={useGameStore.getState().voteBombPot}
+        onStandUp={viewingPlayer ? useGameStore.getState().standUp : undefined}
+        onQueueLeave={viewingPlayer ? useGameStore.getState().queueLeave : undefined}
+        leaveQueued={useGameStore((s) => s.leaveQueued)}
       />
 
       {/* Sit-down dialog (desktop — uses dialog variant) */}
@@ -420,7 +451,7 @@ export default function TablePageClient({ code }: { code: string }) {
         {selectedSeat !== null && (
           <SitDownForm
             seatIndex={selectedSeat}
-            bigBlindCents={gs.blinds.big}
+            bigBlindCents={blinds.big}
             onConfirm={confirmSitDown}
             onDismiss={() => setSelectedSeat(null)}
             variant="dialog"
@@ -433,7 +464,7 @@ export default function TablePageClient({ code }: { code: string }) {
         {showRebuySheet && viewingPlayer && (
           <RebuySheet
             playerName={viewingPlayer.name}
-            bigBlindCents={gs.blinds.big}
+            bigBlindCents={blinds.big}
             onRebuy={handleRebuy}
             onLeave={handleLeave}
             variant={isPortrait ? "sheet" : "dialog"}
@@ -441,8 +472,6 @@ export default function TablePageClient({ code }: { code: string }) {
         )}
       </AnimatePresence>
 
-      {/* ── Debug Panel (dev only) ── */}
-      {process.env.NEXT_PUBLIC_DEBUG === "true" && <DebugPanel />}
     </div>
   );
 }

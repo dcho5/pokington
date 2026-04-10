@@ -5,10 +5,12 @@ import { formatCents } from "lib/formatCents";
 import TimerBar from "../TimerBar";
 import VotingPanel from "../VotingPanel";
 import { useRaiseAmount } from "hooks/useRaiseAmount";
+import type { SevenTwoBountyBB } from "@pokington/engine";
 
 interface RaiseSheetProps {
   pot: number;
   stack: number;
+  currentBet?: number;
   minRaise: number;
   bigBlind: number;
   isFirstBet: boolean;
@@ -19,21 +21,22 @@ interface RaiseSheetProps {
 const RaiseSheet: React.FC<RaiseSheetProps> = ({
   pot,
   stack,
+  currentBet = 0,
   minRaise,
   bigBlind,
   isFirstBet,
   onConfirm,
   onDismiss,
 }) => {
-  const { amount, setAmount, increment, lowerBound, presets, clamp } = useRaiseAmount({ minRaise, stack, pot, bigBlind });
+  const { amount, setAmount, increment, lowerBound, presets, clamp, allInTotal } = useRaiseAmount({ minRaise, stack, pot, bigBlind, currentBet });
   const label = isFirstBet ? "Bet" : "Raise to";
-  // When lowerBound === stack the player's only legal move is to go all-in
-  const isAllInOnly = lowerBound >= stack;
+  // When lowerBound === allInTotal the player's only legal move is to go all-in
+  const isAllInOnly = lowerBound >= allInTotal;
 
   return (
     <>
       <motion.div
-        className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40"
+        className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -41,7 +44,7 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
       />
 
       <motion.div
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-3xl
+        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl
           bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl
           border-t border-gray-200/50 dark:border-white/[0.06]
           px-4 pt-4"
@@ -92,7 +95,7 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
             <input
               type="range"
               min={lowerBound}
-              max={stack}
+              max={allInTotal}
               step={increment}
               value={amount}
               onChange={(e) => setAmount(Number(e.target.value))}
@@ -132,14 +135,14 @@ function FoldConfirmSheet({ onConfirm, onDismiss }: { onConfirm: () => void; onD
   return (
     <>
       <motion.div
-        className="fixed inset-0 z-40 bg-black/20 dark:bg-black/40"
+        className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onDismiss}
       />
       <motion.div
-        className="fixed bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-white/[0.06] px-4 pt-4 pb-6"
+        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-white/[0.06] px-4 pt-4 pb-6"
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
@@ -173,6 +176,7 @@ interface ActionBarProps {
   callAmount?: number;
   pot?: number;
   stack?: number;
+  currentBet?: number;
   minRaise?: number;
   bigBlind?: number;
   canCheck?: boolean;
@@ -199,9 +203,9 @@ interface ActionBarProps {
   viewerCanVote?: boolean;
   showNextHand?: boolean;
   viewerPlayerId?: string; // id of the viewing player (to show their vote highlight)
-  players?: Array<{ id?: string; name: string; isFolded?: boolean } | null>;
-  sevenTwoBountyBB?: 0 | 1 | 2 | 3;
-  onSetSevenTwoBounty?: (bountyBB: 0 | 1 | 2 | 3) => void;
+  players?: Array<{ id?: string; name: string; isFolded?: boolean; stack?: number } | null>;
+  sevenTwoBountyBB?: SevenTwoBountyBB;
+  onSetSevenTwoBounty?: (bountyBB: SevenTwoBountyBB) => void;
   handNumber?: number;
   isBombPotHand?: boolean;
 }
@@ -212,6 +216,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
   callAmount = 0,
   pot = 0,
   stack = 0,
+  currentBet = 0,
   minRaise = 0,
   bigBlind = 25,
   canCheck = false,
@@ -250,6 +255,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
   const isShowdown = phase === "showdown";
   const isVoting = phase === "voting";
   const betOrRaiseLabel = isFirstBet ? "Bet" : "Raise";
+  const eligiblePlayerCount = players.filter((p) => p != null && (p.stack ?? 1) > 0).length;
 
   if (isVoting) {
     return (
@@ -276,7 +282,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
           </p>
         )}
 
-        {isAdmin && (isWaiting || showNextHand) && (
+        {isAdmin && (isWaiting || isShowdown) && (
           <>
             {isWaiting && (
               <>
@@ -300,7 +306,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm text-gray-500 dark:text-gray-400 font-semibold whitespace-nowrap">🃏 7-2 bounty</span>
                       <div className="flex gap-1">
-                        {([0, 1, 2, 3] as const).map((n) => (
+                        {([0, 2, 4, 8, 10] as const).map((n) => (
                           <button
                             key={n}
                             onClick={() => onSetSevenTwoBounty?.(n)}
@@ -319,13 +325,21 @@ const ActionBar: React.FC<ActionBarProps> = ({
                 )}
               </>
             )}
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={onStartHand}
-              className="w-full h-[52px] xs:h-[56px] rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-lg shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
-            >
-              {isShowdown ? "Next Hand" : "Start Game"}
-            </motion.button>
+            {eligiblePlayerCount < 2 ? (
+              isWaiting ? (
+                <div className="w-full h-[52px] xs:h-[56px] rounded-2xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 text-sm font-semibold">
+                  Waiting for more players…
+                </div>
+              ) : null
+            ) : (
+              <motion.button
+                whileTap={{ scale: 0.96 }}
+                onClick={onStartHand}
+                className="w-full h-[52px] xs:h-[56px] rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-lg shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+              >
+                {isShowdown ? "Next Hand" : "Start Game"}
+              </motion.button>
+            )}
           </>
         )}
       </div>
@@ -349,7 +363,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
           </p>
         )}
 
-        {isYourTurn && timerEnabled && (
+        {isYourTurn && turnStartedAt != null && (
           <TimerBar startedAt={turnStartedAt} variant="turn" className="mb-3" />
         )}
 
@@ -414,6 +428,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
           <RaiseSheet
             pot={pot}
             stack={stack}
+            currentBet={currentBet}
             minRaise={minRaise}
             bigBlind={bigBlind}
             isFirstBet={isFirstBet}
