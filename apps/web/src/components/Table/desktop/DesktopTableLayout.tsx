@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { LANDSCAPE, computeSeatCoords, type TableGeometry } from "lib/seatLayout";
+import { computeSeatCoords, type TableGeometry } from "lib/seatLayout";
 import { useColorScheme } from "hooks/useColorScheme";
 import { useRaiseAmount } from "hooks/useRaiseAmount";
 import PokerChip from "components/poker/PokerChip";
@@ -12,25 +12,93 @@ import Card from "components/poker/Card";
 import HoleCards from "components/poker/HoleCards";
 import DealerButton from "./DealerButton";
 import { BetChipsLayer } from "./BetChips";
-import { WinnerChipsAnimation, getRunTimings, ANNOUNCE_DELAY_S } from "./WinnerChipsAnimation";
+import { WinnerChipsAnimation } from "./WinnerChipsAnimation";
 import RunItBoard from "../RunItBoard";
-import TimerBar from "../TimerBar";
+
+import AnnouncementBanner from "../AnnouncementBanner";
 import WinnerBanner from "../WinnerBanner";
 import VotingPanel, { RUN_LABELS } from "../VotingPanel";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
 import BombPotVotingPanel from "../BombPotVotingPanel";
 import { SevenTwoBountyChips } from "./SevenTwoBountyChips";
 import { formatCents } from "lib/formatCents";
+import type { HandIndicator } from "lib/handIndicators";
 import { useGameStore } from "store/useGameStore";
-import type { Card as CardType } from "@pokington/shared";
-import type { RunResult, WinnerInfo } from "@pokington/engine";
-import type { Player } from "types/player";
 import type { TableLayoutProps } from "../TableLayout";
 import { isActivePhase } from "lib/phases";
+import {
+  getCenterBoardMode,
+  isRunItShowdownSequence,
+  shouldRenderRunItBoard,
+} from "lib/tableVisualState";
+import { BOMB_POT_ANTE_BB_VALUES } from "constants/game";
+import {
+  getDesktopTableLayoutProfile,
+  type DesktopBombPotCenterStage,
+  type DesktopRunItCenterStage,
+  type DesktopStandardCenterStage,
+} from "lib/desktopTableLayout";
 
 const Seat = dynamic(() => import("./Seat"), { ssr: false });
 
 const TOTAL_SEATS = 10;
+
+function DesktopHandIndicatorFan({ indicators }: { indicators: HandIndicator[] }) {
+  if (indicators.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">Hand</span>
+        <span className="font-black text-gray-500 dark:text-gray-400 text-[18px]">--</span>
+      </div>
+    );
+  }
+
+  if (indicators.length === 1) {
+    const indicator = indicators[0];
+    return (
+      <div className="flex flex-col items-center gap-1.5">
+        <span className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">{indicator.title}</span>
+        <span className="font-black text-gray-900 dark:text-white text-[18px]">
+          {indicator.label ?? "--"}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <span className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">
+        Hands
+      </span>
+      <div className="relative h-[92px] w-[220px]">
+        {indicators.map((indicator, index) => {
+          const center = (indicators.length - 1) / 2;
+          const offset = (index - center) * 32;
+          const rotate = (index - center) * 7;
+          return (
+            <div
+              key={indicator.id}
+              className="absolute left-1/2 top-0 w-[148px] rounded-[20px] border px-3 py-2 text-center shadow-[0_16px_30px_rgba(15,23,42,0.16)] backdrop-blur-md bg-white/95 dark:bg-slate-900/92"
+              style={{
+                transform: `translateX(calc(-50% + ${offset}px)) rotate(${rotate}deg)`,
+                transformOrigin: "bottom center",
+                borderColor: "rgba(148,163,184,0.22)",
+                zIndex: index + 1,
+              }}
+            >
+              <div className="text-[9px] font-black uppercase tracking-[0.24em] text-gray-400">
+                {indicator.title}
+              </div>
+              <div className="mt-1 text-[16px] font-black text-gray-900 dark:text-white">
+                {indicator.label ?? "--"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // ── Desktop Raise Popover (text input + presets + ±, live validation) ──
 function DesktopRaisePopover({
@@ -55,6 +123,7 @@ function DesktopRaisePopover({
   const { amount, setAmount, increment: bbIncrement, lowerBound, presets, clamp, allInTotal } = useRaiseAmount({ minRaise, stack, pot, bigBlind, currentBet });
   const [rawInput, setRawInput] = useState((lowerBound / 100).toFixed(2));
   const [inputError, setInputError] = useState(false);
+  const incrementLabel = formatCents(bbIncrement);
 
   const applyAmount = (cents: number) => {
     const c = clamp(cents);
@@ -94,11 +163,18 @@ function DesktopRaisePopover({
         transition={{ type: "spring", stiffness: 500, damping: 30 }}
         className="absolute bottom-full right-0 mb-2 z-50 w-72 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl p-4"
       >
-        <div className="flex items-center justify-center gap-3 mb-1">
-          <button
-            className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-lg font-bold flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
-            onClick={() => applyAmount(amount - bbIncrement)}
-          >−</button>
+        <div className="flex items-start justify-center gap-3 mb-1">
+          <div className="w-12 flex flex-col items-center gap-1 flex-shrink-0">
+            <button
+              aria-label={`Decrease by ${incrementLabel}`}
+              title={`Decrease by ${incrementLabel}`}
+              className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-lg font-bold flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+              onClick={() => applyAmount(amount - bbIncrement)}
+            >−</button>
+            <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 tabular-nums">
+              -{incrementLabel}
+            </span>
+          </div>
           <input
             type="text"
             inputMode="decimal"
@@ -115,10 +191,17 @@ function DesktopRaisePopover({
                 : "bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white focus:border-red-500 focus:ring-1 focus:ring-red-500"
             }`}
           />
-          <button
-            className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-lg font-bold flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
-            onClick={() => applyAmount(amount + bbIncrement)}
-          >+</button>
+          <div className="w-12 flex flex-col items-center gap-1 flex-shrink-0">
+            <button
+              aria-label={`Increase by ${incrementLabel}`}
+              title={`Increase by ${incrementLabel}`}
+              className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-lg font-bold flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
+              onClick={() => applyAmount(amount + bbIncrement)}
+            >+</button>
+            <span className="text-[9px] font-bold text-gray-500 dark:text-gray-400 tabular-nums">
+              +{incrementLabel}
+            </span>
+          </div>
         </div>
 
         <div className="h-4 mb-2 text-center">
@@ -168,52 +251,52 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: 8, scale: 0.94 }}
       transition={{ type: "spring", stiffness: 420, damping: 28 }}
-      className="absolute bottom-full mb-2 left-0 z-10 w-80 rounded-2xl p-3 max-h-[60vh] overflow-y-auto"
+      className="absolute bottom-full mb-4 left-0 z-[90] w-[1170px] rounded-[36px] p-[30px] max-h-[1100px] overflow-y-auto"
       style={{
         background: "rgba(8,10,20,0.97)",
         border: "1px solid rgba(255,255,255,0.1)",
-        backdropFilter: "blur(12px)",
-        boxShadow: "0 -8px 32px rgba(0,0,0,0.5)",
+        backdropFilter: "blur(20px)",
+        boxShadow: "0 24px 72px rgba(0,0,0,0.58)",
       }}
     >
-      <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Session Ledger</span>
-        <button onClick={onClose} className="text-gray-600 hover:text-gray-400 text-xs font-bold">✕</button>
+      <div className="flex items-center justify-between mb-6 px-1">
+        <span className="text-[19px] font-black text-gray-400 uppercase tracking-[0.28em]">Session Ledger</span>
+        <button onClick={onClose} className="text-gray-600 hover:text-gray-400 text-xl font-bold">✕</button>
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-gray-600 text-xs text-center py-3">No players seated yet.</p>
+        <p className="text-gray-600 text-xl text-center py-9">No players seated yet.</p>
       ) : (
         <>
-          <div className="flex text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1 px-1">
+          <div className="flex text-[16px] font-bold text-gray-600 uppercase tracking-[0.22em] mb-3 px-1">
             <span className="flex-1">Player</span>
-            <span className="w-14 text-right">Buy-in</span>
-            <span className="w-14 text-right">Cash-out</span>
-            <span className="w-12 text-right">Net</span>
+            <span className="w-40 text-right">Buy-in</span>
+            <span className="w-40 text-right">Cash-out</span>
+            <span className="w-36 text-right">Net</span>
           </div>
 
-          <div className="flex flex-col gap-0.5 mb-3">
+          <div className="flex flex-col gap-2.5 mb-6">
             {rows.map((row) => {
               const netColor = row.net > 0 ? "#4ade80" : row.net < 0 ? "#f87171" : "#6b7280";
               const netPrefix = row.net > 0 ? "+" : "";
               return (
                 <div
                   key={row.playerId}
-                  className="flex items-center px-2 py-1.5 rounded-lg"
-                  style={{ background: "rgba(255,255,255,0.04)" }}
+                  className="flex items-center px-5 py-4 rounded-[26px]"
+                  style={{ background: "rgba(255,255,255,0.05)" }}
                 >
-                  <div className="flex-1 flex items-center gap-1 min-w-0">
-                    <span className="text-white text-xs font-semibold truncate">{row.name}</span>
+                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                    <span className="text-white text-[23px] font-semibold truncate">{row.name}</span>
                     {row.isSeated && (
-                      <span className="text-[8px] font-bold px-1 py-px rounded-full flex-shrink-0"
+                      <span className="text-[15px] font-bold px-3 py-1 rounded-full flex-shrink-0"
                         style={{ background: "rgba(34,197,94,0.12)", color: "#86efac", border: "1px solid rgba(34,197,94,0.2)" }}>
                         in
                       </span>
                     )}
                   </div>
-                  <span className="w-14 text-right text-[10px] text-gray-500 font-mono">{formatCents(row.totalBuyIn)}</span>
-                  <span className="w-14 text-right text-[10px] text-gray-400 font-mono">{formatCents(row.totalCashOut)}</span>
-                  <span className="w-12 text-right text-[11px] font-black font-mono" style={{ color: netColor }}>
+                  <span className="w-40 text-right text-[22px] text-gray-500 font-mono">{formatCents(row.totalBuyIn)}</span>
+                  <span className="w-40 text-right text-[22px] text-gray-400 font-mono">{formatCents(row.totalCashOut)}</span>
+                  <span className="w-36 text-right text-[27px] font-black font-mono" style={{ color: netColor }}>
                     {netPrefix}{formatCents(Math.abs(row.net))}
                   </span>
                 </div>
@@ -223,18 +306,18 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
 
           {payouts.length > 0 && (
             <>
-              <div className="h-px mb-2" style={{ background: "rgba(255,255,255,0.07)" }} />
-              <div className="text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1.5 px-1">Payouts</div>
-              <div className="flex flex-col gap-1">
+              <div className="h-px mb-5" style={{ background: "rgba(255,255,255,0.07)" }} />
+              <div className="text-[16px] font-bold text-gray-600 uppercase tracking-[0.22em] mb-3 px-1">Payouts</div>
+              <div className="flex flex-col gap-3">
                 {payouts.map((p, i) => (
-                  <div key={i} className="flex items-center justify-between px-2 py-1.5 rounded-lg"
+                  <div key={i} className="flex items-center justify-between px-5 py-4 rounded-[26px]"
                     style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.12)" }}>
-                    <span className="text-xs text-gray-300">
+                    <span className="text-[22px] text-gray-300">
                       <span className="font-bold text-red-400">{p.fromName}</span>
                       <span className="text-gray-600"> → </span>
                       <span className="font-bold text-green-400">{p.toName}</span>
                     </span>
-                    <span className="text-xs font-black text-white font-mono ml-2">{formatCents(p.amount)}</span>
+                    <span className="text-[27px] font-black text-white font-mono ml-4">{formatCents(p.amount)}</span>
                   </div>
                 ))}
               </div>
@@ -246,8 +329,12 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-const DesktopTableLayout: React.FC<TableLayoutProps> = ({
+type DesktopTableLayoutProps = TableLayoutProps & { desktopScale?: number };
+
+const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   onSitDown,
+  desktopScale = 1,
+  seatSelectionLocked = false,
   players = [],
   dealerIndex = 0,
   tableName,
@@ -255,7 +342,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
   pot,
   communityCards,
   holeCards,
-  handStrength,
+  handIndicators = [],
   phase,
   winners,
   onFold,
@@ -276,11 +363,8 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
   viewerStack = 0,
   viewerCurrentBet = 0,
   showdownCountdown = null,
-  turnStartedAt = null,
   isAdmin = false,
   streetSweeping = false,
-  timerEnabled = true,
-  onToggleTimer,
   runItVotes = {},
   onVoteRun,
   runResults = [],
@@ -291,7 +375,6 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
   isRunItBoard = false,
   knownCardCount = 0,
   runDealStartedAt = null,
-  showNextHand = true,
   sevenTwoBountyBB = 0,
   sevenTwoAnnouncement = null,
   sevenTwoBountyTrigger = null,
@@ -300,7 +383,6 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
   myRevealedCardIndices,
   sevenTwoEligible = false,
   voluntaryShownPlayerIds = [],
-  onSetSevenTwoBounty,
   bombPotVote = null,
   bombPotNextHand: _bombPotNextHand = null,
   isBombPotHand = false,
@@ -313,10 +395,63 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
   onStandUp,
   onQueueLeave,
   leaveQueued,
+  cardPeelPersistenceKey,
 }) => {
   const isDark = useColorScheme() === "dark";
-  const g: TableGeometry = LANDSCAPE;
   const router = useRouter();
+  const isShowdown = phase === "showdown";
+  const isWaiting = !phase || phase === "waiting";
+  const centerBoardMode = getCenterBoardMode({
+    phase,
+    isBombPotHand,
+    isRunItBoard,
+    runDealStartedAt,
+    runAnnouncement,
+    runResults,
+    communityCards2,
+  });
+  const isRunItCenterStage = centerBoardMode === "runIt";
+  const isRunItShowdown = isRunItShowdownSequence({
+    phase,
+    isBombPotHand,
+    isRunItBoard,
+    runResults,
+  });
+  const isShowingBombPotCenterStage = centerBoardMode === "bombPot";
+  const isRunItDealing = shouldRenderRunItBoard({
+    phase,
+    isRunItBoard,
+    isBombPotHand,
+    runDealStartedAt,
+    runAnnouncement,
+  });
+  const resolvedRunCount = Math.max(runCount, runResults.length, 1);
+  const desktopLayout = getDesktopTableLayoutProfile({
+    isBombPotHand: isShowingBombPotCenterStage,
+    isRunItBoard: isRunItCenterStage,
+    runCount: resolvedRunCount,
+  });
+  const centerStage = desktopLayout.centerStage;
+  const standardCenterStage =
+    centerStage.kind === "standard"
+      ? centerStage as DesktopStandardCenterStage
+      : null;
+  const bombPotCenterStage =
+    centerStage.kind === "bombPot"
+      ? centerStage as DesktopBombPotCenterStage
+      : null;
+  const runItCenterStage =
+    centerStage.kind === "runIt"
+      ? centerStage as DesktopRunItCenterStage
+      : null;
+  const g: TableGeometry = desktopLayout.seat.geometry;
+  const stageInset = Math.max(0, (1 - desktopScale) * 22);
+  const overlayLift = -Math.round(desktopLayout.overlays.lift + stageInset * 0.75);
+  const seatSize = desktopLayout.seat.size;
+  const infoClusterStyle = {
+    left: Math.round(desktopLayout.infoCluster.left + stageInset),
+    bottom: Math.round(desktopLayout.infoCluster.bottom + stageInset * 0.5),
+  };
 
   const [bothRevealed, setBothRevealed] = useState(false);
   const [autoFlip, setAutoFlip] = useState(false);
@@ -347,8 +482,6 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, [ledgerOpen]);
-  const handleRevealChange = useCallback((revealed: boolean) => setBothRevealed(revealed), []);
-
   // Container width for winner chip animation pixel math
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -363,6 +496,10 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
 
   const youPlayer = players.find((p) => p != null && p.isYou) ?? null;
   const viewingPlayerId = players.find((p) => p?.isYou)?.id;
+  const minPlayerStack = players.reduce((min, p) => {
+    if (p == null || (p.stack ?? 0) <= 0) return min;
+    return min === undefined ? p.stack : Math.min(min, p.stack);
+  }, undefined as number | undefined);
 
   const activeIdx = players.findIndex((p) => p?.isCurrentActor);
   const { x: ax, y: ay } =
@@ -374,12 +511,21 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
   const CARD_COUNT = 5;
   const isVoting = phase === "voting";
   const isPlaying = phase && phase !== "waiting" && phase !== "showdown" && phase !== "voting";
-  const isShowdown = phase === "showdown";
-  const isWaiting = !phase || phase === "waiting";
-  const isRunItShowdown = isRunItBoard;
-  const isRunItDealing = isRunItShowdown && runDealStartedAt != null && runAnnouncement == null;
   const hasHoleCards = holeCards != null;
   const betOrRaiseLabel = isFirstBet ? "Bet" : "Raise";
+  const bombPotAnnouncementIsCanceled = bombPotAnnouncement?.kind === "canceled";
+  const centerStageTransition = {
+    type: "spring" as const,
+    stiffness: 280,
+    damping: 30,
+    mass: 0.9,
+  };
+
+  useEffect(() => {
+    if (!isYourTurn || !canRaise) {
+      setRaiseOpen(false);
+    }
+  }, [canRaise, isYourTurn]);
 
   return (
     <div className="flex flex-col h-full w-full overflow-hidden bg-gray-100 dark:bg-gray-950 transition-colors duration-500">
@@ -393,7 +539,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
         aria-label="Leave table"
       >
         <span className="text-lg leading-none">&larr;</span>
-        <span>{tableName ?? "Menu"}</span>
+        <span className="max-w-[180px] truncate">{tableName ?? "Menu"}</span>
       </button>
 
       {/* Ambient Background Glow */}
@@ -403,14 +549,26 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
 
       {/* Table area */}
       <div className="relative flex-1 flex items-center justify-center overflow-hidden z-10">
-        <div ref={tableContainerRef} className="relative w-full max-w-[90%] mx-auto aspect-[21/9]">
+        <div
+          ref={tableContainerRef}
+          className="relative mx-auto"
+          style={{
+            width: `${desktopLayout.table.maxWidthPct}%`,
+            aspectRatio: `${desktopLayout.table.aspectRatio}`,
+          }}
+        >
           {/* Rail */}
-          <div className="absolute inset-0 rounded-[100px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] dark:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)]" />
+          <div
+            className="absolute inset-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] dark:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)]"
+            style={{ borderRadius: desktopLayout.table.railRadius }}
+          />
 
           {/* Table Surface */}
           <div
-            className="absolute inset-[3px] rounded-[97px] shadow-inner overflow-hidden"
+            className="absolute shadow-inner overflow-hidden"
             style={{
+              inset: desktopLayout.table.feltInset,
+              borderRadius: desktopLayout.table.feltRadius,
               background: isDark
                 ? "radial-gradient(ellipse at 50% 38%, #2c1f1f 0%, #1a1212 55%, #0d0808 100%)"
                 : "radial-gradient(ellipse at 50% 38%, #1e2a3a 0%, #111a26 58%, #070c14 100%)",
@@ -418,24 +576,40 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
           >
             <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none" />
 
-            {/* Floating chip — hidden during run-it card deal to free up center space */}
-            <AnimatePresence>
-              {!isRunItDealing && (
+            {/* Floating chip */}
+            <motion.div
+              className="absolute z-10 pointer-events-none"
+              initial={false}
+              animate={{
+                left: `${centerStage.chipLeftPct}%`,
+                top: `${centerStage.chipTopPct}%`,
+              }}
+              transition={centerStageTransition}
+            >
+              <div className="-translate-x-1/2 -translate-y-1/2">
                 <motion.div
-                  className="absolute left-1/2 top-[27%] -translate-x-1/2 -translate-y-1/2 z-10 pointer-events-none"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.4 }}
+                  initial={false}
+                  animate={{
+                    scale: isRunItDealing ? 0.94 : 1,
+                    rotate: isRunItDealing ? -12 : 0,
+                    opacity: 1,
+                  }}
+                  transition={centerStageTransition}
                 >
-                  <PokerChip size={34} glowAngle={chipGlowAngle} />
+                  <PokerChip size={30} glowAngle={chipGlowAngle} />
                 </motion.div>
-              )}
-            </AnimatePresence>
+              </div>
+            </motion.div>
 
             {/* ── Community Cards (normal, non-run-it showdown) ── */}
-            {!isRunItShowdown && !isBombPotHand && (
-              <div className="absolute left-1/2 top-[46%] -translate-x-1/2 -translate-y-1/2 flex gap-3 lg:gap-5">
+            {centerBoardMode === "single" && (
+              <div
+                className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 flex"
+                style={{
+                  top: `${standardCenterStage?.topPct ?? 43.6}%`,
+                  gap: standardCenterStage?.gap ?? 20,
+                }}
+              >
                 {Array.from({ length: CARD_COUNT }, (_, i) => {
                   const isRevealed = communityCards?.[i] != null;
                   const cardKey = `${handNumber}-card-${i}-${isRevealed ? "shown" : "hidden"}`;
@@ -448,7 +622,11 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                     >
                       <Card
                         card={communityCards?.[i]}
-                        className="w-[72px] h-[100px] lg:w-[96px] lg:h-[136px] rounded-xl shadow-2xl"
+                        className="rounded-2xl shadow-2xl"
+                        style={{
+                          width: standardCenterStage?.cardWidth,
+                          height: standardCenterStage?.cardHeight,
+                        }}
                       />
                     </div>
                   );
@@ -457,10 +635,24 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             )}
 
             {/* ── Bomb Pot: two boards ── */}
-            {isBombPotHand && !isRunItShowdown && (
-              <div className="absolute left-1/2 top-[44%] -translate-x-1/2 -translate-y-1/2 flex flex-col gap-1.5 items-center">
-                <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Board 1</div>
-                <div className="flex gap-2 lg:gap-4">
+            {isShowingBombPotCenterStage && (
+              <div
+                className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center"
+                style={{
+                  top: `${bombPotCenterStage?.topPct ?? 41.6}%`,
+                  gap: bombPotCenterStage?.stackGap ?? 12,
+                }}
+              >
+                <div
+                  className="font-black text-gray-400 uppercase"
+                  style={{
+                    fontSize: bombPotCenterStage?.labelFontSize,
+                    letterSpacing: `${bombPotCenterStage?.labelTrackingEm ?? 0.28}em`,
+                  }}
+                >
+                  Board 1
+                </div>
+                <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
                   {Array.from({ length: CARD_COUNT }, (_, i) => {
                     const isRevealed = communityCards?.[i] != null;
                     const cardKey = `${handNumber}-b1-card-${i}-${isRevealed ? "shown" : "hidden"}`;
@@ -468,14 +660,26 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                       <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
                         <Card
                           card={communityCards?.[i]}
-                          className="w-[60px] h-[84px] lg:w-[80px] lg:h-[112px] rounded-xl shadow-xl"
+                          className="rounded-xl shadow-xl"
+                          style={{
+                            width: bombPotCenterStage?.cardWidth,
+                            height: bombPotCenterStage?.cardHeight,
+                          }}
                         />
                       </div>
                     );
                   })}
                 </div>
-                <div className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">Board 2</div>
-                <div className="flex gap-2 lg:gap-4">
+                <div
+                  className="mt-1 font-black text-gray-400 uppercase"
+                  style={{
+                    fontSize: bombPotCenterStage?.labelFontSize,
+                    letterSpacing: `${bombPotCenterStage?.labelTrackingEm ?? 0.28}em`,
+                  }}
+                >
+                  Board 2
+                </div>
+                <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
                   {Array.from({ length: CARD_COUNT }, (_, i) => {
                     const isRevealed = communityCards2?.[i] != null;
                     const cardKey = `${handNumber}-b2-card-${i}-${isRevealed ? "shown" : "hidden"}`;
@@ -483,7 +687,11 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                       <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
                         <Card
                           card={communityCards2?.[i]}
-                          className="w-[60px] h-[84px] lg:w-[80px] lg:h-[112px] rounded-xl shadow-xl"
+                          className="rounded-xl shadow-xl"
+                          style={{
+                            width: bombPotCenterStage?.cardWidth,
+                            height: bombPotCenterStage?.cardHeight,
+                          }}
                         />
                       </div>
                     );
@@ -494,34 +702,55 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
 
             {/* ── Run-it board — all runs stacked along Y axis ── */}
             {isRunItDealing && (
-              <div className="absolute left-1/2 top-[38%] -translate-x-1/2 -translate-y-1/2 z-10 w-[460px] lg:w-[620px]">
+              <div
+                className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
+                style={{
+                  top: `${runItCenterStage?.topPct ?? 38.2}%`,
+                  width: runItCenterStage?.rowWidth,
+                }}
+              >
                 <RunItBoard
                   runResults={runResults}
                   handNumber={handNumber}
                   runDealStartedAt={runDealStartedAt!}
                   knownCardCount={knownCardCount}
+                  desktopLayout={runItCenterStage ?? undefined}
                 />
               </div>
             )}
 
             {/* Pot Display — visible whenever pot > 0 (voting, active play, and throughout showdown) */}
             {(pot ?? 0) > 0 && (
-              <div className="absolute left-1/2 top-[62%] -translate-x-1/2 text-center group">
-                <div className="text-[10px] uppercase tracking-[0.3em] text-gray-400 font-black mb-1.5 opacity-80">Total Pot</div>
-                <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="px-10 py-3 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 shadow-lg text-white font-mono font-black text-xl lg:text-2xl transition-all group-hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] group-hover:-translate-y-0.5"
-                >
-                  {formatCents(pot ?? 0)}
-                </motion.div>
-              </div>
+              <motion.div
+                className="absolute z-20"
+                initial={false}
+                animate={{
+                  left: `${centerStage.potLeftPct}%`,
+                  top: `${centerStage.potTopPct}%`,
+                }}
+                transition={centerStageTransition}
+              >
+                <div className="-translate-x-1/2 -translate-y-1/2 text-center group">
+                  <div className="text-[10px] uppercase tracking-[0.28em] text-gray-400 font-black mb-1.5 opacity-80">Total Pot</div>
+                  <motion.div
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: isRunItDealing ? 0.96 : 1, opacity: 1 }}
+                    transition={centerStageTransition}
+                    className="min-w-[170px] px-7 py-3.5 rounded-[22px] bg-gradient-to-r from-red-500 to-red-700 shadow-lg text-white font-mono font-black text-[28px] transition-all group-hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] group-hover:-translate-y-0.5"
+                    style={{
+                      boxShadow: "0 16px 32px rgba(239,68,68,0.26), 0 0 0 1px rgba(255,255,255,0.08) inset",
+                    }}
+                  >
+                    {formatCents(pot ?? 0)}
+                  </motion.div>
+                </div>
+              </motion.div>
             )}
 
             {/* Winner celebration banner — normal showdown only (no run-it board) */}
             <AnimatePresence>
               {isShowdown && !isRunItShowdown && winners && winners.length > 0 && (
-                <div className="absolute inset-x-0 top-[15%] flex justify-center z-30 pointer-events-none">
+                <div className="absolute inset-x-0 top-[15%] flex justify-center z-[160] pointer-events-none">
                   <WinnerBanner winners={winners} players={players} variant="desktop" />
                 </div>
               )}
@@ -530,7 +759,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             {/* 7-2 Offsuit announcement banner */}
             <AnimatePresence>
               {sevenTwoAnnouncement && (
-                <div className="absolute inset-x-0 top-[5%] flex justify-center z-[55] pointer-events-none">
+                <div className="absolute inset-x-0 top-[5%] flex justify-center z-[170] pointer-events-none">
                   <SevenTwoAnnouncement
                     winnerName={sevenTwoAnnouncement.winnerName}
                     perPlayer={sevenTwoAnnouncement.perPlayer}
@@ -545,20 +774,19 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             {/* Run announcement banner */}
             <AnimatePresence>
               {runAnnouncement != null && (
-                <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.7, y: -16 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 24 }}
-                    className="px-10 py-5 rounded-3xl text-white font-black text-xl lg:text-2xl shadow-2xl"
-                    style={{
-                      background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
-                      boxShadow: "0 0 50px rgba(124,58,237,0.5), 0 20px 40px rgba(0,0,0,0.5)",
-                    }}
-                  >
-                    Running it {RUN_LABELS[runAnnouncement - 1]}!
-                  </motion.div>
+                <div className="absolute inset-0 flex items-center justify-center z-[175] pointer-events-none" style={{ transform: `translateY(${overlayLift}px)` }}>
+                  <AnnouncementBanner
+                    eyebrow="All-in Showdown"
+                    title={`Running it ${RUN_LABELS[runAnnouncement - 1]}`}
+                    detail={
+                      runAnnouncement === 1
+                        ? "A single board will settle the pot."
+                        : `${runAnnouncement} boards will decide this hand.`
+                    }
+                    badge={`${runAnnouncement} ${runAnnouncement === 1 ? "board" : "boards"}`}
+                    tone="violet"
+                    variant="desktop"
+                  />
                 </div>
               )}
             </AnimatePresence>
@@ -566,7 +794,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             {/* Bomb pot voting panel */}
             <AnimatePresence>
               {bombPotVote && (
-                <div className="absolute inset-0 flex items-center justify-center z-[60] pointer-events-none">
+                <div className="overlay-scrim-strong absolute inset-0 flex items-center justify-center z-[180] rounded-[94px] pointer-events-none" style={{ transform: `translateY(${overlayLift}px)` }}>
                   <div className="pointer-events-auto">
                     <BombPotVotingPanel
                       vote={bombPotVote}
@@ -576,6 +804,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                       onApprove={() => onVoteBombPot?.(true)}
                       onReject={() => onVoteBombPot?.(false)}
                       variant="desktop"
+                      desktopMetrics={desktopLayout.bombPotVotingPanel}
                     />
                   </div>
                 </div>
@@ -585,23 +814,15 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             {/* Bomb pot announcement banner */}
             <AnimatePresence>
               {bombPotAnnouncement && (
-                <div className="absolute inset-0 flex items-center justify-center z-[76] pointer-events-none">
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.7, y: -16 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ type: "spring", stiffness: 380, damping: 22 }}
-                    className="px-10 py-5 rounded-3xl text-white font-black text-xl lg:text-2xl shadow-2xl"
-                    style={{
-                      background: "linear-gradient(135deg, #1e1b4b, #312e81)",
-                      boxShadow: "0 0 50px rgba(99,102,241,0.5), 0 20px 40px rgba(0,0,0,0.5)",
-                    }}
-                  >
-                    <div className="text-center">BOMB POT!</div>
-                    <div className="text-sm text-indigo-200 text-center mt-1 font-normal">
-                      {bombPotAnnouncement.anteBB}x BB ante next hand
-                    </div>
-                  </motion.div>
+                <div className="absolute inset-0 flex items-center justify-center z-[178] pointer-events-none" style={{ transform: `translateY(${overlayLift}px)` }}>
+                  <AnnouncementBanner
+                    eyebrow={bombPotAnnouncementIsCanceled ? "Table Update" : "Special Hand"}
+                    title={bombPotAnnouncement.title}
+                    detail={bombPotAnnouncement.detail}
+                    badge={bombPotAnnouncementIsCanceled ? "Canceled" : "Bomb Pot"}
+                    tone={bombPotAnnouncementIsCanceled ? "amber" : "sky"}
+                    variant="desktop"
+                  />
                 </div>
               )}
             </AnimatePresence>
@@ -609,7 +830,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             {/* Voting overlay */}
             <AnimatePresence>
               {isVoting && (
-                <div className="absolute inset-0 flex items-center justify-center z-40 bg-black/50 backdrop-blur-sm rounded-[94px]">
+                <div className="overlay-scrim-strong absolute inset-0 flex items-center justify-center z-[165] rounded-[94px]">
                   <VotingPanel
                     votes={runItVotes}
                     players={players}
@@ -617,6 +838,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                     onVote={onVoteRun}
                     votingStartedAt={votingStartedAt}
                     canVote={viewerCanVote}
+                    desktopMetrics={desktopLayout.votingPanel}
                   />
                 </div>
               )}
@@ -625,7 +847,12 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
 
           {/* Dealer Button */}
           {dealerIndex >= 0 && (
-            <DealerButton seatIndex={dealerIndex} totalSeats={TOTAL_SEATS} geometry={g} />
+            <DealerButton
+              seatIndex={dealerIndex}
+              totalSeats={TOTAL_SEATS}
+              geometry={g}
+              orbitFactor={desktopLayout.seat.dealerOrbitFactor}
+            />
           )}
 
           {/* Seats */}
@@ -640,7 +867,8 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
               isDealer={i === dealerIndex}
               isCurrentActor={players[i]?.isCurrentActor ?? false}
               onSitDown={onSitDown}
-              seatSize={110}
+              seatSelectionLocked={seatSelectionLocked}
+              seatSize={seatSize}
               handNumber={handNumber}
             />
           ))}
@@ -650,8 +878,12 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             players={players as any}
             totalSeats={TOTAL_SEATS}
             geometry={g}
-            bigBlind={blinds?.big}
+            seatSize={seatSize}
             sweepMode={streetSweeping}
+            tableWidth={desktopLayout.tableReferenceSize.width}
+            tableHeight={desktopLayout.tableReferenceSize.height}
+            potLeftPct={centerStage.potLeftPct}
+            potTopPct={centerStage.potTopPct}
           />
 
           {/* Winner chips — animate from pot to winner seat(s), per run if multi-run */}
@@ -667,6 +899,9 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                 geometry={g}
                 containerWidth={containerWidth}
                 handNumber={handNumber}
+                tableAspectRatio={desktopLayout.table.aspectRatio}
+                potTopPct={centerStage.potTopPct}
+                potLeftPct={centerStage.potLeftPct}
               />
             )}
           </AnimatePresence>
@@ -686,103 +921,132 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
           )}
         </div>
 
-        {/* Table Info Bar */}
-        <div className="absolute bottom-4 left-6 hidden lg:flex items-center gap-4 px-5 py-3 rounded-2xl bg-white/85 dark:bg-[rgba(3,7,18,0.85)] border border-gray-200/50 dark:border-white/[0.06] backdrop-blur-md shadow-xl animate-slide-up">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white text-lg">
-            ♠
-          </div>
-          <div>
-            <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none">
-              {tableName ?? "Pokington Main"}
-            </h4>
-            <p className="text-sm font-bold text-gray-900 dark:text-white">
-              Blinds: {formatCents(blinds?.small ?? 100)} / {formatCents(blinds?.big ?? 200)}
-            </p>
-          </div>
-          {sevenTwoBountyBB > 0 && (
-            <div className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wide bg-red-500/20 text-red-400 border border-red-500/30">
-              7-2: ON • {sevenTwoBountyBB}x BB
+        <div className="absolute flex items-end gap-3 z-[55] animate-slide-up" style={infoClusterStyle}>
+          {/* Table Info Bar */}
+          <div className="flex items-center gap-4 px-5 py-3 rounded-2xl bg-white/85 dark:bg-[rgba(3,7,18,0.85)] border border-gray-200/50 dark:border-white/[0.06] backdrop-blur-md shadow-xl">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white text-lg">
+              ♠
             </div>
-          )}
-          {isBombPotHand && (
-            <div className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-              BOMB POT
+            <div>
+              <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none">
+                {tableName ?? "Pokington Main"}
+              </h4>
+              <p className="text-sm font-bold text-gray-900 dark:text-white">
+                Blinds: {formatCents(blinds?.small ?? 100)} / {formatCents(blinds?.big ?? 200)}
+              </p>
             </div>
-          )}
-          {/* 💰 Ledger button + panel */}
-          <div className="relative" ref={ledgerRef}>
-            <motion.button
-              whileTap={{ scale: 0.88 }}
-              onClick={() => setLedgerOpen((o) => !o)}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-base"
-              style={{
-                background: ledgerOpen ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.08)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                backdropFilter: "blur(8px)",
-              }}
-            >
-              💰
-            </motion.button>
-            <AnimatePresence>
-              {ledgerOpen && <DesktopLedgerPanel onClose={() => setLedgerOpen(false)} />}
-            </AnimatePresence>
+            {sevenTwoBountyBB > 0 && (
+              <div className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-red-500/20 text-red-400 border border-red-500/30">
+                7-2: ON • {sevenTwoBountyBB}x BB
+              </div>
+            )}
+            {isBombPotHand && (
+              <div className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                BOMB POT
+              </div>
+            )}
           </div>
 
-          {/* Propose bomb pot — 💣 icon button + popover */}
-          {!bombPotVote && !_bombPotNextHand && viewingPlayerId && !bombPotCooldown.includes(viewingPlayerId) && (
-            <div className="relative" ref={bombProposePanelRef}>
+          <div className="flex items-center gap-2 rounded-2xl bg-white/78 dark:bg-[rgba(3,7,18,0.78)] border border-gray-200/50 dark:border-white/[0.06] backdrop-blur-md shadow-xl px-3 py-2">
+            <div className="relative" ref={ledgerRef}>
               <motion.button
                 whileTap={{ scale: 0.88 }}
-                onClick={() => setBombProposePanelOpen((o) => !o)}
-                className="w-9 h-9 rounded-full flex items-center justify-center text-lg"
+                onClick={() => setLedgerOpen((o) => !o)}
+                className="w-11 h-11 rounded-full flex items-center justify-center text-lg"
                 style={{
-                  background: bombProposePanelOpen ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.22)",
-                  border: "1px solid rgba(99,102,241,0.45)",
+                  background: ledgerOpen ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)",
+                  border: "1px solid rgba(255,255,255,0.15)",
                   backdropFilter: "blur(8px)",
                 }}
+                aria-label="Open session ledger"
               >
-                💣
+                💰
               </motion.button>
-
               <AnimatePresence>
-                {bombProposePanelOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.92 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.92 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 26 }}
-                    className="absolute bottom-full mb-2 left-0 flex flex-col gap-1.5 p-2 rounded-2xl z-10"
-                    style={{
-                      background: "rgba(15,17,30,0.97)",
-                      border: "1px solid rgba(99,102,241,0.3)",
-                      backdropFilter: "blur(12px)",
-                      boxShadow: "0 -8px 32px rgba(99,102,241,0.25)",
-                    }}
-                  >
-                    <div className="text-[8px] font-black text-indigo-400 uppercase tracking-widest px-1">
-                      Bomb Pot
-                    </div>
-                    <div className="flex gap-1">
-                      {([2, 4, 8, 10] as const).map((n) => (
-                        <button
-                          key={n}
-                          onClick={() => { onProposeBombPot?.(n); setBombProposePanelOpen(false); }}
-                          className="px-2 py-1 rounded-lg text-[10px] font-black transition-colors hover:bg-indigo-500/30"
-                          style={{
-                            background: "rgba(99,102,241,0.18)",
-                            color: "#a5b4fc",
-                            border: "1px solid rgba(99,102,241,0.3)",
-                          }}
-                        >
-                          {n}x
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
+                {ledgerOpen && <DesktopLedgerPanel onClose={() => setLedgerOpen(false)} />}
               </AnimatePresence>
             </div>
-          )}
+
+            {!bombPotVote && !_bombPotNextHand && viewingPlayerId && !bombPotCooldown.includes(viewingPlayerId) && (
+              <div className="relative" ref={bombProposePanelRef}>
+                <motion.button
+                  whileTap={{ scale: 0.88 }}
+                  onClick={() => setBombProposePanelOpen((o) => !o)}
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-xl"
+                  style={{
+                    background: bombProposePanelOpen ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.22)",
+                    border: "1px solid rgba(99,102,241,0.45)",
+                    backdropFilter: "blur(8px)",
+                  }}
+                  aria-label="Propose bomb pot"
+                >
+                  💣
+                </motion.button>
+
+                <AnimatePresence>
+                  {bombProposePanelOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8, scale: 0.92 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 8, scale: 0.92 }}
+                      transition={{ type: "spring", stiffness: 400, damping: 26 }}
+                      className="absolute bottom-full mb-4 left-0 flex flex-col gap-6 p-[30px] rounded-[36px] z-[80] w-[678px]"
+                      style={{
+                        background: "rgba(15,17,30,0.97)",
+                        border: "1px solid rgba(99,102,241,0.3)",
+                        backdropFilter: "blur(12px)",
+                        boxShadow: "0 -8px 32px rgba(99,102,241,0.25)",
+                      }}
+                    >
+                      <div className="px-1">
+                        <div className="text-[16px] font-black text-indigo-400 uppercase tracking-[0.22em]">
+                          Bomb Pot
+                        </div>
+                        <div className="mt-1 text-[21px] font-semibold text-indigo-100">
+                          Players ante in and two boards are dealt.
+                        </div>
+                        <div className="mt-1 text-[16px] text-indigo-200/70">
+                          Choose the blind multiple for next hand.
+                        </div>
+                      </div>
+                      <div className="flex gap-3">
+                        {BOMB_POT_ANTE_BB_VALUES.map((n) => {
+                          const anteCents = n * (blinds?.big ?? 25);
+                          const disabled = minPlayerStack !== undefined && anteCents > minPlayerStack;
+
+                          return (
+                            <motion.button
+                              key={n}
+                              whileTap={disabled ? undefined : { scale: 0.94 }}
+                              disabled={disabled}
+                              onClick={() => {
+                                if (!disabled) {
+                                  onProposeBombPot?.(n);
+                                  setBombProposePanelOpen(false);
+                                }
+                              }}
+                              className="flex-1 h-[162px] rounded-[32px] flex flex-col items-center justify-center gap-3"
+                              style={{
+                                background: disabled ? "rgba(99,102,241,0.04)" : "rgba(99,102,241,0.12)",
+                                border: `1px solid ${disabled ? "rgba(99,102,241,0.1)" : "rgba(99,102,241,0.3)"}`,
+                                opacity: disabled ? 0.35 : 1,
+                              }}
+                            >
+                              <span className="text-[38px] leading-none font-black text-indigo-200">{n}× BB</span>
+                              <span className="text-[21px] font-bold text-indigo-400">{formatCents(anteCents)}</span>
+                            </motion.button>
+                          );
+                        })}
+                      </div>
+                      <div className="px-1 text-[16px] text-indigo-200/70">
+                        Sizes are unavailable if any next-hand stack cannot fully cover the ante.
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -793,18 +1057,29 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
             ? "animate-action-pulse bg-white dark:bg-[rgba(3,7,18,0.97)] border-red-500/50"
             : "bg-white/95 dark:bg-[rgba(3,7,18,0.95)] border-gray-200/50 dark:border-white/[0.06]"
         }`}>
-          <div className="flex items-center gap-10 px-10 py-6 max-w-6xl mx-auto">
+          <div
+            className="flex items-center mx-auto"
+            style={{
+              gap: desktopLayout.actionBar.gap,
+              maxWidth: desktopLayout.actionBar.maxWidth,
+              padding: `${desktopLayout.actionBar.paddingY}px ${desktopLayout.actionBar.paddingX}px`,
+            }}
+          >
 
             {/* Hole cards area */}
-            <div className="flex-1 flex flex-col items-center relative z-10" style={{ marginTop: hasHoleCards ? -32 : 0 }}>
+            <div
+              className="flex-1 flex flex-col items-center relative z-10"
+              style={{ marginTop: hasHoleCards ? desktopLayout.actionBar.holeCardsLift : 0 }}
+            >
               {hasHoleCards ? (
                 <>
                   <HoleCards
                     key={handNumber}
                     cards={holeCards}
-                    cardHeight={193}
+                    cardHeight={desktopLayout.actionBar.holeCardHeight}
+                    persistenceKey={cardPeelPersistenceKey}
                     autoReveal={autoFlip}
-                    onRevealChange={handleRevealChange}
+                    onRevealChange={setBothRevealed}
                     canRevealToOthers={canShowCards}
                     revealedToOthersIndices={myRevealedCardIndices}
                     onRevealToOthers={onRevealCard}
@@ -813,7 +1088,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                   />
                   <button
                     onClick={() => setAutoFlip((a) => !a)}
-                    className={`mt-2 flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wide transition-colors ${
+                    className={`mt-2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide transition-colors ${
                       autoFlip
                         ? "bg-red-500 text-white"
                         : "bg-gray-100 dark:bg-white/[0.07] text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-white/[0.12]"
@@ -830,25 +1105,30 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
               )}
             </div>
 
-            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
-              <span className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">Hand</span>
-              <span className="text-base font-black text-gray-900 dark:text-white">
-                {bothRevealed ? (handStrength ?? "—") : "—"}
-              </span>
-              <span className="font-mono font-black text-gray-900 dark:text-white text-xl">
+            <div
+              className="flex flex-col items-center gap-1.5 flex-shrink-0"
+              style={{ minWidth: handIndicators.length > 1 ? 240 : 120 }}
+            >
+              <div className={bothRevealed ? "" : "opacity-60"}>
+                <DesktopHandIndicatorFan
+                  indicators={bothRevealed ? handIndicators : []}
+                />
+              </div>
+              <span
+                className="font-mono font-black text-gray-900 dark:text-white"
+                style={{ fontSize: desktopLayout.actionBar.metaStackFontSize }}
+              >
                 {formatCents(youPlayer.stack)}
               </span>
-              {(youPlayer.currentBet ?? 0) > 0 && (
-                <span className="text-xs font-mono text-yellow-600 dark:text-yellow-400">
-                  Bet: {formatCents(youPlayer.currentBet!)}
-                </span>
-              )}
               <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 px-2 py-0.5 rounded-md font-black uppercase">You</span>
               {onStandUp && (() => {
                 const midHand = isActivePhase(phase) && !(youPlayer?.isFolded ?? false);
                 if (leaveQueued) {
                   return (
-                    <span className="text-[10px] font-bold text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10">
+                    <span
+                      className="font-bold text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10"
+                      style={{ fontSize: desktopLayout.actionBar.leaveFontSize }}
+                    >
                       Leaving...
                     </span>
                   );
@@ -856,7 +1136,8 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                 return (
                   <button
                     onClick={midHand ? onQueueLeave : onStandUp}
-                    className="text-[10px] font-bold text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2 py-0.5 rounded-md border border-gray-200 dark:border-gray-700 transition-colors"
+                    className="font-bold text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2 py-0.5 rounded-md border border-gray-200 dark:border-gray-700 transition-colors"
+                    style={{ fontSize: desktopLayout.actionBar.leaveFontSize }}
                   >
                     {midHand ? "Leave Next Hand" : "Leave"}
                   </button>
@@ -866,7 +1147,7 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
 
             {/* Action buttons */}
             <div className="flex flex-col gap-2 flex-shrink-0 relative">
-              {(isWaiting || (isShowdown && showNextHand)) && isAdmin && (() => {
+              {(isWaiting || isShowdown) && isAdmin && (() => {
                 const eligibleCount = players.filter((p) => p != null && (p.stack ?? 0) > 0).length;
                 return (
                 <>
@@ -875,56 +1156,31 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                       Next hand in {showdownCountdown}s...
                     </p>
                   )}
-                  {isWaiting && (
+                  {(isWaiting || isShowdown) && (
                     <>
-                      <div className="flex items-center justify-between gap-4 px-1">
-                        <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold whitespace-nowrap">⏱ Turn timer</span>
-                        <button
-                          onClick={() => onToggleTimer?.(!timerEnabled)}
-                          className={`relative w-10 h-5 rounded-full flex-shrink-0 transition-colors duration-200 focus:outline-none ${
-                            timerEnabled ? "bg-red-500" : "bg-gray-300 dark:bg-gray-700"
-                          }`}
-                          aria-label={timerEnabled ? "Disable turn timer" : "Enable turn timer"}
+                      {eligibleCount < 2 ? (
+                        <div
+                          className="px-12 rounded-xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-semibold"
+                          style={{
+                            height: desktopLayout.actionBar.buttonHeight,
+                            fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                          }}
                         >
-                          <span
-                            className="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                            style={{ left: timerEnabled ? "calc(100% - 18px)" : "2px" }}
-                          />
-                        </button>
-                      </div>
-                      {handNumber === 0 && (
-                        <div className="flex items-center justify-between gap-2 px-1">
-                          <span className="text-xs text-gray-500 dark:text-gray-400 font-semibold whitespace-nowrap">🃏 7-2 bounty</span>
-                          <div className="flex gap-1">
-                            {([0, 2, 4, 8, 10] as const).map((n) => (
-                              <button
-                                key={n}
-                                onClick={() => onSetSevenTwoBounty?.(n)}
-                                className={`px-2 py-0.5 rounded text-[10px] font-black transition-colors ${
-                                  sevenTwoBountyBB === n
-                                    ? "bg-red-600 text-white"
-                                    : "bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-gray-700"
-                                }`}
-                              >
-                                {n === 0 ? "Off" : `${n}×`}
-                              </button>
-                            ))}
-                          </div>
+                          Waiting for more players…
                         </div>
+                      ) : (
+                        <button
+                          onClick={onStartHand}
+                          className="px-12 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                          style={{
+                            height: desktopLayout.actionBar.buttonHeight,
+                            fontSize: desktopLayout.actionBar.primaryButtonFontSize,
+                          }}
+                        >
+                          {isShowdown ? "Next Hand" : "Start Game"}
+                        </button>
                       )}
                     </>
-                  )}
-                  {isWaiting && eligibleCount < 2 ? (
-                    <div className="h-14 px-12 rounded-xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 text-base font-semibold">
-                      Waiting for more players…
-                    </div>
-                  ) : (
-                    <button
-                      onClick={onStartHand}
-                      className="h-14 px-12 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
-                    >
-                      {isShowdown ? "Next Hand" : "Start Game"}
-                    </button>
                   )}
                 </>
                 );
@@ -947,12 +1203,12 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                     </p>
                   )}
 
-                  {/* Timer bar — shows when timer is enabled OR when away auto-timer is active */}
-                  {isYourTurn && turnStartedAt != null && (
-                    <TimerBar startedAt={turnStartedAt} variant="turn" />
-                  )}
 
-                  <div className={`flex gap-3 transition-opacity duration-200 ${!isYourTurn ? "opacity-40 pointer-events-none" : ""}`}>
+
+                  <div
+                    className={`flex transition-opacity duration-200 ${!isYourTurn ? "opacity-40 pointer-events-none" : ""}`}
+                    style={{ gap: 12 }}
+                  >
                     {/* Fold button with confirmation when not facing a bet */}
                     <div className="relative">
                       <button
@@ -960,7 +1216,11 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                           if (canCheck) { setFoldConfirm(true); }
                           else { onFold?.(); }
                         }}
-                        className="h-14 px-8 rounded-xl bg-gray-100 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold text-base transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
+                        className="px-8 rounded-xl bg-gray-100 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
+                        style={{
+                          height: desktopLayout.actionBar.buttonHeight,
+                          fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                        }}
                       >
                         Fold
                       </button>
@@ -1000,15 +1260,26 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
 
                     {canCheck ? (
                       <button
-                        onClick={onCheck}
-                        className="h-14 px-8 rounded-xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold text-base transition-colors hover:bg-gray-300 dark:hover:bg-gray-600"
+                        onClick={() => {
+                          setRaiseOpen(false);
+                          onCheck?.();
+                        }}
+                        className="px-8 rounded-xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold transition-colors hover:bg-gray-300 dark:hover:bg-gray-600"
+                        style={{
+                          height: desktopLayout.actionBar.buttonHeight,
+                          fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                        }}
                       >
                         Check
                       </button>
                     ) : (
                       <button
                         onClick={onCall}
-                        className="h-14 px-8 rounded-xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold text-base transition-colors hover:bg-gray-300 dark:hover:bg-gray-600"
+                        className="px-8 rounded-xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold transition-colors hover:bg-gray-300 dark:hover:bg-gray-600"
+                        style={{
+                          height: desktopLayout.actionBar.buttonHeight,
+                          fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                        }}
                       >
                         Call {formatCents(callAmount)}
                       </button>
@@ -1018,7 +1289,11 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                       <div className="relative">
                         <button
                           onClick={() => setRaiseOpen((o) => !o)}
-                          className="h-14 px-8 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                          className="px-8 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                          style={{
+                            height: desktopLayout.actionBar.buttonHeight,
+                            fontSize: desktopLayout.actionBar.primaryButtonFontSize,
+                          }}
                         >
                           {betOrRaiseLabel}
                         </button>
@@ -1042,7 +1317,11 @@ const DesktopTableLayout: React.FC<TableLayoutProps> = ({
                     {!canRaise && canAllIn && (
                       <button
                         onClick={onAllIn}
-                        className="h-14 px-8 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                        className="px-8 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                        style={{
+                          height: desktopLayout.actionBar.buttonHeight,
+                          fontSize: desktopLayout.actionBar.primaryButtonFontSize,
+                        }}
                       >
                         All-in
                       </button>

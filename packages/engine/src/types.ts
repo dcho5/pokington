@@ -4,9 +4,9 @@ import type { Card, Rank, Suit, GamePhase, LastAction } from "@pokington/shared"
 export type { Card, Rank, Suit, GamePhase, LastAction };
 
 // 7-2 bounty multiplier (in big blinds). 0 = off.
-export type SevenTwoBountyBB = 0 | 2 | 4 | 8 | 10;
+export type SevenTwoBountyBB = 0 | 2 | 4 | 8;
 // Bomb pot ante (in big blinds).
-export type BombPotAnteBB = 2 | 4 | 8 | 10;
+export type BombPotAnteBB = 2 | 4 | 8;
 
 // ── Engine-internal player ──
 export interface EnginePlayer {
@@ -49,10 +49,13 @@ export interface GameState {
   closedActors: string[]; // players who matched the current bet; can only call/fold on partial re-open
   sidePots: SidePot[];    // populated at showdown
   winners: WinnerInfo[] | null;
+  showdownKind: ShowdownKind;
   // Run-it-multiple-times
   runItVotes: Record<string, 1 | 2 | 3>; // votes during 'voting' phase
   runCount: 1 | 2 | 3;   // resolved run count (1 = default)
   runResults: RunResult[]; // per-run boards + winners, populated at showdown
+  autoRevealWinningHands: boolean; // true only when showdown is contested and winners must table
+  autoRevealWinningHandsAt: number | null; // server-side release time for auto-revealed winning hands
   // 7-2 Offsuit side game (table-level, set before first hand)
   sevenTwoBountyBB: SevenTwoBountyBB;  // 0 = off; N = N × bigBlind per player
   sevenTwoBountyTrigger: {           // non-null at showdown when bounty fires
@@ -73,10 +76,43 @@ export interface GameState {
   bombPotCooldown: string[]; // player IDs who proposed this orbit
 }
 
+export type ShowdownKind = "none" | "contested" | "uncontested";
+
 export interface WinnerInfo {
   playerId: string;
   amount: number;
-  hand: string;
+  hand: string | null; // actual evaluated hand only; null when the pot was won uncontested
+}
+
+export function isUncontestedWinnerHandLabel(hand: string): boolean {
+  return hand === "Uncontested" || hand === "Last standing";
+}
+
+function inferShowdownKind(winners: WinnerInfo[] | null | undefined): ShowdownKind {
+  if (!winners || winners.length === 0) return "none";
+  if (winners.length === 1 && winners[0].hand === null) return "uncontested";
+  if (
+    winners.length === 1 &&
+    typeof winners[0].hand === "string" &&
+    isUncontestedWinnerHandLabel(winners[0].hand)
+  ) {
+    return "uncontested";
+  }
+  return "contested";
+}
+
+export function isUncontestedShowdown(
+  winners: WinnerInfo[] | null | undefined,
+  showdownKind?: ShowdownKind | null,
+): boolean {
+  return (showdownKind ?? inferShowdownKind(winners)) === "uncontested";
+}
+
+export function shouldAutoRevealWinningHands(
+  winners: WinnerInfo[] | null | undefined,
+  showdownKind?: ShowdownKind | null,
+): boolean {
+  return !!winners && winners.length > 0 && (showdownKind ?? inferShowdownKind(winners)) === "contested";
 }
 
 export interface RunResult {
@@ -135,9 +171,12 @@ export function createInitialState(
     closedActors: [],
     sidePots: [],
     winners: null,
+    showdownKind: "none",
     runItVotes: {},
     runCount: 1,
     runResults: [],
+    autoRevealWinningHands: false,
+    autoRevealWinningHandsAt: null,
     sevenTwoBountyBB: options?.sevenTwoBountyBB ?? 0,
     sevenTwoBountyTrigger: null,
     voluntaryShownPlayerIds: [],

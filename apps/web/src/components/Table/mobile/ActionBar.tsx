@@ -1,11 +1,9 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCents } from "lib/formatCents";
-import TimerBar from "../TimerBar";
 import VotingPanel from "../VotingPanel";
 import { useRaiseAmount } from "hooks/useRaiseAmount";
-import type { SevenTwoBountyBB } from "@pokington/engine";
 
 interface RaiseSheetProps {
   pot: number;
@@ -30,13 +28,13 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
 }) => {
   const { amount, setAmount, increment, lowerBound, presets, clamp, allInTotal } = useRaiseAmount({ minRaise, stack, pot, bigBlind, currentBet });
   const label = isFirstBet ? "Bet" : "Raise to";
-  // When lowerBound === allInTotal the player's only legal move is to go all-in
   const isAllInOnly = lowerBound >= allInTotal;
+  const incrementLabel = formatCents(increment);
 
   return (
     <>
       <motion.div
-        className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
+        className="overlay-scrim-strong absolute inset-0 z-40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -45,8 +43,7 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
 
       <motion.div
         className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl
-          bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl
-          border-t border-gray-200/50 dark:border-white/[0.06]
+          elevated-surface-light border-t
           px-4 pt-4"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
         initial={{ y: "100%" }}
@@ -55,21 +52,28 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
         drag="y"
         dragConstraints={{ top: 0 }}
-        onDragEnd={(_, info) => {
+        onDragEnd={(_event: unknown, info: { offset: { y: number } }) => {
           if (info.offset.y > 80) onDismiss();
         }}
       >
+        <div className="surface-content">
         <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-4" />
 
-        {/* Amount display with ± nudge buttons */}
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <button
-            disabled={isAllInOnly}
-            className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-2xl font-bold flex items-center justify-center disabled:opacity-30"
-            onClick={() => setAmount(clamp(amount - increment))}
-          >
-            −
-          </button>
+        <div className="flex items-start justify-center gap-3 mb-4">
+          <div className="w-14 flex flex-col items-center gap-1">
+            <button
+              disabled={isAllInOnly}
+              aria-label={`Decrease by ${incrementLabel}`}
+              title={`Decrease by ${incrementLabel}`}
+              className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-2xl font-bold flex items-center justify-center disabled:opacity-30"
+              onClick={() => setAmount(clamp(amount - increment))}
+            >
+              −
+            </button>
+            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 tabular-nums">
+              -{incrementLabel}
+            </span>
+          </div>
           <div className="flex-1 text-center">
             <p className="text-2xl font-mono font-black text-gray-900 dark:text-white">
               {formatCents(amount)}
@@ -78,16 +82,22 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
               <p className="text-[11px] font-bold text-red-400 uppercase tracking-widest mt-0.5">All-in</p>
             )}
           </div>
-          <button
-            disabled={isAllInOnly}
-            className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-2xl font-bold flex items-center justify-center disabled:opacity-30"
-            onClick={() => setAmount(clamp(amount + increment))}
-          >
-            +
-          </button>
+          <div className="w-14 flex flex-col items-center gap-1">
+            <button
+              disabled={isAllInOnly}
+              aria-label={`Increase by ${incrementLabel}`}
+              title={`Increase by ${incrementLabel}`}
+              className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white text-2xl font-bold flex items-center justify-center disabled:opacity-30"
+              onClick={() => setAmount(clamp(amount + increment))}
+            >
+              +
+            </button>
+            <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 tabular-nums">
+              +{incrementLabel}
+            </span>
+          </div>
         </div>
 
-        {/* Slider — fully filled static bar when all-in only */}
         <div className="px-2 mb-4">
           {isAllInOnly ? (
             <div className="h-2 rounded-full bg-red-500" />
@@ -96,7 +106,7 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
               type="range"
               min={lowerBound}
               max={allInTotal}
-              step={increment}
+              step={1}
               value={amount}
               onChange={(e) => setAmount(Number(e.target.value))}
               className="w-full accent-red-500 h-2"
@@ -104,7 +114,6 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
           )}
         </div>
 
-        {/* Presets — hidden when all-in is the only option */}
         {!isAllInOnly && (
           <div className="flex gap-1.5 mb-4">
             {presets.map((p) => (
@@ -125,45 +134,47 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
         >
           {label} {formatCents(amount)}
         </button>
+        </div>
       </motion.div>
     </>
   );
 };
 
-// ── Fold confirmation sheet (mobile) ──
 function FoldConfirmSheet({ onConfirm, onDismiss }: { onConfirm: () => void; onDismiss: () => void }) {
   return (
     <>
       <motion.div
-        className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
+        className="overlay-scrim-strong absolute inset-0 z-40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onDismiss}
       />
       <motion.div
-        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-2xl bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-t border-gray-200/50 dark:border-white/[0.06] px-4 pt-4 pb-6"
+        className="elevated-surface-light absolute bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t px-4 pt-4 pb-6"
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
       >
-        <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-4">
-          You can check for free. Fold anyway?
-        </p>
-        <div className="flex gap-3">
-          <button
-            onClick={onDismiss}
-            className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold text-sm"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => { onConfirm(); onDismiss(); }}
-            className="flex-1 h-12 rounded-xl bg-red-500 text-white font-bold text-sm"
-          >
-            Fold
-          </button>
+        <div className="surface-content">
+          <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-4">
+            You can check for free. Fold anyway?
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={onDismiss}
+              className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold text-sm"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => { onConfirm(); onDismiss(); }}
+              className="flex-1 h-12 rounded-xl bg-red-500 text-white font-bold text-sm"
+            >
+              Fold
+            </button>
+          </div>
         </div>
       </motion.div>
     </>
@@ -186,26 +197,20 @@ interface ActionBarProps {
   phase?: string;
   isFirstBet?: boolean;
   isAdmin?: boolean;
-  timerEnabled?: boolean;
-  onToggleTimer?: (enabled: boolean) => void;
   onFold?: () => void;
   onCall?: () => void;
   onCheck?: () => void;
   onRaise?: (amount: number) => void;
   onStartHand?: () => void;
   showdownCountdown?: number | null;
-  turnStartedAt?: number | null;
-  // Run-it-multiple-times
   runItVotes?: Record<string, 1 | 2 | 3>;
   onVoteRun?: (count: 1 | 2 | 3) => void;
   runAnnouncement?: 1 | 2 | 3 | null;
   votingStartedAt?: number | null;
   viewerCanVote?: boolean;
   showNextHand?: boolean;
-  viewerPlayerId?: string; // id of the viewing player (to show their vote highlight)
+  viewerPlayerId?: string;
   players?: Array<{ id?: string; name: string; isFolded?: boolean; stack?: number } | null>;
-  sevenTwoBountyBB?: SevenTwoBountyBB;
-  onSetSevenTwoBounty?: (bountyBB: SevenTwoBountyBB) => void;
   handNumber?: number;
   isBombPotHand?: boolean;
 }
@@ -226,8 +231,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
   phase,
   isFirstBet = false,
   isAdmin = false,
-  timerEnabled = true,
-  onToggleTimer,
   runItVotes = {},
   onVoteRun,
   runAnnouncement = null,
@@ -236,8 +239,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
   showNextHand = true,
   viewerPlayerId,
   players = [],
-  sevenTwoBountyBB = 0,
-  onSetSevenTwoBounty,
   handNumber = 0,
   isBombPotHand: _isBombPotHand = false,
   onFold,
@@ -246,10 +247,15 @@ const ActionBar: React.FC<ActionBarProps> = ({
   onRaise,
   onStartHand,
   showdownCountdown,
-  turnStartedAt = null,
 }) => {
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [foldConfirm, setFoldConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!isYourTurn || !canRaise) {
+      setRaiseOpen(false);
+    }
+  }, [canRaise, isYourTurn]);
 
   const isWaiting = !phase || phase === "waiting";
   const isShowdown = phase === "showdown";
@@ -284,53 +290,10 @@ const ActionBar: React.FC<ActionBarProps> = ({
 
         {isAdmin && (isWaiting || isShowdown) && (
           <>
-            {isWaiting && (
-              <>
-                <div className="flex items-center justify-between gap-4 px-1 mb-3">
-                  <span className="text-sm text-gray-500 dark:text-gray-400 font-semibold whitespace-nowrap">⏱ Turn timer</span>
-                  <button
-                    onClick={() => onToggleTimer?.(!timerEnabled)}
-                    className={`relative w-11 h-6 rounded-full flex-shrink-0 transition-colors duration-200 focus:outline-none ${
-                      timerEnabled ? "bg-red-500" : "bg-gray-300 dark:bg-gray-700"
-                    }`}
-                    aria-label={timerEnabled ? "Disable turn timer" : "Enable turn timer"}
-                  >
-                    <span
-                      className="absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all duration-200"
-                      style={{ left: timerEnabled ? "calc(100% - 18px)" : "4px" }}
-                    />
-                  </button>
-                </div>
-                {handNumber === 0 && (
-                  <div className="mb-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm text-gray-500 dark:text-gray-400 font-semibold whitespace-nowrap">🃏 7-2 bounty</span>
-                      <div className="flex gap-1">
-                        {([0, 2, 4, 8, 10] as const).map((n) => (
-                          <button
-                            key={n}
-                            onClick={() => onSetSevenTwoBounty?.(n)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-black transition-colors ${
-                              sevenTwoBountyBB === n
-                                ? "bg-red-600 text-white"
-                                : "bg-gray-200 dark:bg-gray-800 text-gray-500 dark:text-gray-400"
-                            }`}
-                          >
-                            {n === 0 ? "Off" : `${n}×`}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
             {eligiblePlayerCount < 2 ? (
-              isWaiting ? (
-                <div className="w-full h-[52px] xs:h-[56px] rounded-2xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 text-sm font-semibold">
-                  Waiting for more players…
-                </div>
-              ) : null
+              <div className="w-full h-[52px] xs:h-[56px] rounded-2xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 text-sm font-semibold">
+                Waiting for more players…
+              </div>
             ) : (
               <motion.button
                 whileTap={{ scale: 0.96 }}
@@ -363,10 +326,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
           </p>
         )}
 
-        {isYourTurn && turnStartedAt != null && (
-          <TimerBar startedAt={turnStartedAt} variant="turn" className="mb-3" />
-        )}
-
         <div className={`flex gap-2 transition-opacity duration-200 ${!isYourTurn ? "opacity-40 pointer-events-none" : ""}`}>
           <motion.button
             whileTap={{ scale: 0.96 }}
@@ -385,7 +344,10 @@ const ActionBar: React.FC<ActionBarProps> = ({
           {canCheck ? (
             <motion.button
               whileTap={{ scale: 0.96 }}
-              onClick={onCheck}
+              onClick={() => {
+                setRaiseOpen(false);
+                onCheck?.();
+              }}
               className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold text-sm xs:text-lg whitespace-nowrap"
             >
               Check
@@ -420,7 +382,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
             </motion.button>
           )}
         </div>
-
       </div>
 
       <AnimatePresence>
@@ -446,7 +407,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
           />
         )}
       </AnimatePresence>
-
     </>
   );
 };

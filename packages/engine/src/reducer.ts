@@ -2,10 +2,12 @@ import type { GameState, GameEvent, EnginePlayer, SidePot, RunResult, WinnerInfo
 import type { Card } from "@pokington/shared";
 import { createDeck, shuffle } from "./deck";
 import { evaluate7, compareHands } from "./evaluator";
+import { shouldAutoRevealWinningHands } from "./types";
 
 // ── Helpers ──
 
 const MAX_SEATS = 10;
+const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting"]);
 
 /** Returns true if the two hole cards are a 7 and a 2 of different suits. */
 function hasSevTwoOffsuit(cards: [Card, Card] | null): boolean {
@@ -62,7 +64,7 @@ function nextEligibleSeat(
   players: Record<string, EnginePlayer>,
 ): number {
   const ordered = playersFromSeat((fromSeat + 1) % MAX_SEATS, players);
-  return ordered.find((p) => !p.sitOutUntilBB)?.seatIndex ?? -1;
+  return ordered.find((p) => p.stack > 0 && !p.sitOutUntilBB)?.seatIndex ?? -1;
 }
 
 /** Find player at a given seat index. */
@@ -79,7 +81,7 @@ function activePlayerIdsFrom(
   players: Record<string, EnginePlayer>
 ): string[] {
   return playersFromSeat(startSeat, players)
-    .filter((p) => !p.isFolded && !p.isAllIn)
+    .filter((p) => p.holeCards !== null && !p.isFolded && !p.isAllIn)
     .map((p) => p.id);
 }
 
@@ -105,7 +107,7 @@ function sumCurrentBets(players: Record<string, EnginePlayer>): number {
 
 /** Count non-folded players (including all-in). */
 function countActive(players: Record<string, EnginePlayer>): number {
-  return Object.values(players).filter((p) => !p.isFolded).length;
+  return Object.values(players).filter((p) => p.holeCards !== null && !p.isFolded).length;
 }
 
 /**
@@ -123,7 +125,7 @@ function fullRaiseThreshold(roundBet: number, lastLegalRaiseIncrement: number): 
  * Adjusts totalContribution and state.pot so subsequent side-pot math is exact.
  */
 function returnUncallableChips(state: GameState): void {
-  const nonFolded = Object.values(state.players).filter((p) => !p.isFolded);
+  const nonFolded = Object.values(state.players).filter((p) => p.holeCards !== null && !p.isFolded);
   // Only applies when all remaining players are committed (no one can bet further)
   if (nonFolded.some((p) => !p.isAllIn)) return;
 
@@ -150,7 +152,7 @@ function returnUncallableChips(state: GameState): void {
 
 function buildSidePots(players: Record<string, EnginePlayer>): SidePot[] {
   const all = Object.values(players);
-  const nonFolded = all.filter((p) => !p.isFolded && p.totalContribution > 0);
+  const nonFolded = all.filter((p) => p.holeCards !== null && !p.isFolded && p.totalContribution > 0);
 
   if (nonFolded.length === 0) return [];
 
@@ -165,7 +167,7 @@ function buildSidePots(players: Record<string, EnginePlayer>): SidePot[] {
     const increment = level - prevLevel;
     const contributors = all.filter((p) => p.totalContribution >= level);
     const eligible = contributors
-      .filter((p) => !p.isFolded)
+      .filter((p) => p.holeCards !== null && !p.isFolded)
       .map((p) => p.id);
 
     if (eligible.length > 0) {
@@ -190,7 +192,7 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
   state.sidePots = sidePots;
 
   const totalRuns = boards.length;
-  const aggregated = new Map<string, { amount: number; hand: string }>();
+  const aggregated = new Map<string, { amount: number; hand: string | null }>();
   const runResults: RunResult[] = boards.map((board) => ({ board, winners: [] }));
 
   for (const pot of sidePots) {
@@ -212,8 +214,8 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
         w.stack += runPot;
         const ex = aggregated.get(w.id);
         if (ex) ex.amount += runPot;
-        else aggregated.set(w.id, { amount: runPot, hand: "Uncontested" });
-        runResults[ri].winners.push({ playerId: w.id, amount: runPot, hand: "Uncontested" });
+        else aggregated.set(w.id, { amount: runPot, hand: null });
+        runResults[ri].winners.push({ playerId: w.id, amount: runPot, hand: null });
         continue;
       }
 
@@ -240,7 +242,7 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
         const ex = aggregated.get(w.player.id);
         if (ex) {
           ex.amount += amt;
-          if (ex.hand === "Uncontested") ex.hand = w.hand.label;
+          if (ex.hand === null) ex.hand = w.hand.label;
         } else {
           aggregated.set(w.player.id, { amount: amt, hand: w.hand.label });
         }
@@ -254,17 +256,19 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
   state.needsToAct = [];
   state.closedActors = [];
   state.runResults = runResults;
+  state.showdownKind = "contested";
   state.winners = Array.from(aggregated.entries()).map(([playerId, { amount, hand }]) => ({
     playerId,
     amount,
     hand,
   }));
+  state.autoRevealWinningHands = shouldAutoRevealWinningHands(state.winners, state.showdownKind);
+  state.autoRevealWinningHandsAt = null;
   state.sevenTwoBountyTrigger = null;
   state.voluntaryShownPlayerIds = [];
 
   // Auto-trigger 7-2 bounty for contested showdowns (sole winner whose cards are shown)
-  const isContested = !(state.winners.length === 1 && state.winners[0].hand === "Uncontested");
-  if (state.sevenTwoBountyBB > 0 && isContested && state.winners.length === 1) {
+  if (state.sevenTwoBountyBB > 0 && state.autoRevealWinningHands && state.winners.length === 1) {
     const w = state.players[state.winners[0].playerId];
     if (w && hasSevTwoOffsuit(w.holeCards)) {
       applySevenTwoBounty(state, w.id);
@@ -294,15 +298,24 @@ function handleShowdown(state: GameState): GameState {
 function dealMultipleRuns(state: GameState, runCount: 1 | 2 | 3): GameState {
   state.runCount = runCount;
   const shared = [...state.communityCards];
-  const needed = 5 - shared.length;
 
   const boards: Card[][] = [];
   for (let r = 0; r < runCount; r++) {
     const board = [...shared];
-    for (let i = 0; i < needed; i++) {
-      if (r === 0 && state.deck.length > 0) state.deck.pop(); // burn (first run only)
+
+    if (board.length < 3) {
+      if (r === 0 && state.deck.length > 0) state.deck.pop(); // burn before flop
+      while (board.length < 3 && state.deck.length > 0) board.push(state.deck.pop()!);
+    }
+    if (board.length < 4) {
+      if (r === 0 && state.deck.length > 0) state.deck.pop(); // burn before turn
       if (state.deck.length > 0) board.push(state.deck.pop()!);
     }
+    if (board.length < 5) {
+      if (r === 0 && state.deck.length > 0) state.deck.pop(); // burn before river
+      if (state.deck.length > 0) board.push(state.deck.pop()!);
+    }
+
     boards.push(board);
   }
 
@@ -315,7 +328,7 @@ function dealMultipleRuns(state: GameState, runCount: 1 | 2 | 3): GameState {
  * otherwise runs out directly (single run).
  */
 function enterVotingOrRunOut(state: GameState): GameState {
-  const nonFolded = Object.values(state.players).filter((p) => !p.isFolded);
+  const nonFolded = Object.values(state.players).filter((p) => p.holeCards !== null && !p.isFolded);
 
   if (state.communityCards.length >= 5 || nonFolded.length <= 1) {
     return dealMultipleRuns(state, 1);
@@ -422,6 +435,53 @@ function advanceStreet(state: GameState): GameState {
   return state;
 }
 
+function hasNoFurtherActionAgainstAllIn(state: GameState): boolean {
+  const activePlayers = Object.values(state.players).filter(
+    (p) => p.holeCards !== null && !p.isFolded && !p.isAllIn
+  );
+  return activePlayers.length === 1 && activePlayers[0].currentBet >= state.roundBet;
+}
+
+function shouldForceRunoutPreflop(state: GameState): boolean {
+  return hasNoFurtherActionAgainstAllIn(state);
+}
+
+function resetTableToWaiting(state: GameState): GameState {
+  for (const p of Object.values(state.players)) {
+    p.holeCards = null;
+    p.currentBet = 0;
+    p.totalContribution = 0;
+    p.isFolded = false;
+    p.isAllIn = false;
+    p.lastAction = null;
+    if (p.stack > 0) p.sitOutUntilBB = false;
+  }
+  state.phase = "waiting";
+  state.communityCards = [];
+  state.communityCards2 = [];
+  state.isBombPot = false;
+  state.bombPotVote = null;
+  state.pot = 0;
+  state.roundBet = 0;
+  state.lastLegalRaiseIncrement = state.blinds.big;
+  state.isBlindIncomplete = false;
+  state.needsToAct = [];
+  state.closedActors = [];
+  state.sidePots = [];
+  state.winners = null;
+  state.showdownKind = "none";
+  state.runItVotes = {};
+  state.runCount = 1;
+  state.runResults = [];
+  state.autoRevealWinningHands = false;
+  state.autoRevealWinningHandsAt = null;
+  state.sevenTwoBountyTrigger = null;
+  state.voluntaryShownPlayerIds = [];
+  state.smallBlindSeatIndex = -1;
+  state.bigBlindSeatIndex = -1;
+  return state;
+}
+
 // ── Main reducer ──
 
 export function gameReducer(
@@ -456,7 +516,12 @@ export function gameReducer(
 
     // ────── STAND UP ──────
     case "STAND_UP": {
-      if (!state.players[event.playerId]) return prevState;
+      const player = state.players[event.playerId];
+      if (!player) return prevState;
+      const isCommittedToCurrentHand =
+        ACTIVE_HAND_PHASES.has(state.phase) &&
+        (player.holeCards !== null || player.currentBet > 0 || player.totalContribution > 0 || !player.sitOutUntilBB);
+      if (isCommittedToCurrentHand) return prevState;
       delete state.players[event.playerId];
       state.needsToAct = state.needsToAct.filter((id) => id !== event.playerId);
       state.closedActors = state.closedActors.filter((id) => id !== event.playerId);
@@ -466,25 +531,28 @@ export function gameReducer(
     // ────── START HAND ──────
     case "START_HAND": {
       const playerList = Object.values(state.players);
-      if (playerList.length < 2) return prevState;
       if (state.phase !== "waiting" && state.phase !== "showdown") return prevState;
 
       // When transitioning from showdown, clear sitOutUntilBB for all players
       // so that rebuyers are immediately eligible for the next hand.
       if (state.phase === "showdown") {
-        for (const p of playerList) p.sitOutUntilBB = false;
+        for (const p of playerList) {
+          if (p.stack > 0) p.sitOutUntilBB = false;
+        }
       }
 
       // Eligible = not sitting out waiting for BB
-      const eligiblePlayers = playerList.filter((p) => !p.sitOutUntilBB);
-      if (eligiblePlayers.length < 2) return prevState;
+      const eligiblePlayers = playerList.filter((p) => !p.sitOutUntilBB && p.stack > 0);
+      if (eligiblePlayers.length < 2) {
+        return state.phase === "showdown" ? resetTableToWaiting(state) : prevState;
+      }
 
       for (const p of Object.values(state.players)) {
         p.holeCards = null;
         p.currentBet = 0;
         p.totalContribution = 0;
-        p.isFolded = p.sitOutUntilBB;
-        p.isAllIn = false;
+        p.isFolded = p.sitOutUntilBB || p.stack <= 0;
+        p.isAllIn = p.stack <= 0;
         p.lastAction = null;
       }
       state.communityCards = [];
@@ -496,9 +564,12 @@ export function gameReducer(
       state.closedActors = [];
       state.sidePots = [];
       state.winners = null;
+      state.showdownKind = "none";
       state.runItVotes = {};
       state.runCount = 1;
       state.runResults = [];
+      state.autoRevealWinningHands = false;
+      state.autoRevealWinningHandsAt = null;
       state.sevenTwoBountyTrigger = null;
       state.voluntaryShownPlayerIds = [];
       state.isBlindIncomplete = false;
@@ -535,6 +606,19 @@ export function gameReducer(
       // Remove BB player from bomb pot cooldown (orbit complete)
       state.bombPotCooldown = state.bombPotCooldown.filter((id) => id !== bbPlayer.id);
 
+      // Re-validate scheduled bomb pots against the players who are actually
+      // about to enter this hand. If anyone can no longer cover the ante,
+      // the table falls back to a normal hand.
+      if (state.bombPotNextHand) {
+        const anteCents = state.bombPotNextHand.anteBB * state.blinds.big;
+        const bombPotEntrants = playersFromSeat((dealerSeat + 1) % MAX_SEATS, state.players)
+          .filter((p) => !p.sitOutUntilBB && p.stack > 0);
+        const canCoverAnte = bombPotEntrants.every((p) => p.stack >= anteCents);
+        if (!canCoverAnte) {
+          state.bombPotNextHand = null;
+        }
+      }
+
       const sbPlayer = playerAtSeat(sbSeat, state.players)!;
 
       const sbAmount = Math.min(state.blinds.small, sbPlayer.stack);
@@ -553,9 +637,10 @@ export function gameReducer(
       state.lastLegalRaiseIncrement = state.blinds.big; // always full BB, even if short-posted
       state.isBlindIncomplete = bbAmount < state.blinds.big;
 
-      // Deal cards only to eligible players
+      // Deal cards to every seated player who entered the hand, even if
+      // posting a blind put them all-in before the deal.
       const dealOrder = playersFromSeat((dealerSeat + 1) % MAX_SEATS, state.players)
-        .filter((p) => !p.sitOutUntilBB);
+        .filter((p) => !p.sitOutUntilBB && !p.isFolded);
       for (const p of dealOrder) {
         p.holeCards = [state.deck.pop()!, state.deck.pop()!];
       }
@@ -578,7 +663,7 @@ export function gameReducer(
 
         // Collect antes from all eligible (dealing-order) players
         const anteDealOrder = playersFromSeat((dealerSeat + 1) % MAX_SEATS, state.players)
-          .filter((p) => !p.sitOutUntilBB);
+          .filter((p) => !p.sitOutUntilBB && p.stack > 0);
         for (const p of anteDealOrder) {
           const ante = Math.min(anteCents, p.stack);
           p.stack -= ante;
@@ -615,6 +700,10 @@ export function gameReducer(
         .filter((id) => !state.players[id]?.sitOutUntilBB);
 
       if (actors.length === 0) {
+        return enterVotingOrRunOut(state);
+      }
+
+      if (shouldForceRunoutPreflop(state)) {
         return enterVotingOrRunOut(state);
       }
 
@@ -775,7 +864,7 @@ export function gameReducer(
 
       // Only one non-folded player: uncontested win
       if (countActive(state.players) === 1) {
-        const winner = Object.values(state.players).find((p) => !p.isFolded)!;
+        const winner = Object.values(state.players).find((p) => p.holeCards !== null && !p.isFolded)!;
         const totalPot = state.pot + sumCurrentBets(state.players);
         winner.stack += totalPot;
 
@@ -786,10 +875,17 @@ export function gameReducer(
         state.needsToAct = [];
         state.closedActors = [];
         state.runResults = [];
-        state.winners = [{ playerId: winner.id, amount: totalPot, hand: "Last standing" }];
+        state.winners = [{ playerId: winner.id, amount: totalPot, hand: null }];
+        state.showdownKind = "uncontested";
+        state.autoRevealWinningHands = false;
+        state.autoRevealWinningHandsAt = null;
         state.sevenTwoBountyTrigger = null;
         state.voluntaryShownPlayerIds = [];
         return state;
+      }
+
+      if (hasNoFurtherActionAgainstAllIn(state)) {
+        state.needsToAct = [];
       }
 
       if (state.needsToAct.length === 0) {
@@ -808,7 +904,7 @@ export function gameReducer(
       state.runItVotes[event.playerId] = event.count;
 
       const nonFoldedIds = Object.values(state.players)
-        .filter((p) => !p.isFolded)
+        .filter((p) => p.holeCards !== null && !p.isFolded)
         .map((p) => p.id);
       const allVoted = nonFoldedIds.every((id) => state.runItVotes[id] !== undefined);
 
@@ -827,7 +923,7 @@ export function gameReducer(
       if (state.phase !== "voting") return prevState;
 
       const nonFoldedIds = Object.values(state.players)
-        .filter((p) => !p.isFolded)
+        .filter((p) => p.holeCards !== null && !p.isFolded)
         .map((p) => p.id);
       const votes = nonFoldedIds
         .map((id) => state.runItVotes[id])
@@ -856,9 +952,7 @@ export function gameReducer(
         state.voluntaryShownPlayerIds.push(event.playerId);
       }
       // Fire 7-2 bounty for uncontested winner who chose to show
-      const isUncontested =
-        state.winners?.length === 1 &&
-        (state.winners[0].hand === "Uncontested" || state.winners[0].hand === "Last standing");
+      const isUncontested = state.showdownKind === "uncontested" && state.winners?.length === 1;
       if (
         state.sevenTwoBountyBB > 0 &&
         !state.sevenTwoBountyTrigger &&

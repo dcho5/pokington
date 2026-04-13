@@ -2,6 +2,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { formatCents } from "lib/formatCents";
+import type { DesktopBombPotVotingPanelMetrics } from "lib/desktopTableLayout";
 
 interface BombPotVotingPanelProps {
   vote: { anteBB: number; proposedBy: string; votes: Record<string, boolean> };
@@ -11,6 +12,7 @@ interface BombPotVotingPanelProps {
   onApprove: () => void;
   onReject: () => void;
   variant?: "desktop" | "mobile";
+  desktopMetrics?: DesktopBombPotVotingPanelMetrics;
 }
 
 export default function BombPotVotingPanel({
@@ -21,13 +23,27 @@ export default function BombPotVotingPanel({
   onApprove,
   onReject,
   variant = "desktop",
+  desktopMetrics,
 }: BombPotVotingPanelProps) {
   const anteCents = vote.anteBB * bigBlind;
   const hasVoted = viewingPlayerId ? vote.votes[viewingPlayerId] !== undefined : true;
   const isDesktop = variant === "desktop";
+  const metrics = desktopMetrics ?? {
+    width: 360,
+    padding: 20,
+    titleFontSize: 18,
+    descriptionFontSize: 14,
+    voteBadgeFontSize: 12,
+    buttonHeight: 56,
+    buttonFontSize: 16,
+    waitingFontSize: 14,
+  };
 
   const proposer = players.find((p) => p?.id === vote.proposedBy);
   const proposerName = proposer?.name ?? "Someone";
+  const shellClass = isDesktop
+    ? "elevated-surface-dark relative rounded-[2rem] border"
+    : "elevated-surface-dark relative rounded-[1.7rem] border p-4";
 
   return (
     <motion.div
@@ -35,95 +51,120 @@ export default function BombPotVotingPanel({
       animate={{ opacity: 1, scale: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.85 }}
       transition={{ type: "spring", stiffness: 380, damping: 24 }}
-      className={`relative overflow-hidden rounded-2xl ${isDesktop ? "p-4 w-64" : "p-3 w-full"}`}
+      className={shellClass}
       style={{
-        background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #1e3a8a 100%)",
-        border: "1px solid rgba(165,180,252,0.25)",
-        boxShadow: "0 0 30px rgba(99,102,241,0.4), 0 8px 24px rgba(0,0,0,0.5)",
+        width: isDesktop ? metrics.width : undefined,
+        padding: isDesktop ? metrics.padding : undefined,
       }}
     >
-      <div
-        className={`font-black text-center mb-1 ${isDesktop ? "text-sm" : "text-xs"}`}
-        style={{ color: "#fde68a" }}
-      >
-        Bomb Pot Vote!
-      </div>
-      <div
-        className={`text-center mb-3 ${isDesktop ? "text-xs" : "text-[10px]"}`}
-        style={{ color: "rgba(255,255,255,0.85)" }}
-      >
-        <span className="font-bold" style={{ color: "#a5b4fc" }}>{proposerName}</span>
-        {" proposed "}
-        <span className="font-black" style={{ color: "#fde68a" }}>{vote.anteBB}x BB ante</span>
-        {" ("}
-        <span style={{ color: "#a5b4fc" }}>{formatCents(anteCents)}</span>
-        {")"}
-      </div>
+      <div className={`absolute inset-0 ${isDesktop ? "bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03)_48%,rgba(255,255,255,0.02))]" : "bg-[linear-gradient(180deg,rgba(2,6,23,0.98),rgba(2,6,23,0.94))]"}`} />
+      <div className={`absolute inset-0 ${isDesktop ? "bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_40%),radial-gradient(circle_at_bottom,_rgba(34,197,94,0.08),_transparent_46%)]" : "bg-[linear-gradient(135deg,rgba(255,255,255,0.07),rgba(255,255,255,0.018)_42%,rgba(255,255,255,0.01))]"}`} />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.2),_transparent_40%),radial-gradient(circle_at_bottom,_rgba(34,197,94,0.08),_transparent_46%)]" />
+      <div className={`${isDesktop ? "hidden" : "absolute inset-0 bg-[linear-gradient(180deg,rgba(2,6,23,0.04),rgba(2,6,23,0.18)_52%,rgba(2,6,23,0.3))]"}`} />
+      <div className="absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent" />
 
-      {/* Vote status */}
-      <div className="flex flex-wrap gap-1 mb-3 justify-center">
-        {players.filter(Boolean).map((p) => {
-          if (!p?.id) return null;
-          const v = vote.votes[p.id];
-          return (
-            <span
-              key={p.id}
-              className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
+      <div className="surface-content">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="relative flex h-3 w-3 shrink-0">
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-sky-200 shadow-[0_0_18px_rgba(186,230,253,0.65)]" />
+            </span>
+            <span className={`truncate font-semibold uppercase text-sky-100/80 ${isDesktop ? "text-[11px] tracking-[0.26em]" : "text-[10px] tracking-[0.22em]"}`}>
+              Special Hand
+            </span>
+          </div>
+          <div className={`rounded-full border border-sky-100/15 bg-sky-300/10 font-semibold uppercase text-sky-50/90 ${isDesktop ? "px-3 py-1.5 text-[11px] tracking-[0.18em]" : "px-3 py-1 text-[10px] tracking-[0.16em]"}`}>
+            Vote
+          </div>
+        </div>
+
+        <div className="mb-4 text-center">
+          <div className="font-black tracking-tight text-white" style={{ fontSize: isDesktop ? metrics.titleFontSize : 22 }}>
+            Bomb Pot Vote
+          </div>
+          <div className="mt-1 text-white/80" style={{ fontSize: isDesktop ? metrics.descriptionFontSize : 13 }}>
+            <span className="font-semibold text-sky-100">{proposerName}</span> proposed{" "}
+            <span className="font-black text-white">{vote.anteBB}x BB ante</span>{" "}
+            for <span className="font-semibold text-sky-100">{formatCents(anteCents)}</span>.
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap justify-center gap-2">
+          {players.filter(Boolean).map((p) => {
+            if (!p?.id) return null;
+            const v = vote.votes[p.id];
+            return (
+              <span
+                key={p.id}
+                className={`${isDesktop ? "px-3 py-1.5 text-[12px]" : "px-2.5 py-1 text-[10px]"} max-w-full truncate rounded-full border font-bold`}
+                style={{
+                  background:
+                    v === true
+                      ? "rgba(34,197,94,0.14)"
+                      : v === false
+                      ? "rgba(239,68,68,0.12)"
+                      : isDesktop ? "rgba(255,255,255,0.06)" : "rgba(15,23,42,0.82)",
+                  color:
+                    v === true ? "#bbf7d0" : v === false ? "#fecaca" : "rgba(255,255,255,0.56)",
+                  border: `1px solid ${
+                    v === true
+                      ? "rgba(34,197,94,0.24)"
+                      : v === false
+                      ? "rgba(239,68,68,0.24)"
+                      : "rgba(255,255,255,0.08)"
+                  }`,
+                }}
+              >
+                {v === true ? "In" : v === false ? "Out" : "Pending"} {p.name}
+              </span>
+            );
+          })}
+        </div>
+
+        {!hasVoted && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={onApprove}
+              className={`rounded-2xl border font-black transition-colors ${isDesktop ? "" : "py-3 text-sm"}`}
               style={{
-                background:
-                  v === true
-                    ? "rgba(34,197,94,0.25)"
-                    : v === false
-                    ? "rgba(239,68,68,0.25)"
-                    : "rgba(255,255,255,0.08)",
-                color:
-                  v === true ? "#86efac" : v === false ? "#fca5a5" : "rgba(255,255,255,0.5)",
-                border: `1px solid ${
-                  v === true
-                    ? "rgba(34,197,94,0.4)"
-                    : v === false
-                    ? "rgba(239,68,68,0.4)"
-                    : "rgba(255,255,255,0.12)"
-                }`,
+                height: isDesktop ? metrics.buttonHeight : undefined,
+                fontSize: isDesktop ? metrics.buttonFontSize : undefined,
+                background: "rgba(34,197,94,0.14)",
+                color: "#dcfce7",
+                borderColor: "rgba(34,197,94,0.24)",
+                boxShadow: isDesktop ? undefined : "0 10px 26px rgba(34,197,94,0.12)",
               }}
             >
-              {v === true ? "v" : v === false ? "x" : "..."} {p.name}
-            </span>
-          );
-        })}
+              Let's Gooooo
+            </button>
+            <button
+              onClick={onReject}
+              className={`rounded-2xl border font-bold transition-colors ${isDesktop ? "" : "py-3 text-sm"}`}
+              style={{
+                height: isDesktop ? metrics.buttonHeight : undefined,
+                fontSize: isDesktop ? metrics.buttonFontSize : undefined,
+                background: "rgba(239,68,68,0.12)",
+                color: "#fee2e2",
+                borderColor: "rgba(239,68,68,0.24)",
+                boxShadow: isDesktop ? undefined : "0 10px 26px rgba(239,68,68,0.12)",
+              }}
+            >
+              Not Feeling It
+            </button>
+          </div>
+        )}
+        {hasVoted && (
+          <div
+            className={`rounded-2xl border ${isDesktop ? "border-white/8 bg-white/5" : "border-white/10 bg-slate-900/78"} py-3 text-center ${isDesktop ? "" : "text-xs"}`}
+            style={{
+              color: isDesktop ? "rgba(255,255,255,0.56)" : "rgba(255,255,255,0.68)",
+              fontSize: isDesktop ? metrics.waitingFontSize : undefined,
+            }}
+          >
+            Vote locked in. Waiting for the rest of the table…
+          </div>
+        )}
       </div>
-
-      {!hasVoted && (
-        <div className="flex gap-2">
-          <button
-            onClick={onApprove}
-            className="flex-1 py-2 rounded-xl text-sm font-black transition-colors"
-            style={{
-              background: "rgba(34,197,94,0.25)",
-              color: "#86efac",
-              border: "1px solid rgba(34,197,94,0.4)",
-            }}
-          >
-            In
-          </button>
-          <button
-            onClick={onReject}
-            className="flex-1 py-2 rounded-xl text-sm font-bold transition-colors"
-            style={{
-              background: "rgba(239,68,68,0.15)",
-              color: "#fca5a5",
-              border: "1px solid rgba(239,68,68,0.3)",
-            }}
-          >
-            Out
-          </button>
-        </div>
-      )}
-      {hasVoted && (
-        <div className="text-center text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-          Waiting for others...
-        </div>
-      )}
     </motion.div>
   );
 }

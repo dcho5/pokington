@@ -5,6 +5,7 @@ import Card from "components/poker/Card";
 import { deriveRunAnimation } from "lib/runAnimation";
 import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
 import type { RunResult } from "@pokington/engine";
+import type { DesktopRunItCenterStage } from "lib/desktopTableLayout";
 
 const CARD_COUNT = 5;
 
@@ -15,10 +16,9 @@ interface RunItBoardProps {
   handNumber: number;
   /** true = mobile (flex-based sizing), false = desktop (fixed px sizing) */
   compact?: boolean;
+  desktopLayout?: DesktopRunItCenterStage;
 }
 
-const DESKTOP_CARD = "w-[72px] h-[100px] lg:w-[96px] lg:h-[136px]";
-const DESKTOP_GAP = "gap-3 lg:gap-5";
 const MOBILE_CARD = "flex-1";
 const MOBILE_GAP = "gap-[2%]";
 
@@ -28,6 +28,7 @@ export default function RunItBoard({
   runDealStartedAt,
   handNumber,
   compact = false,
+  desktopLayout,
 }: RunItBoardProps) {
   const { currentRun, revealedCount } = deriveRunAnimation(
     runDealStartedAt,
@@ -38,8 +39,18 @@ export default function RunItBoard({
   const animationComplete = currentRun === totalRuns - 1 && revealedCount === CARD_COUNT;
   useRunAnimationTicker(runDealStartedAt, knownCardCount, totalRuns, !animationComplete);
 
+  const desktopCardStyle = compact || !desktopLayout
+    ? undefined
+    : {
+        width: desktopLayout.cardWidth,
+        height: desktopLayout.cardHeight,
+      };
+
   return (
-    <div className="flex flex-col items-center gap-2 w-full">
+    <div
+      className="flex flex-col items-center w-full"
+      style={compact || !desktopLayout ? { gap: 8 } : { gap: desktopLayout.rowGap }}
+    >
       {Array.from({ length: totalRuns }, (_, r) => {
         const isPast = r < currentRun;
         const isCurrent = r === currentRun;
@@ -47,14 +58,19 @@ export default function RunItBoard({
         const rowOpacity = isPast ? 0.45 : 1;
 
         return (
-          <div key={`run-${handNumber}-${r}`} className="flex flex-col items-center gap-1 w-full">
+          <div
+            key={`run-${handNumber}-${r}`}
+            className="flex flex-col items-center w-full"
+            style={compact || !desktopLayout ? { gap: 4 } : { gap: desktopLayout.labelGap }}
+          >
             <motion.div
               animate={{ opacity: isFuture ? 0.25 : isCurrent ? 1 : 0.45 }}
               transition={{ duration: 0.3 }}
-              className={
-                compact
-                  ? "text-[9px] font-black uppercase tracking-[0.2em] text-white/60 select-none"
-                  : "text-[10px] font-black uppercase tracking-[0.25em] text-white/60 select-none"
+              className="font-black uppercase text-white/60 select-none"
+              style={
+                compact || !desktopLayout
+                  ? { fontSize: 9, letterSpacing: "0.2em" }
+                  : { fontSize: desktopLayout.labelFontSize, letterSpacing: "0.24em" }
               }
             >
               Run {r + 1}
@@ -63,14 +79,19 @@ export default function RunItBoard({
             <motion.div
               animate={{ opacity: rowOpacity }}
               transition={{ duration: 0.4 }}
-              className={`flex justify-center ${compact ? MOBILE_GAP : DESKTOP_GAP} w-full`}
+              className={`flex justify-center ${compact ? MOBILE_GAP : ""} w-full`}
+              style={compact || !desktopLayout ? undefined : { gap: desktopLayout.gap }}
             >
               {Array.from({ length: CARD_COUNT }, (_, i) => {
                 const isKnown = i < knownCardCount;
 
                 if (isKnown) {
                   return (
-                    <div key={i} className={compact ? MOBILE_CARD : DESKTOP_CARD}>
+                    <div
+                      key={i}
+                      className={compact ? MOBILE_CARD : ""}
+                      style={desktopCardStyle}
+                    >
                       <Card
                         card={runResults[r]?.board[i]}
                         className="w-full aspect-[5/7] rounded-xl shadow-xl"
@@ -85,7 +106,14 @@ export default function RunItBoard({
                   (isCurrent && i < revealedCount);
 
                 return (
-                  <div key={i} className={`${compact ? MOBILE_CARD : DESKTOP_CARD} relative aspect-[5/7]`} style={{ perspective: 600 }}>
+                  <div
+                    key={i}
+                    className={`${compact ? MOBILE_CARD : ""} relative aspect-[5/7]`}
+                    style={{
+                      perspective: 600,
+                      ...desktopCardStyle,
+                    }}
+                  >
                     {isRevealed ? (
                       <motion.div
                         className="absolute inset-0"

@@ -2,6 +2,7 @@
 import React from "react";
 import { useRouter } from "next/navigation";
 import PokerChip from "components/poker/PokerChip";
+import { formatCents } from "lib/formatCents";
 import type { SevenTwoBountyBB } from "@pokington/engine";
 
 interface TableHeaderProps {
@@ -37,7 +38,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         aria-label="Go back"
       >
         <span className="text-xl leading-none text-gray-900 dark:text-white">←</span>
-        <span className="font-bold text-sm text-gray-900 dark:text-white">{tableName}</span>
+        <span className="font-bold text-sm text-gray-900 dark:text-white truncate max-w-[160px]">{tableName}</span>
       </button>
 
       {/* Center: chip logo — absolutely centered so left/right elements don't shift it */}
@@ -53,7 +54,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
           </span>
         )}
         <span className="font-mono text-xs text-gray-500 dark:text-gray-400">
-          ${smallBlind} / ${bigBlind}
+          {formatCents(smallBlind)} / {formatCents(bigBlind)}
         </span>
       </div>
     </div>

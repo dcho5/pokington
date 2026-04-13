@@ -2,6 +2,13 @@
   "name": "pokington",
   "private": true,
   "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "node scripts/dev.mjs",
+    "dev:turbo": "turbo run dev party --parallel --filter=@pokington/web",
+    "typecheck": "turbo run typecheck",
+    "test": "pnpm -C packages/engine test && pnpm -C apps/web test"
+  },
   "devDependencies": {
     "typescript": "^5.0.0",
     "turbo": "latest"

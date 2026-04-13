@@ -1,29 +1,33 @@
 "use client";
 import OptionSelector from "./OptionSelector";
-import type { BLIND_OPTIONS, BOUNTY_OPTIONS } from "constants/game";
+import type { BLIND_OPTIONS } from "constants/game";
 
 interface CreateTableCardProps {
   blindOptions: typeof BLIND_OPTIONS;
-  bountyOptions: typeof BOUNTY_OPTIONS;
   blindIdx: number;
   setBlindIdx: (idx: number) => void;
+  bountyOptions: readonly string[];
   bountyIdx: number;
   setBountyIdx: (idx: number) => void;
   tableName: string;
   setTableName: (name: string) => void;
   onCreate: () => void;
+  status?: string | null;
+  isCreating?: boolean;
 }
 
 const CreateTableCard = ({
   blindOptions,
-  bountyOptions,
   blindIdx,
   setBlindIdx,
+  bountyOptions,
   bountyIdx,
   setBountyIdx,
   tableName,
   setTableName,
   onCreate,
+  status,
+  isCreating = false,
 }: CreateTableCardProps) => (
   <div
     className="
@@ -74,12 +78,13 @@ const CreateTableCard = ({
         options={bountyOptions}
         value={bountyIdx}
         onChange={setBountyIdx}
-        variant="pills"
+        variant="tabs"
       />
     </div>
 
     <button
       onClick={onCreate}
+      disabled={isCreating}
       className="
         group relative w-full
         min-h-[48px]
@@ -91,11 +96,18 @@ const CreateTableCard = ({
         transition-all duration-200
         focus:outline-none focus:ring-2 focus:ring-red-400
         overflow-hidden
+        disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:shadow-md
       "
     >
-      <span className="relative z-10">Create Table</span>
+      <span className="relative z-10">{isCreating ? "Creating..." : "Create Table"}</span>
       <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
     </button>
+
+    {status ? (
+      <p className="text-xs text-red-500 dark:text-red-400">
+        {status}
+      </p>
+    ) : null}
   </div>
 );
 

@@ -3,6 +3,8 @@ import type { Card, GamePhase } from "@pokington/shared";
 
 // Re-export so consumers only need to import from one place
 export type { GameEvent, WinnerInfo, RunResult, SidePot, GamePhase };
+export const PROTOCOL_VERSION = 3;
+export const CORE_SEVEN_TWO_BOUNTY_BB = 0;
 
 // ── Public player: same as EnginePlayer but holeCards is always null, hasCards added ──
 export type PublicEnginePlayer = Omit<EnginePlayer, "holeCards"> & {
@@ -25,15 +27,52 @@ export function toPublicGameState(state: GameState): PublicGameState {
   return { ...rest, deckSize: deck.length, players: publicPlayers };
 }
 
+export type TableStatus = "creating" | "active" | "archived" | "error";
+
+export interface TableBlinds {
+  small: number;
+  big: number;
+}
+
+export interface CreateTableRequest {
+  tableName: string;
+  blinds: TableBlinds;
+  creatorClientId: string;
+  sevenTwoBountyBB?: SevenTwoBountyBB;
+}
+
+export interface CreateTableResponse {
+  code: string;
+  tableId: string;
+  joinUrl: string;
+  status: TableStatus;
+}
+
+export interface GetTableResponse {
+  exists: boolean;
+  status: TableStatus | null;
+  tableName: string | null;
+  blinds: TableBlinds | null;
+}
+
+export interface JoinTableRequest {
+  clientId: string;
+}
+
+export interface JoinTableResponse {
+  token: string;
+  tableId: string;
+  playerSessionId: string;
+  isCreator: boolean;
+}
+
 // ── Client → Server messages ──
 export type ClientMessage =
-  | { type: "AUTH"; userId: string }
-  | { type: "CONFIGURE"; tableName: string; blinds: { small: number; big: number }; sevenTwoBountyBB: SevenTwoBountyBB }
+  | { type: "AUTH"; token: string; protocolVersion: number }
   | { type: "GAME_EVENT"; event: GameEvent }
   | { type: "REVEAL_CARD"; cardIndex: 0 | 1 }
-  | { type: "SET_TIMER"; enabled: boolean }
   | { type: "SET_AWAY"; away: boolean }
-  | { type: "PEEK_CARD"; cardIndex: 0 | 1 }
+  | { type: "PEEK_CARD"; cardIndex: 0 | 1; handNumber: number }
   | { type: "QUEUE_LEAVE" };
 
 // ── Session ledger ──
@@ -66,9 +105,11 @@ export interface PayoutInstruction {
 
 // ── Server → Client messages ──
 export type ServerMessage =
-  | { type: "WELCOME"; yourUserId: string; isCreator: boolean }
-  | { type: "STATE"; state: PublicGameState }
-  | { type: "PRIVATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]> }
-  | { type: "ROOM_META"; creatorUserId: string | null; connectedUserIds: string[]; turnTimerEnabled: boolean; awayPlayerIds: string[]; peekedCounts: Record<string, number> }
-  | { type: "LEDGER"; entries: LedgerEntry[] }
+  | { type: "WELCOME"; playerSessionId: string; isCreator: boolean }
+  | { type: "TABLE_STATE"; state: PublicGameState }
+  // Includes any currently public hole-card slots for this hand, including the
+  // viewer's own public cards so reconnects can restore reveal state locally.
+  | { type: "PRIVATE_STATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]> }
+  | { type: "ROOM_PRESENCE"; connectedPlayerIds: string[]; awayPlayerIds: string[]; peekedCounts: Record<string, number> }
+  | { type: "LEDGER_STATE"; entries: LedgerEntry[] }
   | { type: "ERROR"; code: string; message: string };

@@ -13,6 +13,7 @@ interface RunItMobileTabsProps {
   knownCardCount: number;
   runDealStartedAt: number;
   handNumber: number;
+  onViewingRunChange?: (runIndex: number) => void;
 }
 
 export default function RunItMobileTabs({
@@ -20,6 +21,7 @@ export default function RunItMobileTabs({
   knownCardCount,
   runDealStartedAt,
   handNumber,
+  onViewingRunChange,
 }: RunItMobileTabsProps) {
   const { currentRun, revealedCount } = deriveRunAnimation(
     runDealStartedAt,
@@ -40,6 +42,15 @@ export default function RunItMobileTabs({
       setViewingRun(currentRun);
     }
   }, [currentRun]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    prevViewingRun.current = 0;
+    setViewingRun(0);
+  }, [handNumber]);
+
+  useEffect(() => {
+    onViewingRunChange?.(viewingRun);
+  }, [onViewingRunChange, viewingRun]);
 
   function switchTo(r: number) {
     prevViewingRun.current = viewingRun;

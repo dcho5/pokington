@@ -20,14 +20,16 @@ function isRed(suit: string): boolean {
 interface CardProps {
   card?: CardType;
   className?: string;
+  style?: React.CSSProperties;
 }
 
-const Card: React.FC<CardProps> = ({ card, className = "" }) => {
+const Card: React.FC<CardProps> = ({ card, className = "", style }) => {
   if (!card) {
     // Face-down back — white card frame with dark blue gradient inner
     return (
       <div
         className={`relative bg-white overflow-hidden ${className}`}
+        style={style}
       >
         {/* Inner back area */}
         <div
@@ -64,6 +66,7 @@ const Card: React.FC<CardProps> = ({ card, className = "" }) => {
   return (
     <div
       className={`card-face relative flex flex-col justify-between p-1.5 ${red ? "red" : ""} ${className}`}
+      style={style}
     >
       {/* Top-left: rank + suit */}
       <div className="flex items-center gap-0.5 leading-none text-sm font-bold">

@@ -1,12 +1,12 @@
 "use client";
 import React from "react";
-import { motion } from "framer-motion";
 import { formatCents } from "lib/formatCents";
+import AnnouncementBanner from "./AnnouncementBanner";
 
 interface WinnerEntry {
   playerId: string;
   amount: number;
-  hand: string;
+  hand: string | null;
 }
 
 interface WinnerBannerProps {
@@ -16,47 +16,43 @@ interface WinnerBannerProps {
   variant?: "desktop" | "mobile";
 }
 
+function getPlayerName(
+  playerId: string,
+  players: Array<{ id?: string; name: string } | null>,
+): string {
+  return players.find((pl) => pl?.id === playerId)?.name ?? "?";
+}
+
 function formatWinnerText(
   winners: WinnerEntry[],
   players: Array<{ id?: string; name: string } | null>,
 ): string {
   return winners
     .map((w) => {
-      const p = players.find((pl) => pl?.id === w.playerId);
-      return `${p?.name ?? "?"} wins ${formatCents(w.amount)} — ${w.hand}`;
+      const handText = w.hand ? ` ${w.hand}` : "";
+      return `${getPlayerName(w.playerId, players)} ${formatCents(w.amount)}${handText}`;
     })
-    .join(" | ");
+    .join(" • ");
 }
 
 export default function WinnerBanner({ winners, players, variant = "desktop" }: WinnerBannerProps) {
+  const total = winners.reduce((sum, winner) => sum + winner.amount, 0);
   const text = formatWinnerText(winners, players);
-
-  if (variant === "mobile") {
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0 }}
-        className="px-4 py-2 rounded-xl bg-gradient-to-r from-yellow-500 to-amber-600 shadow-[0_0_20px_rgba(245,158,11,0.4)] text-black font-black text-xs text-center"
-      >
-        {text}
-      </motion.div>
-    );
-  }
+  const singleWinner = winners.length === 1 ? winners[0] : null;
+  const singleWinnerName = singleWinner ? getPlayerName(singleWinner.playerId, players) : null;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.5, y: 30 }}
-      animate={{ opacity: 1, scale: [0.5, 1.08, 1], y: 0 }}
-      exit={{ opacity: 0, scale: 0.8, y: -20 }}
-      transition={{ duration: 0.6, scale: { times: [0, 0.6, 1], duration: 0.7 } }}
-    >
-      <div className="relative px-8 py-4 rounded-2xl bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-400 shadow-[0_0_40px_rgba(245,158,11,0.6),0_0_80px_rgba(245,158,11,0.2)] text-black font-black text-base lg:text-lg whitespace-nowrap">
-        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
-        </div>
-        <span className="relative z-10">{text}</span>
-      </div>
-    </motion.div>
+    <AnnouncementBanner
+      eyebrow={winners.length === 1 ? "Pot Awarded" : "Split Pot"}
+      title={
+        singleWinner
+          ? `${singleWinnerName} wins ${formatCents(singleWinner.amount)}`
+          : `${winners.length} players split ${formatCents(total)}`
+      }
+      detail={singleWinner ? (singleWinner.hand ?? undefined) : text}
+      badge={formatCents(total)}
+      tone="gold"
+      variant={variant}
+    />
   );
 }

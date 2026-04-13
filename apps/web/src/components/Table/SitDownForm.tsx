@@ -107,7 +107,7 @@ export default function SitDownForm({
     return (
       <>
         <motion.div
-          className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
+          className="overlay-scrim-strong absolute inset-0 z-40"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -115,27 +115,29 @@ export default function SitDownForm({
         />
         <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
           <motion.div
-            className="w-full max-w-sm rounded-2xl bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl border border-gray-200/50 dark:border-white/[0.06] shadow-2xl p-6 pointer-events-auto"
+            className="elevated-surface-light w-full max-w-sm rounded-2xl border p-6 pointer-events-auto"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ type: "spring", stiffness: 400, damping: 30 }}
           >
-            {formBody}
-            <div className="flex gap-3">
-              <button
-                onClick={onDismiss}
-                className="flex-1 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold text-base border border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={!canConfirm}
-                onClick={handleConfirm}
-                className="flex-1 h-14 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none"
-              >
-                Sit Down
-              </button>
+            <div className="surface-content">
+              {formBody}
+              <div className="flex gap-3">
+                <button
+                  onClick={onDismiss}
+                  className="flex-1 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold text-base border border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  disabled={!canConfirm}
+                  onClick={handleConfirm}
+                  className="flex-1 h-14 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none"
+                >
+                  Sit Down
+                </button>
+              </div>
             </div>
           </motion.div>
         </div>
@@ -147,7 +149,7 @@ export default function SitDownForm({
   return (
     <>
       <motion.div
-        className="absolute inset-0 z-40 bg-black/20 dark:bg-black/40"
+        className="overlay-scrim-strong absolute inset-0 z-40"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -155,8 +157,7 @@ export default function SitDownForm({
       />
       <motion.div
         className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl
-          bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl
-          border-t border-gray-200/50 dark:border-white/[0.06]
+          elevated-surface-light border-t
           px-4 pt-4"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
         initial={{ y: "100%" }}
@@ -165,17 +166,19 @@ export default function SitDownForm({
         transition={{ type: "spring", stiffness: 400, damping: 30 }}
         drag="y"
         dragConstraints={{ top: 0 }}
-        onDragEnd={(_, info) => { if (info.offset.y > 80) onDismiss(); }}
+        onDragEnd={(_event: unknown, info: { offset: { y: number } }) => { if (info.offset.y > 80) onDismiss(); }}
       >
-        <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-5" />
-        {formBody}
-        <button
-          disabled={!canConfirm}
-          onClick={handleConfirm}
-          className="w-full h-14 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none"
-        >
-          Sit Down
-        </button>
+        <div className="surface-content">
+          <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-5" />
+          {formBody}
+          <button
+            disabled={!canConfirm}
+            onClick={handleConfirm}
+            className="w-full h-14 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none"
+          >
+            Sit Down
+          </button>
+        </div>
       </motion.div>
     </>
   );

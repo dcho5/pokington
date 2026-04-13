@@ -1,3 +1,5 @@
+import type { BombPotAnteBB } from "@pokington/engine";
+
 /** Blind level cent values corresponding 1-to-1 with BLIND_OPTIONS. */
 export const BLIND_CENTS: Array<{ small: number; big: number }> = [
   { small: 10, big: 25 },
@@ -20,11 +22,13 @@ export const BOUNTY_OPTIONS = [
   "2x BB",
   "4x BB",
   "8x BB",
-  "10x BB",
 ] as const;
 
 /** Cent values corresponding 1-to-1 with BOUNTY_OPTIONS (index 0 = off). */
-export const BOUNTY_VALUES = [0, 2, 4, 8, 10] as const;
+export const BOUNTY_VALUES = [0, 2, 4, 8] as const;
+
+/** Bomb pot ante multipliers supported by both UI and engine. */
+export const BOMB_POT_ANTE_BB_VALUES: readonly BombPotAnteBB[] = [2, 4, 8] as const;
 
 /**
  * Returns the three standard buy-in preset amounts (in dollars)

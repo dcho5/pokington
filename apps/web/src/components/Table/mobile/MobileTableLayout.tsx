@@ -12,8 +12,10 @@ import BombPotSheet from "./BombPotSheet";
 import LedgerSheet from "./LedgerSheet";
 import PokerChip from "components/poker/PokerChip";
 import { formatCents } from "lib/formatCents";
+import { isAnimatedRunItShowdown, shouldRenderRunItBoard } from "lib/tableVisualState";
 import { MobileWinnerChips } from "./MobileWinnerChips";
 import { MobileSevenTwoBountyChips } from "./MobileSevenTwoBountyChips";
+import AnnouncementBanner from "../AnnouncementBanner";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
 import WinnerBanner from "../WinnerBanner";
 import type { Player } from "types/player";
@@ -34,6 +36,7 @@ function computeMobileChipAngle(
 
 const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   onSitDown,
+  seatSelectionLocked = false,
   players = [],
   dealerIndex = 0,
   tableName = "Table",
@@ -43,7 +46,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   bigBlindIndex,
   communityCards,
   holeCards,
-  handStrength,
+  handIndicators = [],
   totalSeats = 10,
   phase,
   winners,
@@ -63,10 +66,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   isFirstBet = false,
   handNumber = 0,
   showdownCountdown = null,
-  turnStartedAt = null,
   isAdmin = false,
-  timerEnabled = true,
-  onToggleTimer,
   runItVotes = {},
   onVoteRun,
   runAnnouncement = null,
@@ -85,7 +85,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   onRevealCard,
   myRevealedCardIndices,
   sevenTwoEligible = false,
-  onSetSevenTwoBounty,
   bombPotVote = null,
   bombPotNextHand: _bombPotNextHand = null,
   isBombPotHand = false,
@@ -98,22 +97,44 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   onStandUp,
   onQueueLeave,
   leaveQueued,
+  cardPeelPersistenceKey,
 }) => {
+  const RUN_LABELS = ["once", "twice", "three times"] as const;
   const [selectedEmptySeat, setSelectedEmptySeat] = useState<number | null>(null);
   const [bombPotSheetOpen, setBombPotSheetOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [activeHandIndicatorId, setActiveHandIndicatorId] = useState<string | null>(null);
+  const handIndicatorIdsKey = handIndicators.map((indicator) => indicator.id).join("|");
 
-  // Reset scroll position after keyboard dismisses (e.g. after SitDownForm).
-  // On mobile, the virtual keyboard shifts the viewport upward; when it
-  // closes the scroll offset can stick, causing the y-axis shift bug.
   useEffect(() => {
     if (selectedEmptySeat === null) {
       window.scrollTo(0, 0);
     }
   }, [selectedEmptySeat]);
 
+  useEffect(() => {
+    setActiveHandIndicatorId((current) => {
+      if (current && handIndicators.some((indicator) => indicator.id === current)) {
+        return current;
+      }
+      return handIndicators[0]?.id ?? null;
+    });
+  }, [handIndicatorIdsKey, handIndicators, handNumber]);
+
   const youPlayer = players.find((p) => p != null && p.isYou) ?? null;
-  const isRunItDealing = isRunItBoard && runDealStartedAt != null && runAnnouncement == null;
+  const isRunItDealing = shouldRenderRunItBoard({
+    phase,
+    isRunItBoard,
+    isBombPotHand,
+    runDealStartedAt,
+    runAnnouncement,
+  });
+  const animatedRunIt = isAnimatedRunItShowdown({
+    phase,
+    isRunItBoard,
+    isBombPotHand,
+    runResults,
+  });
 
   const opponents = players
     .map((p, i) => ({ player: p, seatIndex: i }))
@@ -136,6 +157,9 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   const waitingFor = currentActorName ?? players.find(
     (p) => p != null && p.isCurrentActor && !p.isYou
   )?.name;
+  const bombPotAnnouncementIsCanceled = bombPotAnnouncement?.kind === "canceled";
+  const mobileBannerHaloClass =
+    "pointer-events-none absolute inset-2 rounded-[2rem] bg-[radial-gradient(circle_at_top,rgba(15,23,42,0.56),rgba(15,23,42,0.22)_60%,transparent_88%)] blur-2xl";
 
   const chipGlowAngle = computeMobileChipAngle(
     isYourTurn,
@@ -145,39 +169,21 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
   return (
     <div className="absolute inset-0 overflow-hidden overscroll-none bg-gray-100 dark:bg-gray-950 transition-colors duration-500">
-      {/*
-       * Z-INDEX MANIFEST — MobileTableLayout
-       * z-[80]  Run-it announcement (absolute, pointer-events-none)
-       * z-[76]  Bomb pot announcement (absolute, pointer-events-none)
-       * z-[75]  7-2 announcement (absolute, pointer-events-none)
-       * z-[70]  Show/Muck buttons + Bomb pot voting panel
-       * z-[65]  Winner banner (absolute, pointer-events-none)
-       * z-[55]  Floating bomb pot button (right) + ledger button (left)
-       * z-50    Sheets: RaiseSheet / FoldConfirmSheet / SitDownForm / BombPotSheet / LedgerSheet
-       * z-40    Sheet backdrops
-       * z-30    TableHeader
-       * z-10    Active-player OpponentStrip cell (showdown card stacking)
-       * Rule: do not insert new overlays between z-55 and z-65.
-       * Rule: z-50 is reserved exclusively for sheets/dialogs.
-       */}
-      {/* Ambient glow */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[40%] bg-red-500/5 dark:bg-red-600/10 blur-[80px] rounded-full" style={{ willChange: "auto" }} />
       </div>
 
-      {/* Winner chips animation overlay */}
       {phase === "showdown" && winners && winners.length > 0 && (
         <MobileWinnerChips
           key={`${handNumber}-mobile-chips`}
           winners={winners}
-          runResults={isRunItBoard ? runResults : undefined}
-          knownCardCount={isRunItBoard ? knownCardCount : undefined}
+          runResults={animatedRunIt ? runResults : undefined}
+          knownCardCount={animatedRunIt ? knownCardCount : undefined}
           players={players.map((p, i) => p ? { id: p.id, seatIndex: i, isYou: p.isYou } : null)}
           handNumber={handNumber}
         />
       )}
 
-      {/* 7-2 bounty chips animation overlay */}
       {sevenTwoBountyTrigger && (
         <MobileSevenTwoBountyChips
           winnerId={sevenTwoBountyTrigger.winnerId}
@@ -187,7 +193,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         />
       )}
 
-      {/* Header */}
       <TableHeader
         tableName={tableName}
         smallBlind={blinds.small}
@@ -195,7 +200,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         sevenTwoBountyBB={sevenTwoBountyBB}
       />
 
-      {/* Content */}
       <div
         className="absolute inset-0 flex flex-col min-h-0"
         style={{
@@ -203,7 +207,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           paddingBottom: "env(safe-area-inset-bottom)",
         }}
       >
-        {/* Zone 1: Opponents — pt-7 gives showdown cards room above bubbles without clipping under nav bar */}
         <div className="flex-shrink-0 pt-7">
           <OpponentStrip
             players={opponents}
@@ -211,9 +214,9 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             smallBlindIndex={smallBlindIndex}
             bigBlindIndex={bigBlindIndex}
             emptySeats={emptySeats}
+            seatSelectionLocked={seatSelectionLocked}
             onEmptySeatTap={(seatIndex) => {
-              // If already seated during waiting phase, move seat via onSitDown
-              // (which triggers changeSeat). Otherwise open the SitDownForm.
+              if (seatSelectionLocked) return;
               const isWaiting = !phase || phase === "waiting";
               if (youPlayer && isWaiting) {
                 onSitDown(seatIndex);
@@ -224,9 +227,9 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           />
         </div>
 
-        {/* Zone 2: Community cards */}
         <div className="flex-1 min-h-0 flex flex-col items-center justify-start gap-1 pt-4">
           <CommunityCards
+            phase={phase}
             communityCards={communityCards}
             communityCards2={communityCards2}
             isBombPot={isBombPotHand}
@@ -236,10 +239,11 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             runDealStartedAt={runDealStartedAt}
             runAnnouncement={runAnnouncement}
             handNumber={handNumber}
+            onActiveBoardChange={(boardIndex) => setActiveHandIndicatorId(`board-${boardIndex}`)}
+            onViewingRunChange={(runIndex) => setActiveHandIndicatorId(`run-${runIndex}`)}
           />
         </div>
 
-        {/* Pot pill — between cards and hand panel */}
         {pot > 0 && (
           <div className="flex-shrink-0 flex justify-center py-1">
             <motion.div
@@ -253,7 +257,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           </div>
         )}
 
-        {/* Zone 3: Chip (flanked by bomb pot + ledger buttons) + Hand */}
         <div className="flex-shrink-0">
           <AnimatePresence>
             {!isRunItDealing && (
@@ -264,7 +267,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.4 }}
               >
-                {/* Bomb pot button (left of chip) */}
                 <div className="w-10 flex justify-end">
                   <AnimatePresence>
                     {!bombPotVote && !_bombPotNextHand && youPlayer?.id && !bombPotCooldown.includes(youPlayer.id) && (
@@ -290,7 +292,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
                 <PokerChip size={38} glowAngle={chipGlowAngle} />
 
-                {/* Ledger button (right of chip) */}
                 <div className="w-10 flex justify-start">
                   <motion.button
                     initial={{ scale: 0, opacity: 0 }}
@@ -313,7 +314,8 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           <HandPanel
             player={youPlayer}
             holeCards={holeCards}
-            handStrength={handStrength}
+            handIndicators={handIndicators}
+            activeHandIndicatorId={activeHandIndicatorId}
             handNumber={handNumber}
             canRevealToOthers={canShowCards}
             revealedToOthersIndices={myRevealedCardIndices}
@@ -325,10 +327,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             leaveQueued={leaveQueued}
             phase={phase}
             currentBet={youPlayer?.currentBet ?? 0}
+            cardPeelPersistenceKey={cardPeelPersistenceKey}
           />
         </div>
 
-        {/* Zone 4: Action bar */}
         <div className="flex-shrink-0 bg-white dark:bg-[rgb(3,7,18)] border-t border-gray-200/50 dark:border-white/[0.06]">
           <ActionBar
             isYourTurn={isYourTurn}
@@ -352,9 +354,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             onRaise={onRaise}
             onStartHand={onStartHand}
             showdownCountdown={showdownCountdown}
-            turnStartedAt={turnStartedAt}
-            timerEnabled={timerEnabled}
-            onToggleTimer={onToggleTimer}
             runItVotes={runItVotes}
             onVoteRun={onVoteRun}
             runAnnouncement={runAnnouncement}
@@ -363,90 +362,91 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             showNextHand={showNextHand}
             viewerPlayerId={youPlayer?.id}
             players={players}
-            sevenTwoBountyBB={sevenTwoBountyBB}
-            onSetSevenTwoBounty={onSetSevenTwoBounty}
             handNumber={handNumber}
             isBombPotHand={isBombPotHand}
           />
         </div>
       </div>
 
-      {/* 7-2 announcement overlay */}
       <AnimatePresence>
         {sevenTwoAnnouncement && (
-          <div className="absolute inset-0 flex items-start justify-center z-[75] pointer-events-none pt-[30%]">
-            <SevenTwoAnnouncement
-              winnerName={sevenTwoAnnouncement.winnerName}
-              perPlayer={sevenTwoAnnouncement.perPlayer}
-              total={sevenTwoAnnouncement.total}
-              variant="mobile"
-            />
-          </div>
-        )}
-      </AnimatePresence>
-
-
-      {/* Run-it announcement overlay */}
-      <AnimatePresence>
-        {runAnnouncement != null && (
-          <div className="absolute inset-0 flex items-center justify-center z-[80] pointer-events-none">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.7, y: -16 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8 }}
-              transition={{ type: "spring", stiffness: 400, damping: 24 }}
-              className="px-8 py-5 rounded-3xl text-white font-black text-xl shadow-2xl"
-              style={{
-                background: "linear-gradient(135deg, #7c3aed, #4f46e5)",
-                boxShadow: "0 0 50px rgba(124,58,237,0.5), 0 20px 40px rgba(0,0,0,0.5)",
-              }}
-            >
-              Running it {["once", "twice", "three times"][runAnnouncement - 1]}!
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Bomb pot voting panel overlay */}
-      <AnimatePresence>
-        {bombPotVote && (
-          <div className="absolute inset-0 flex items-center justify-center z-[70] pointer-events-none">
-            <div className="pointer-events-auto px-4 w-full max-w-xs">
-              <BombPotVotingPanel
-                vote={bombPotVote}
-                players={players}
-                viewingPlayerId={youPlayer?.id}
-                bigBlind={blinds.big}
-                onApprove={() => onVoteBombPot?.(true)}
-                onReject={() => onVoteBombPot?.(false)}
-                variant="mobile"
-              />
+          <div className="absolute inset-0 flex items-start justify-center pt-[30%] z-[170] pointer-events-none">
+            <div className="relative isolate px-4">
+              <div className={mobileBannerHaloClass} />
+              <div className="relative z-10">
+                <SevenTwoAnnouncement
+                  winnerName={sevenTwoAnnouncement.winnerName}
+                  perPlayer={sevenTwoAnnouncement.perPlayer}
+                  total={sevenTwoAnnouncement.total}
+                  variant="mobile"
+                />
+              </div>
             </div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Bomb pot announcement overlay */}
+      <AnimatePresence>
+        {runAnnouncement != null && (
+          <div className="absolute inset-0 flex items-center justify-center z-[175] pointer-events-none">
+            <div className="relative isolate px-4 w-full max-w-sm">
+              <div className={mobileBannerHaloClass} />
+              <div className="relative z-10">
+                <AnnouncementBanner
+                  eyebrow="All-in Showdown"
+                  title={`Running it ${RUN_LABELS[runAnnouncement - 1]}`}
+                  detail={
+                    runAnnouncement === 1
+                      ? "A single board will settle the pot."
+                      : `${runAnnouncement} boards will decide this hand.`
+                  }
+                  badge={`${runAnnouncement} ${runAnnouncement === 1 ? "board" : "boards"}`}
+                  tone="violet"
+                  variant="mobile"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bombPotVote && (
+          <div className="absolute inset-0 flex items-center justify-center z-[180] pointer-events-none">
+            <div className="pointer-events-auto relative isolate px-4 w-full max-w-xs">
+              <div className={mobileBannerHaloClass} />
+              <div className="relative z-10">
+                <BombPotVotingPanel
+                  vote={bombPotVote}
+                  players={players}
+                  viewingPlayerId={youPlayer?.id}
+                  bigBlind={blinds.big}
+                  onApprove={() => onVoteBombPot?.(true)}
+                  onReject={() => onVoteBombPot?.(false)}
+                  variant="mobile"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {bombPotAnnouncement && (
-          <div className="absolute inset-0 flex items-center justify-center z-[76] pointer-events-none pt-[20%]">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.7 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.85 }}
-              transition={{ type: "spring", stiffness: 380, damping: 22 }}
-              className="px-6 py-4 rounded-2xl text-center"
-              style={{
-                background: "linear-gradient(135deg, #1e1b4b, #312e81)",
-                border: "1px solid rgba(165,180,252,0.3)",
-                boxShadow: "0 0 40px rgba(99,102,241,0.5)",
-              }}
-            >
-              <div className="text-xl font-black text-yellow-300">BOMB POT!</div>
-              <div className="text-sm text-indigo-200 mt-1">
-                {bombPotAnnouncement.anteBB}x BB ante next hand
+          <div className="absolute inset-0 flex items-center justify-center pt-[20%] z-[178] pointer-events-none">
+            <div className="relative isolate px-4 w-full max-w-sm">
+              <div className={mobileBannerHaloClass} />
+              <div className="relative z-10">
+                <AnnouncementBanner
+                  eyebrow={bombPotAnnouncementIsCanceled ? "Table Update" : "Special Hand"}
+                  title={bombPotAnnouncement.title}
+                  detail={bombPotAnnouncement.detail}
+                  badge={bombPotAnnouncementIsCanceled ? "Canceled" : "Bomb Pot"}
+                  tone={bombPotAnnouncementIsCanceled ? "amber" : "sky"}
+                  variant="mobile"
+                />
               </div>
-            </motion.div>
+            </div>
           </div>
         )}
       </AnimatePresence>
@@ -469,18 +469,22 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Winner banner — floats above HandPanel, does not push layout */}
       <AnimatePresence>
-        {phase === "showdown" && !isRunItBoard && winners && winners.length > 0 && (
+        {phase === "showdown" && !animatedRunIt && winners && winners.length > 0 && (
           <motion.div
-            className="absolute z-[65] left-4 right-4 pointer-events-none"
+            className="absolute z-[160] left-4 right-4 pointer-events-none"
             style={{ bottom: "calc(env(safe-area-inset-bottom) + 180px)" }}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ type: "spring", stiffness: 380, damping: 26 }}
           >
-            <WinnerBanner winners={winners} players={players} variant="mobile" />
+            <div className="relative isolate">
+              <div className={mobileBannerHaloClass} />
+              <div className="relative z-10">
+                <WinnerBanner winners={winners} players={players} variant="mobile" />
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

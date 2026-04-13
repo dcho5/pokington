@@ -4,12 +4,16 @@ interface JoinTableCardProps {
   tableCode: string;
   setTableCode: (code: string) => void;
   onJoin: () => void;
+  error?: string | null;
+  isJoining?: boolean;
 }
 
 const JoinTableCard = ({
   tableCode,
   setTableCode,
   onJoin,
+  error,
+  isJoining = false,
 }: JoinTableCardProps) => (
   <div
     className="
@@ -39,11 +43,12 @@ const JoinTableCard = ({
         "
         placeholder="Enter table code"
         value={tableCode}
-        onChange={(e) => setTableCode(e.target.value)}
+        onChange={(e) => setTableCode(e.target.value.toUpperCase())}
       />
 
       <button
         onClick={onJoin}
+        disabled={isJoining}
         className="
           group relative
           min-h-[44px]
@@ -56,12 +61,18 @@ const JoinTableCard = ({
           transition-all duration-200
           focus:outline-none focus:ring-2 focus:ring-red-400
           overflow-hidden
+          disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:shadow-md
         "
       >
-        <span className="relative z-10">Join</span>
+        <span className="relative z-10">{isJoining ? "Checking..." : "Join"}</span>
         <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </button>
     </div>
+    {error ? (
+      <p className="text-xs text-red-500 dark:text-red-400">
+        {error}
+      </p>
+    ) : null}
   </div>
 );
 

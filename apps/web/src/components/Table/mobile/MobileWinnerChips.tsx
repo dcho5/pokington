@@ -2,10 +2,8 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCents } from "lib/formatCents";
-import { getRunTimings, ANNOUNCE_DELAY_S } from "components/Table/desktop/WinnerChipsAnimation";
+import { getRunTimings, ANNOUNCE_DELAY_S, CHIP_DURATION_S } from "lib/showdownTiming";
 import type { WinnerInfo } from "@pokington/engine";
-
-const CHIP_DURATION_S = 2.4;
 
 // Approximate viewport fractions for each layout zone
 const POT_X_FRAC = 0.50;   // center of screen horizontally

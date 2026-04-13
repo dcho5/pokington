@@ -5,6 +5,11 @@
     "module": "esnext",
     "moduleResolution": "bundler",
     "baseUrl": "src",
+    "paths": {
+      "framer-motion": [
+        "types/framer-motion"
+      ]
+    },
     "lib": [
       "dom",
       "dom.iterable",

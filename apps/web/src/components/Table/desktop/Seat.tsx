@@ -1,42 +1,111 @@
 "use client";
+
 import React, { useEffect } from "react";
-import { computeSeatPosition, type TableGeometry } from "lib/seatLayout";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
+import { computeSeatPosition, type TableGeometry } from "lib/seatLayout";
 import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_DESKTOP as ACTION_COLORS } from "lib/actionColors";
 import type { Player } from "types/player";
 import Card from "components/poker/Card";
 import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
 
-/** Three-state peek eye: 0 = closed (gray), 1 = half (amber), 2+ = full (emerald). */
 function PeekEye({ count, size = 14 }: { count: number; size?: number }) {
-  const colorClass =
-    count === 0 ? "text-gray-400 dark:text-gray-600 opacity-40" :
-    count === 1 ? "text-amber-500 opacity-70" :
-    "text-emerald-500";
-  return <PeekEyeIcon count={count} size={size} className={colorClass} />;
+  const bgClass =
+    count === 0 ? "bg-gray-700/80 border-gray-500/40" :
+    count === 1 ? "bg-yellow-600/90 border-yellow-400/50" :
+    "bg-emerald-600/90 border-emerald-400/50";
+  const iconSize = Math.max(10, Math.round(size * 0.56));
+
+  return (
+    <div
+      className={`rounded-full border flex items-center justify-center shadow-lg ${bgClass}`}
+      style={{ width: size, height: size }}
+    >
+      <PeekEyeIcon
+        count={count}
+        size={iconSize}
+        strokeWidth={2.5}
+        className={count === 0 ? "text-white opacity-50" : "text-white"}
+      />
+    </div>
+  );
 }
 
-/** Two mini card backs indicating a player has been dealt cards */
-function MiniCardIndicator({ visible, folded }: { visible: boolean; folded: boolean }) {
+function SeatBadge({
+  children,
+  className = "",
+  style,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
-    <AnimatePresence>
-      {visible && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.3, y: -8 }}
-          animate={folded
-            ? { opacity: 0, scale: 0.5, rotate: 15, y: -20 }
-            : { opacity: 1, scale: 1, y: 0 }
-          }
-          exit={{ opacity: 0, scale: 0.5, rotate: 15, y: -20 }}
-          transition={{ type: "spring", stiffness: 400, damping: 22 }}
-          className="flex gap-0.5 mb-1"
-        >
-          <div className="w-4 h-5 rounded-[3px] bg-gradient-to-br from-[#1e3a5f] to-[#0f2040] border border-white/20 shadow-sm" />
-          <div className="w-4 h-5 rounded-[3px] bg-gradient-to-br from-[#1e3a5f] to-[#0f2040] border border-white/20 shadow-sm -ml-2 rotate-3" />
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 font-black uppercase tracking-[0.18em] shadow-lg backdrop-blur-md ${className}`}
+      style={{
+        textShadow: "0 1px 2px rgba(2,6,23,0.92)",
+        ...style,
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SeatPulseOutlines({
+  color,
+  cardWidth,
+  cardHeight,
+  clusterWidth,
+  duration = 1.8,
+  repeat = Infinity,
+  delay = 0,
+  scaleKeyframes = [1, 1.02, 1],
+  opacityKeyframes = [0.28, 0.95, 0.28],
+}: {
+  color: string;
+  cardWidth: number;
+  cardHeight: number;
+  clusterWidth: number;
+  duration?: number;
+  repeat?: number;
+  delay?: number;
+  scaleKeyframes?: number[];
+  opacityKeyframes?: number[];
+}) {
+  const outlines = [
+    { left: 0, rotate: -7 },
+    { left: clusterWidth - cardWidth, rotate: 7 },
+  ] as const;
+
+  return (
+    <div className="absolute inset-0 pointer-events-none">
+      {outlines.map((outline, index) => (
+        <motion.span
+          key={index}
+          className="absolute rounded-[22px]"
+          animate={{
+            scale: scaleKeyframes,
+            opacity: opacityKeyframes,
+            boxShadow: [
+              `0 0 0 1px ${color}, 0 0 10px ${color}`,
+              `0 0 0 2px ${color}, 0 0 26px ${color}`,
+              `0 0 0 1px ${color}, 0 0 10px ${color}`,
+            ],
+          }}
+          transition={{ duration, repeat, delay, ease: "easeInOut" }}
+          style={{
+            left: outline.left,
+            top: 0,
+            width: cardWidth,
+            height: cardHeight,
+            rotate: `${outline.rotate}deg`,
+            transformOrigin: "50% 88%",
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -49,6 +118,7 @@ interface SeatProps {
   isDealer: boolean;
   isCurrentActor: boolean;
   onSitDown: (seatIndex: number) => void;
+  seatSelectionLocked?: boolean;
   seatSize?: number;
   handNumber?: number;
 }
@@ -61,30 +131,131 @@ const Seat: React.FC<SeatProps> = ({
   isYou,
   isCurrentActor,
   onSitDown,
+  seatSelectionLocked = false,
   seatSize = 100,
   handNumber = 0,
 }) => {
   const pos = computeSeatPosition(seatIndex, totalSeats, geometry);
   const action = player?.lastAction ?? null;
   const actionStyle = action ? ACTION_COLORS[action] ?? ACTION_COLORS.check : null;
-
-  // Win animation: bounce everything (cards + seat) together
   const bounceControls = useAnimation();
+
   useEffect(() => {
     if (!player?.winAnimationKey) return;
     if (player.winType === "full") {
       bounceControls.start({
-        scale: [1, 1.1, 0.95, 1.05, 1],
+        scale: [1, 1.11, 0.95, 1.04, 1],
         transition: { duration: 0.55, ease: "easeOut" },
       });
     } else {
       bounceControls.start({
-        scale: [1, 1.06, 0.97, 1.02, 1],
+        scale: [1, 1.07, 0.97, 1.02, 1],
         transition: { duration: 0.45, ease: "easeOut" },
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player?.winAnimationKey]);
+
+  if (!player) {
+    return (
+      <motion.div
+        className="absolute -translate-x-1/2 -translate-y-1/2 z-20"
+        style={pos}
+        initial={false}
+      >
+        <motion.button
+          key="empty"
+          type="button"
+          disabled={seatSelectionLocked}
+          whileHover={seatSelectionLocked ? undefined : { scale: 1.05, backgroundColor: "rgba(239, 68, 68, 0.1)" }}
+          whileTap={seatSelectionLocked ? undefined : { scale: 0.95 }}
+          onClick={seatSelectionLocked ? undefined : () => onSitDown(seatIndex)}
+          aria-disabled={seatSelectionLocked}
+          aria-label={seatSelectionLocked ? `Seat ${seatIndex + 1} unavailable after the game starts` : `Seat ${seatIndex + 1}, click to sit`}
+          className={`
+            group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-200
+            ${seatSelectionLocked
+              ? "cursor-default border-gray-300/50 dark:border-gray-700/50 bg-gray-200/20 dark:bg-gray-900/30 opacity-60"
+              : "cursor-pointer border-gray-300 dark:border-gray-700 bg-transparent"}
+          `}
+          style={{ width: seatSize, height: seatSize }}
+        >
+          <span
+            className={`
+              flex flex-col items-center leading-none transition-colors
+              ${seatSelectionLocked
+                ? "text-gray-400/80 dark:text-gray-500/80"
+                : "text-gray-400 dark:text-gray-500 group-hover:text-red-500"}
+            `}
+          >
+            <span className="text-xs font-bold uppercase tracking-widest">Seat</span>
+            <span className="mt-1 text-[10px] font-mono">{seatIndex + 1}</span>
+          </span>
+        </motion.button>
+      </motion.div>
+    );
+  }
+
+  const publicCards = player.holeCards ?? [null, null];
+  const hasBothPublicCards = publicCards[0] != null && publicCards[1] != null;
+  const cardWidth = Math.round(seatSize * 0.68);
+  const cardHeight = Math.round(cardWidth * 1.4);
+  const overlap = Math.round(cardWidth * 0.38);
+  const clusterWidth = cardWidth * 2 - overlap;
+  const clusterHeight = cardHeight + Math.round(seatSize * 0.18);
+  const nameFontSize = seatSize >= 146 ? 14 : seatSize >= 136 ? 13 : 12;
+  const stackFontSize = seatSize >= 146 ? 20 : seatSize >= 136 ? 19 : 18;
+  const badgeFontSize = seatSize >= 146 ? 10 : 9;
+  const peekEyeSize = seatSize >= 136 ? 36 : 32;
+  const seatOpacity = player.isFolded ? 0.42 : player.isAway ? 0.72 : 1;
+  const statusBadges: Array<{
+    label: string;
+    className: string;
+    borderColor?: string;
+  }> = [];
+
+  if (isYou) {
+    statusBadges.push({
+      label: "You",
+      className: "bg-red-700 text-white border-red-200/55",
+    });
+  }
+  if (player.isAllIn) {
+    statusBadges.push({
+      label: "All In",
+      className: "bg-gradient-to-r from-amber-400 to-yellow-400 text-black border-amber-200/80",
+    });
+  }
+  if (player.isAway) {
+    statusBadges.push({
+      label: "Away",
+      className: "bg-amber-950 text-amber-100 border-amber-300/38",
+    });
+  }
+  if (player.isAdmin) {
+    statusBadges.push({
+      label: "Admin",
+      className: "bg-slate-950 text-slate-50 border-white/22",
+    });
+  }
+  if (action && actionStyle) {
+    statusBadges.push({
+      label: action,
+      className: `bg-slate-950 ${actionStyle.text}`,
+      borderColor:
+        action === "fold" ? "rgba(148,163,184,0.28)" :
+        action === "check" ? "rgba(74,222,128,0.42)" :
+        action === "call" ? "rgba(96,165,250,0.42)" :
+        action === "raise" ? "rgba(248,113,113,0.42)" :
+        "rgba(251,191,36,0.46)",
+    });
+  }
+  if (player.handLabel) {
+    statusBadges.push({
+      label: player.handLabel,
+      className: "bg-slate-950 text-amber-100 border-amber-300/28",
+    });
+  }
 
   return (
     <motion.div
@@ -93,253 +264,235 @@ const Seat: React.FC<SeatProps> = ({
       initial={false}
     >
       <AnimatePresence mode="wait">
-        {player ? (
-          // Bounce wrapper — contains both peeking cards (z-0) and seat bubble (z-10)
-          <motion.div key="occupied" animate={bounceControls} className="relative">
-
-            {/* Showdown cards: peek over the top of the seat from behind (z-0) */}
-            {player.holeCards && (
-              <div
-                className="absolute z-0 flex pointer-events-none"
-                style={{
-                  top: 0,
-                  left: "50%",
-                  transform: "translate(-50%, -50%)",
-                  gap: 6,
-                }}
-              >
-                {/* 7-2 eligible glow overlay */}
-                {player.sevenTwoEligible && (
-                  <motion.div
-                    className="absolute inset-[-10px] rounded-xl pointer-events-none"
-                    animate={{ opacity: [0.5, 1, 0.5], scale: [1, 1.06, 1] }}
-                    transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
-                    style={{ background: "radial-gradient(ellipse, rgba(234,179,8,0.55) 0%, transparent 70%)" }}
+        <motion.div
+          key="occupied"
+          animate={bounceControls}
+          className="relative"
+          style={{ width: clusterWidth + 38, opacity: seatOpacity }}
+        >
+          <div
+            className="relative mx-auto"
+            style={{ width: clusterWidth, height: clusterHeight }}
+          >
+            <AnimatePresence>
+              {player.winAnimationKey && player.winType === "full" && (
+                <motion.div
+                  key={`${player.winAnimationKey}-r1`}
+                  initial={{ opacity: 0.9, scale: 1 }}
+                  animate={{ opacity: 0, scale: 1.42 }}
+                  transition={{ duration: 1.1, ease: "easeOut" }}
+                  className="absolute inset-0 pointer-events-none"
+                >
+                  <SeatPulseOutlines
+                    color="rgba(234,179,8,0.95)"
+                    cardWidth={cardWidth}
+                    cardHeight={cardHeight}
+                    clusterWidth={clusterWidth}
+                    repeat={0}
+                    duration={1.1}
+                    scaleKeyframes={[1, 1.04, 1.12]}
+                    opacityKeyframes={[0.68, 0.88, 0]}
                   />
-                )}
+                </motion.div>
+              )}
+              {player.winAnimationKey && player.winType === "full" && (
+                <motion.div
+                  key={`${player.winAnimationKey}-r2`}
+                  initial={{ opacity: 0.55, scale: 1 }}
+                  animate={{ opacity: 0, scale: 1.72 }}
+                  transition={{ duration: 1.45, ease: "easeOut", delay: 0.16 }}
+                  className="absolute inset-0 pointer-events-none"
+                >
+                  <SeatPulseOutlines
+                    color="rgba(234,179,8,0.62)"
+                    cardWidth={cardWidth}
+                    cardHeight={cardHeight}
+                    clusterWidth={clusterWidth}
+                    repeat={0}
+                    duration={1.45}
+                    delay={0.16}
+                    scaleKeyframes={[1, 1.07, 1.18]}
+                    opacityKeyframes={[0.45, 0.62, 0]}
+                  />
+                </motion.div>
+              )}
+              {player.winAnimationKey && player.winType === "partial" && (
+                <motion.div
+                  key={`${player.winAnimationKey}-partial`}
+                  initial={{ opacity: 0.85, scale: 1 }}
+                  animate={{ opacity: 0, scale: 1.35 }}
+                  transition={{ duration: 0.95, ease: "easeOut" }}
+                  className="absolute inset-0 pointer-events-none"
+                >
+                  <SeatPulseOutlines
+                    color="rgba(34,197,94,0.9)"
+                    cardWidth={cardWidth}
+                    cardHeight={cardHeight}
+                    clusterWidth={clusterWidth}
+                    repeat={0}
+                    duration={0.95}
+                    scaleKeyframes={[1, 1.04, 1.12]}
+                    opacityKeyframes={[0.62, 0.8, 0]}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
-                {/* Floating badge */}
-                {player.sevenTwoEligible && (
-                  <motion.div
-                    className="absolute z-20 text-[9px] font-black text-yellow-300 bg-black/80 px-2 py-0.5 rounded-full border border-yellow-400/50 whitespace-nowrap pointer-events-none"
-                    style={{ top: "-26px", left: "50%", transform: "translateX(-50%)" }}
-                    animate={{ y: [0, -3, 0] }}
-                    transition={{ duration: 1.5, repeat: Infinity }}
-                  >
-                    Show for 7-2 bounty! 💰
-                  </motion.div>
-                )}
+            {isCurrentActor && (
+              <SeatPulseOutlines
+                color="rgba(248,113,113,0.92)"
+                cardWidth={cardWidth}
+                cardHeight={cardHeight}
+                clusterWidth={clusterWidth}
+              />
+            )}
 
-                {player.holeCards.map((card, i) => (
-                  <motion.div
-                    key={card ? `${card.rank}${card.suit}-${handNumber}` : `back-${i}-${handNumber}`}
-                    initial={{ scale: 0.5, opacity: 0, y: 16, rotateY: 90 }}
-                    animate={player.sevenTwoEligible
-                      ? {
-                          scale: 1, opacity: 1, y: 0, rotateY: 0,
-                          filter: [
-                            "drop-shadow(0 0 8px rgba(234,179,8,0.8))",
-                            "drop-shadow(0 0 16px rgba(234,179,8,1))",
-                            "drop-shadow(0 0 8px rgba(234,179,8,0.8))",
-                          ],
-                        }
-                      : { scale: 1, opacity: 1, y: 0, rotateY: 0 }
-                    }
-                    transition={player.sevenTwoEligible
-                      ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
-                      : {
-                          delay: i * 0.1,
-                          duration: 0.4,
-                          type: "spring",
-                          stiffness: 280,
-                          damping: 22,
-                        }
-                    }
-                    style={{
-                      rotate: i === 0 ? -8 : 8,
-                      transformOrigin: "bottom center",
-                      perspective: 600,
-                    }}
-                  >
-                    <Card card={card ?? undefined} className="w-[50px] h-[70px] rounded-xl shadow-2xl" />
-                  </motion.div>
-                ))}
+            {player.sevenTwoEligible && (
+              <SeatPulseOutlines
+                color="rgba(250,204,21,0.82)"
+                cardWidth={cardWidth}
+                cardHeight={cardHeight}
+                clusterWidth={clusterWidth}
+                duration={2}
+                opacityKeyframes={[0.22, 0.65, 0.22]}
+              />
+            )}
+
+            {(player.hasCards ?? true) && !player.isFolded && !isYou && !hasBothPublicCards && (
+              <div className="absolute left-1/2 top-[38%] z-20 -translate-x-1/2 -translate-y-1/2">
+                <PeekEye count={player.peekedCount ?? 0} size={peekEyeSize} />
               </div>
             )}
 
-            {/* Seat bubble — z-10 sits in front of the cards */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 10 }}
-              animate={{
-                opacity: player.isFolded ? 0.4 : player.isAway ? 0.55 : 1,
-                scale: 1,
-                y: 0,
-              }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-              className={`
-                relative z-10 flex flex-col items-center justify-center p-3 rounded-2xl shadow-xl border backdrop-blur-md transition-all duration-300
-                ${isCurrentActor
-                  ? "ring-2 ring-red-500 ring-offset-4 ring-offset-transparent"
-                  : player.isFolded
-                    ? "border-gray-400/30 dark:border-gray-700/30"
-                    : "border-gray-200 dark:border-gray-800"}
-                ${isYou ? "bg-white dark:bg-gray-900" : "bg-white/80 dark:bg-gray-950/80"}
-              `}
-              style={{ width: seatSize * 1.2 }}
-            >
-              {/* Win animation rings */}
-              <AnimatePresence>
-                {player.winAnimationKey && player.winType === "full" && (
-                  <motion.span
-                    key={`${player.winAnimationKey}-r1`}
-                    className="absolute inset-[-4px] rounded-2xl pointer-events-none"
-                    initial={{ opacity: 0.9, scale: 1 }}
-                    animate={{ opacity: 0, scale: 1.45 }}
-                    transition={{ duration: 1.1, ease: "easeOut" }}
-                    style={{ border: "2.5px solid rgba(234,179,8,0.95)" }}
-                  />
-                )}
-                {player.winAnimationKey && player.winType === "full" && (
-                  <motion.span
-                    key={`${player.winAnimationKey}-r2`}
-                    className="absolute inset-[-4px] rounded-2xl pointer-events-none"
-                    initial={{ opacity: 0.6, scale: 1 }}
-                    animate={{ opacity: 0, scale: 1.75 }}
-                    transition={{ duration: 1.5, ease: "easeOut", delay: 0.18 }}
-                    style={{ border: "2px solid rgba(234,179,8,0.55)" }}
-                  />
-                )}
-                {player.winAnimationKey && player.winType === "full" && (
-                  <motion.div
-                    key={`${player.winAnimationKey}-flash`}
-                    className="absolute inset-0 rounded-2xl pointer-events-none"
-                    initial={{ opacity: 0.35 }}
-                    animate={{ opacity: 0 }}
-                    transition={{ duration: 0.7 }}
-                    style={{ background: "linear-gradient(135deg, rgba(234,179,8,0.35), rgba(253,230,138,0.18))" }}
-                  />
-                )}
-                {player.winAnimationKey && player.winType === "partial" && (
-                  <motion.span
-                    key={`${player.winAnimationKey}-r1`}
-                    className="absolute inset-[-4px] rounded-2xl pointer-events-none"
-                    initial={{ opacity: 0.85, scale: 1 }}
-                    animate={{ opacity: 0, scale: 1.35 }}
-                    transition={{ duration: 0.9, ease: "easeOut" }}
-                    style={{ border: "2px solid rgba(34,197,94,0.9)" }}
-                  />
-                )}
-              </AnimatePresence>
-
-              {/* During play: mini card backs. At showdown: cards are outside/above (see above). */}
-              {!player.holeCards && (
-                <MiniCardIndicator
-                  key={handNumber}
-                  visible={player.hasCards ?? false}
-                  folded={player.isFolded ?? false}
+            {publicCards.map((card, i) => (
+              <motion.div
+                key={card ? `${player.id ?? seatIndex}-${card.rank}${card.suit}-${handNumber}-${i}` : `${player.id ?? seatIndex}-back-${handNumber}-${i}`}
+                className="absolute top-0"
+                initial={{ scale: 0.86, opacity: 0, y: 14, rotateY: 90 }}
+                animate={player.sevenTwoEligible
+                  ? {
+                      scale: 1,
+                      opacity: 1,
+                      y: 0,
+                      rotateY: 0,
+                      filter: [
+                        "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
+                        "drop-shadow(0 0 18px rgba(234,179,8,1))",
+                        "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
+                      ],
+                    }
+                  : { scale: 1, opacity: 1, y: 0, rotateY: 0 }
+                }
+                transition={player.sevenTwoEligible
+                  ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
+                  : {
+                      delay: i * 0.06,
+                      duration: 0.34,
+                      type: "spring",
+                      stiffness: 260,
+                      damping: 22,
+                    }
+                }
+                style={{
+                  left: i === 0 ? 0 : clusterWidth - cardWidth,
+                  rotate: i === 0 ? -7 : 7,
+                  transformOrigin: "50% 88%",
+                  perspective: 700,
+                  zIndex: i === 0 ? 1 : 2,
+                }}
+              >
+                <Card
+                  card={card ?? undefined}
+                  className={`
+                    rounded-[18px] shadow-2xl transition-opacity duration-300
+                    ${player.isFolded ? "opacity-75" : ""}
+                  `}
+                  style={{
+                    width: cardWidth,
+                    height: cardHeight,
+                    boxShadow: card
+                      ? "0 20px 28px rgba(2,6,23,0.38)"
+                      : "0 18px 24px rgba(2,6,23,0.34)",
+                  }}
                 />
-              )}
+              </motion.div>
+            ))}
 
-              {/* Peek indicator — shows how many cards this player has looked at */}
-              {(player.hasCards ?? false) && !player.isFolded && !isYou && !player.holeCards && (
-                <div className="flex items-center gap-0.5 mt-0.5">
-                  <PeekEye count={player.peekedCount ?? 0} size={14} />
-                </div>
-              )}
+          </div>
 
-              <div className="flex items-center gap-1.5 mb-1 w-full justify-center">
-                {player.isAway && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0 bg-yellow-500/20 text-yellow-400 font-bold uppercase tracking-wide border border-yellow-500/30" title="Away">Away</span>
-                )}
-                <span className={`text-sm font-bold truncate ${
-                  player.isFolded ? "text-gray-400 dark:text-gray-600" :
-                  isYou ? "text-red-600 dark:text-red-500" :
-                  "text-gray-900 dark:text-gray-100"
-                }`}>
+          {player.sevenTwoEligible && (
+            <motion.div
+              className="absolute left-1/2 top-[-18px] -translate-x-1/2 z-20 pointer-events-none"
+              animate={{ y: [0, -3, 0] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+            >
+              <SeatBadge
+                className="bg-black/95 text-yellow-200 border-yellow-400/55 whitespace-nowrap"
+                style={{ fontSize: badgeFontSize }}
+              >
+                Show for 7-2 bounty
+              </SeatBadge>
+            </motion.div>
+          )}
+
+          {statusBadges.length > 0 && (
+            <div
+              className="absolute z-20 flex flex-col items-end gap-1.5"
+              style={{
+                right: 6,
+                bottom: Math.round(stackFontSize + 40),
+              }}
+            >
+              {statusBadges.map((badge) => (
+                <SeatBadge
+                  key={badge.label}
+                  className={badge.className}
+                  style={{
+                    fontSize: badgeFontSize,
+                    borderColor: badge.borderColor,
+                  }}
+                >
+                  {badge.label}
+                </SeatBadge>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <div
+              className={`
+                flex flex-col items-center gap-2 rounded-[26px] border px-4 py-3 shadow-xl backdrop-blur-md
+                ${isYou
+                  ? "bg-slate-950/92 border-red-400/34"
+                  : "bg-slate-950/88 border-white/12"}
+              `}
+              style={{ minWidth: clusterWidth + 24, maxWidth: clusterWidth + 44 }}
+            >
+              <div className="flex w-full items-center gap-3">
+                <span
+                  className={`min-w-0 flex-1 truncate font-black ${
+                    player.isFolded
+                      ? "text-slate-400 line-through"
+                      : isYou
+                        ? "text-red-200"
+                        : "text-white"
+                  }`}
+                  style={{ fontSize: nameFontSize }}
+                >
                   {player.name}
                 </span>
-                {isYou && (
-                  <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 px-1.5 py-0.5 rounded-md font-black uppercase">
-                    You
-                  </span>
-                )}
-              </div>
-
-              <div className={`text-lg font-mono font-black tabular-nums ${
-                player.isFolded ? "text-gray-400 dark:text-gray-600" : "text-gray-800 dark:text-gray-200"
-              }`}>
-                {formatCents(player.stack)}
-              </div>
-
-              {/* Last action badge */}
-              <AnimatePresence>
-                {action && actionStyle && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.7, y: 4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.7 }}
-                    transition={{ type: "spring", stiffness: 500, damping: 25 }}
-                    className={`mt-1 px-2 py-0.5 rounded-full border text-[9px] font-black uppercase tracking-wider ${actionStyle.bg} ${actionStyle.text}`}
-                  >
-                    {action}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* All-in indicator */}
-              {player.isAllIn && !player.holeCards && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="mt-1 px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 shadow-[0_0_12px_rgba(245,158,11,0.5)] text-black text-[10px] font-black uppercase tracking-wider"
+                <span
+                  className={`font-mono font-black tabular-nums ${
+                    player.isFolded ? "text-slate-400" : "text-slate-100"
+                  }`}
+                  style={{ fontSize: stackFontSize }}
                 >
-                  ALL IN
-                </motion.div>
-              )}
-
-              {/* Winning hand label — key triggers re-animation on each run update */}
-              {player.handLabel && (
-                <motion.div
-                  key={player.handLabel}
-                  initial={{ opacity: 0, y: 4 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="mt-1 px-2 py-0.5 rounded-full text-[9px] font-black tracking-wide whitespace-nowrap"
-                  style={{ background: "rgba(0,0,0,0.78)", color: "#fde68a", border: "1px solid rgba(234,179,8,0.3)" }}
-                >
-                  {player.handLabel}
-                </motion.div>
-              )}
-
-              {player.isAdmin && (
-                <div className="absolute -top-2 -right-2 bg-gray-900 dark:bg-white text-white dark:text-black text-[9px] px-2 py-0.5 rounded-full font-bold shadow-md">
-                  ADMIN
-                </div>
-              )}
-
-              {isCurrentActor && (
-                <span className="absolute inset-[-4px] rounded-2xl animate-pulse-ring pointer-events-none" />
-              )}
-            </motion.div>
-          </motion.div>
-        ) : (
-          <motion.button
-            key="empty"
-            whileHover={{ scale: 1.05, backgroundColor: "rgba(239, 68, 68, 0.1)" }}
-            whileTap={{ scale: 0.95 }}
-            onClick={() => onSitDown(seatIndex)}
-            className="group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-transparent transition-all duration-200"
-            style={{ width: seatSize, height: seatSize }}
-          >
-            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 group-hover:text-red-500 transition-colors uppercase tracking-widest">
-              Sit
-            </span>
-            <span className="text-[10px] text-gray-400/50 dark:text-gray-600 font-mono">
-              {seatIndex + 1}
-            </span>
-          </motion.button>
-        )}
+                  {formatCents(player.stack)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </motion.div>
       </AnimatePresence>
     </motion.div>
   );

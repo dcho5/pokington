@@ -1,15 +1,13 @@
 import { useState, useEffect } from "react";
-import { ANNOUNCE_DELAY_S, getRunTimings } from "components/Table/desktop/WinnerChipsAnimation";
+import {
+  ANNOUNCE_DELAY_S,
+  CHIP_DURATION_S,
+  getRunTimings,
+  NORMAL_LAND_MS,
+  WINNER_STAGGER_BUFFER_S,
+} from "lib/showdownTiming";
 import { deriveRunAnimation } from "lib/runAnimation";
 import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
-
-const CHIP_DURATION_S = 2.4;
-// Buffer to account for per-winner chip stagger (0.35s each in WinnerChipsAnimation)
-// plus the 0.8s tier1 (side-pot) chip delay. Ensures settledRunCount doesn't fire
-// before the last chip (main pot OR side pot) visually lands.
-const WINNER_STAGGER_BUFFER_S = 0.9;
-// Normal showdown (no all-in board): first chip delay + duration + stagger buffer
-const NORMAL_LAND_MS = (0.4 + CHIP_DURATION_S + WINNER_STAGGER_BUFFER_S) * 1000;
 
 /**
  * Returns how many runs have "settled" (winning chips have landed).

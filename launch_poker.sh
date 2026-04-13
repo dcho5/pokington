@@ -41,6 +41,10 @@ if [ "$FRESH" = true ]; then
     echo "🏗️  Building fresh binary (use --no-build to skip)..."
     rm -rf apps/web/.next .turbo
     npx turbo run build --filter="$WEB_PKG_NAME"
+    
+    echo "📂 Injecting static assets into standalone..."
+    cp -r apps/web/public "$STANDALONE_DIR/apps/web/"
+    cp -r apps/web/.next/static "$STANDALONE_DIR/apps/web/.next/"
 fi
 
 # 3. Verify Standalone Structure

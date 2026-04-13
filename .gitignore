@@ -1,6 +1,7 @@
 # --- Pokington Specific ---
 # Ignore the generated standalone folder (this was your 'stale' culprit)
 apps/web/.next/
+NOTES.md
 # Local debug logs from launch_poker.sh
 *.log
 frontend_tunnel.log
@@ -36,13 +37,6 @@ out/
 Thumbs.db
 *.swp
 *.swo
-
-# --- Xcode / iOS ---
-apps/ios/**/*.xcuserstate
-apps/ios/**/xcuserdata/
-apps/ios/DerivedData/
-apps/ios/**/*.ipa
-apps/ios/**/*.dSYM.zip
 
 # --- Vercel ---
 .vercel

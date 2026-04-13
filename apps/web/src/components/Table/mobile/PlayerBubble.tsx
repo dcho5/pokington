@@ -16,7 +16,7 @@ function ShowdownCard({ card }: { card: Card }) {
   const isRed = card.suit === "hearts" || card.suit === "diamonds";
   return (
     <div
-      className="w-[34px] h-[50px] rounded-[5px] flex flex-col items-start justify-start shadow-xl"
+      className="rounded-[5px] flex flex-col items-start justify-start shadow-xl w-[34px] h-[50px]"
       style={{
         background: "white",
         border: "1.5px solid #d1d5db",
@@ -36,6 +36,7 @@ interface PlayerBubbleProps {
   isSmallBlind?: boolean;
   isBigBlind?: boolean;
   emptySeatIndex?: number;
+  seatSelectionLocked?: boolean;
   onEmptyTap?: () => void;
 }
 
@@ -45,22 +46,41 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   isSmallBlind = false,
   isBigBlind = false,
   emptySeatIndex,
+  seatSelectionLocked = false,
   onEmptyTap,
 }) => {
+  const minWidth = 58;
+  const avatarSize = 42;
+
   if (!player) {
     return (
       <motion.button
-        className="flex flex-col items-center gap-0.5 min-w-[58px] px-0.5"
+        type="button"
+        disabled={seatSelectionLocked}
+        className={`flex flex-col items-center gap-0.5 px-0.5 ${seatSelectionLocked ? "opacity-55" : ""}`}
+        style={{ minWidth }}
         initial={{ scale: 0 }}
         animate={{ scale: 1 }}
         exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.25 } }}
         transition={{ type: "spring", stiffness: 300, damping: 20 }}
-        whileTap={{ scale: 0.95 }}
-        onClick={onEmptyTap}
-        aria-label={`Empty seat ${(emptySeatIndex ?? 0) + 1}, tap to sit`}
+        whileTap={seatSelectionLocked ? undefined : { scale: 0.95 }}
+        onClick={seatSelectionLocked ? undefined : onEmptyTap}
+        aria-disabled={seatSelectionLocked}
+        aria-label={seatSelectionLocked
+          ? `Seat ${(emptySeatIndex ?? 0) + 1} unavailable after the game starts`
+          : `Empty seat ${(emptySeatIndex ?? 0) + 1}, tap to sit`}
       >
-        <div className="w-[42px] h-[42px] rounded-full border-2 border-dashed border-gray-400 dark:border-gray-600 flex items-center justify-center">
-          <span className="text-sm font-bold text-gray-400 dark:text-gray-500">+</span>
+        <div
+          className={`rounded-full border-2 border-dashed flex items-center justify-center ${
+            seatSelectionLocked
+              ? "border-gray-400/60 dark:border-gray-600/60 bg-gray-200/25 dark:bg-gray-900/30"
+              : "border-gray-400 dark:border-gray-600"
+          }`}
+          style={{ width: avatarSize, height: avatarSize }}
+        >
+          <span className="text-sm font-bold text-gray-400 dark:text-gray-500">
+            {seatSelectionLocked ? "-" : "+"}
+          </span>
         </div>
         <span className="text-[9px] font-semibold text-gray-400 dark:text-gray-500 leading-tight">
           Seat {(emptySeatIndex ?? 0) + 1}
@@ -73,9 +93,12 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   const avatarColor = getAvatarColor(player.name);
   const initials = getInitials(player.name);
   const isFolded = player.isFolded ?? false;
+  const isAway = player.isAway ?? false;
   const action = player.lastAction;
   const badge = action ? ACTION_BADGE[action] : null;
+  const publicCards = player.holeCards ?? [null, null];
   const showCards = !!player.holeCards;
+  const hasBothPublicCards = publicCards[0] != null && publicCards[1] != null;
 
   // Win animation: bounce the avatar when a win event fires
   const avatarBounce = useAnimation();
@@ -91,9 +114,10 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
 
   return (
     <motion.div
-      className="flex flex-col items-center gap-0.5 min-w-[58px] px-0.5 relative"
+      className="flex flex-col items-center gap-0.5 px-0.5 relative"
+      style={{ minWidth }}
       initial={{ scale: 0 }}
-      animate={{ scale: 1, opacity: isFolded ? 0.35 : 1 }}
+      animate={{ scale: 1, opacity: isFolded ? 0.35 : isAway ? 0.55 : 1 }}
       exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.25 } }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
       aria-label={`${player.name}, stack ${formatCents(player.stack)}`}
@@ -229,28 +253,22 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
           <motion.div animate={avatarBounce}>
           <div
             className={[
-              "w-[42px] h-[42px] rounded-full flex items-center justify-center relative z-10",
+              "rounded-full flex items-center justify-center relative z-10",
               player.isCurrentActor ? "ring-2 ring-red-500" : "",
               isFolded ? "grayscale" : "",
             ].join(" ")}
-            style={{ backgroundColor: avatarColor }}
+            style={{ backgroundColor: avatarColor, width: avatarSize, height: avatarSize }}
           >
             <span className="font-black text-white text-xs select-none">{initials}</span>
           </div>
           </motion.div>
 
-          {player.isAway && (
-            <div className="absolute -top-1 -left-1 w-[20px] h-[20px] rounded-full bg-yellow-600/90 border border-yellow-400/50 flex items-center justify-center z-20 shadow-lg">
-              <span className="text-[8px] font-black text-white">Z</span>
-            </div>
-          )}
-
           {/* Peek indicator */}
-          {(player.hasCards ?? false) && !isFolded && (() => {
+          {(player.hasCards ?? false) && !isFolded && !hasBothPublicCards && (() => {
             const pc = player.peekedCount ?? 0;
             const bgClass =
               pc === 0 ? "bg-gray-700/80 border-gray-500/40" :
-              pc === 1 ? "bg-amber-600/90 border-amber-400/50" :
+              pc === 1 ? "bg-yellow-600/90 border-yellow-400/50" :
               "bg-emerald-600/90 border-emerald-400/50";
             return (
               <div className={`absolute -top-1 -left-1 w-[18px] h-[18px] rounded-full border flex items-center justify-center z-20 shadow-lg ${bgClass}`}>
@@ -266,9 +284,9 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
           )}
 
           {(isSmallBlind || isBigBlind) && !isDealer && (
-            <div className="absolute -top-0.5 -right-0.5 w-[16px] h-[16px] rounded-full bg-gray-200 dark:bg-gray-800 border border-gray-400 dark:border-gray-600 hidden xs:flex items-center justify-center z-20">
-              <span className="text-[7px] font-black text-yellow-600 dark:text-yellow-400">
-                {isSmallBlind ? "1" : "2"}
+            <div className="absolute -top-0.5 -right-0.5 min-w-[22px] h-[16px] px-1 rounded-full bg-gray-200 dark:bg-gray-800 border border-gray-400 dark:border-gray-600 hidden xs:flex items-center justify-center z-20">
+              <span className="text-[7px] font-black text-yellow-600 dark:text-yellow-400 leading-none">
+                {isSmallBlind ? "SB" : "BB"}
               </span>
             </div>
           )}

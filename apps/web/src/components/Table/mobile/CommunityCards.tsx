@@ -1,14 +1,16 @@
 "use client";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Card from "components/poker/Card";
 import RunItMobileTabs from "./RunItMobileTabs";
+import { getCenterBoardMode } from "lib/tableVisualState";
 import type { Card as CardType } from "@pokington/shared";
 import type { RunResult } from "@pokington/engine";
 
 const CARD_COUNT = 5;
 
 interface CommunityCardsProps {
+  phase?: string;
   communityCards?: CardType[];
   communityCards2?: CardType[];
   isBombPot?: boolean;
@@ -19,15 +21,26 @@ interface CommunityCardsProps {
   runDealStartedAt?: number | null;
   runAnnouncement?: 1 | 2 | 3 | null;
   handNumber?: number;
+  onActiveBoardChange?: (boardIndex: number) => void;
+  onViewingRunChange?: (runIndex: number) => void;
 }
 
-function BombPotBoards({ communityCards, communityCards2, handNumber }: {
+function BombPotBoards({ communityCards, communityCards2, handNumber, onActiveBoardChange }: {
   communityCards?: CardType[];
   communityCards2?: CardType[];
   handNumber: number;
+  onActiveBoardChange?: (boardIndex: number) => void;
 }) {
   const [activeBoard, setActiveBoard] = useState(0);
-  const boards = [communityCards, communityCards2 && communityCards2.length > 0 ? communityCards2 : null].filter(Boolean) as CardType[][];
+  const boards = [communityCards ?? [], communityCards2 ?? []];
+
+  useEffect(() => {
+    setActiveBoard(0);
+  }, [handNumber]);
+
+  useEffect(() => {
+    onActiveBoardChange?.(activeBoard);
+  }, [activeBoard, onActiveBoardChange]);
 
   return (
     <div className="flex flex-col items-center gap-2.5 w-full">
@@ -100,6 +113,7 @@ function BombPotBoards({ communityCards, communityCards2, handNumber }: {
 }
 
 const CommunityCards: React.FC<CommunityCardsProps> = ({
+  phase,
   communityCards,
   communityCards2,
   isBombPot = false,
@@ -109,8 +123,19 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
   runDealStartedAt = null,
   runAnnouncement = null,
   handNumber = 0,
+  onActiveBoardChange,
+  onViewingRunChange,
 }) => {
-  const showRunItBoard = isRunItBoard && runDealStartedAt != null && runAnnouncement == null;
+  const boardMode = getCenterBoardMode({
+    phase,
+    isBombPotHand: isBombPot,
+    isRunItBoard,
+    runDealStartedAt,
+    runAnnouncement,
+    runResults,
+    communityCards2,
+  });
+  const showRunItBoard = boardMode === "runIt";
   // During the "Running it N times!" announcement the engine has already dealt
   // the full board, but we should only show the cards that were known before
   // the all-in — the rest stay face-down until RunItMobileTabs takes over.
@@ -125,12 +150,14 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
           knownCardCount={knownCardCount}
           runDealStartedAt={runDealStartedAt!}
           handNumber={handNumber}
+          onViewingRunChange={onViewingRunChange}
         />
-      ) : isBombPot ? (
+      ) : boardMode === "bombPot" ? (
         <BombPotBoards
           communityCards={communityCards}
           communityCards2={communityCards2}
           handNumber={handNumber}
+          onActiveBoardChange={onActiveBoardChange}
         />
       ) : (
         <div className="flex justify-center gap-[2%] w-full">

@@ -12,6 +12,7 @@ import {
 import type { Card } from "@pokington/shared";
 import {
   toPublicGameState,
+  PROTOCOL_VERSION,
   type PublicGameState,
   type PublicEnginePlayer,
   type ServerMessage,
@@ -19,6 +20,9 @@ import {
   type LedgerRow,
   type PayoutInstruction,
 } from "party/types";
+import { deriveLedgerRows, derivePayoutInstructions } from "lib/ledger";
+import { createJoinToken, getOrCreateClientId, getPartyKitHost } from "lib/party";
+import { isTableClearedForNextHand } from "lib/tableVisualState";
 
 // ── UI-facing player shape ──
 export interface UIPlayer {
@@ -36,10 +40,18 @@ export interface UIPlayer {
   hasCards?: boolean;
   isSittingOut?: boolean;
   peekedCount?: number;
-  /** Hole cards — populated for revealed opponents at showdown (null slot = card not revealed) */
+  /** Hole cards — populated for any public opponent card slots (null slot = card not revealed) */
   holeCards?: [Card | null, Card | null] | null;
   handLabel?: string;
   isAway?: boolean;
+}
+
+export interface BombPotAnnouncement {
+  kind: "scheduled" | "canceled";
+  anteBB: number;
+  anteCents: number;
+  title: string;
+  detail: string;
 }
 
 interface GameStore {
@@ -54,27 +66,25 @@ interface GameStore {
 
   // Private hole cards received from server
   myHoleCards: [Card, Card] | null;
-  revealedHoleCards: Record<string, [Card | null, Card | null]>; // other players' cards revealed at showdown
+  revealedHoleCards: Record<string, [Card | null, Card | null]>; // any currently public hole-card slots
   myRevealedCardIndices: Set<0 | 1>; // which of my cards I've revealed to others this hand
   tableNotFound: boolean;
 
   // UI timing
   viewingSeat: number;
-  turnStartedAt: number | null;
   votingStartedAt: number | null;
 
   // Chip sweep animation
   streetPauseChips: { id: string; seatIndex: number; amount: number }[] | null;
   streetSweeping: boolean;
 
-  turnTimerEnabled: boolean;
   runAnnouncement: 1 | 2 | 3 | null;
   isRunItBoard: boolean;
   knownCardCountAtRunIt: number;
   runDealStartedAt: number | null;
   showdownStartedAt: number | null;
   sevenTwoAnnouncement: { winnerName: string; perPlayer: number; total: number } | null;
-  bombPotAnnouncement: { anteBB: number; anteCents: number } | null;
+  bombPotAnnouncement: BombPotAnnouncement | null;
 
   // Actions
   connect: (tableCode: string) => void;
@@ -101,8 +111,6 @@ interface GameStore {
   setViewingSeat: (seat: number) => void;
   proposeBombPot: (anteBB: BombPotAnteBB) => void;
   voteBombPot: (approve: boolean) => void;
-
-  getTurnElapsedMs: () => number;
 
   // Derived selectors
   getPlayers: () => (UIPlayer | null)[];
@@ -132,8 +140,6 @@ interface GameStore {
   getHandNumber: () => number;
   getViewerStack: () => number;
   isViewerAdmin: () => boolean;
-  setTurnTimerEnabled: (enabled: boolean) => void;
-  toggleTimer: (enabled: boolean) => void;
   getBombPotVote: () => PublicGameState["bombPotVote"];
   getBombPotNextHand: () => PublicGameState["bombPotNextHand"];
   isBombPotHand: () => boolean;
@@ -148,7 +154,7 @@ interface GameStore {
   // Away status
   awayPlayerIds: string[];
 
-  // Peek tracking (how many cards each player has peeked at)
+  // Peek tracking (how many cards each player has peeled far enough to identify)
   peekedCounts: Record<string, number>;
 
   // First-state guard (prevents animation replay on page reload)
@@ -166,6 +172,35 @@ let _visibilityHandler: (() => void) | null = null;
 let _idleCleanup: (() => void) | null = null;
 let sevenTwoAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
 let bombPotAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
+
+function getRevealedCardIndices(cards: [Card | null, Card | null] | null | undefined): Set<0 | 1> {
+  const indices = new Set<0 | 1>();
+  if (cards?.[0]) indices.add(0);
+  if (cards?.[1]) indices.add(1);
+  return indices;
+}
+
+function createPlaceholderPublicGameState(): PublicGameState {
+  return toPublicGameState(createInitialState("", { small: 10, big: 25 }));
+}
+
+function hasNoFurtherActionAgainstAllIn(gameState: PublicGameState): boolean {
+  const activePlayers = Object.values(gameState.players).filter(
+    (p) => p.hasCards && !p.isFolded && !p.isAllIn
+  );
+  return activePlayers.length === 1 && activePlayers[0].currentBet >= gameState.roundBet;
+}
+
+function getActionableActor(gameState: PublicGameState): PublicEnginePlayer | null {
+  const actorId = gameState.needsToAct[0];
+  if (!actorId) return null;
+  const actor = gameState.players[actorId];
+  if (!actor || actor.isFolded || actor.isAllIn || !actor.hasCards || actor.sitOutUntilBB) {
+    return null;
+  }
+  if (hasNoFurtherActionAgainstAllIn(gameState)) return null;
+  return actor;
+}
 
 // getPlayers() memoization cache — returns stable references when inputs haven't changed
 let _cachedPlayers: (UIPlayer | null)[] = Array(TOTAL_SEATS).fill(null);
@@ -192,32 +227,20 @@ function playersKey(s: {
   for (const p of players) {
     key += `${p.id}:${p.seatIndex}:${p.stack}:${p.currentBet}:${p.isFolded}:${p.isAllIn}:${p.lastAction}:${p.hasCards}:${p.sitOutUntilBB}|`;
   }
-  // Include revealed hole cards for showdown
-  if (gs.phase === "showdown") {
-    for (const [id, cards] of Object.entries(s.revealedHoleCards)) {
-      key += `${id}:${cards[0]?.rank ?? ""}${cards[0]?.suit ?? ""}-${cards[1]?.rank ?? ""}${cards[1]?.suit ?? ""}|`;
-    }
+  // Include any public hole-card slots shared by the server.
+  for (const [id, cards] of Object.entries(s.revealedHoleCards)) {
+    key += `${id}:${cards[0]?.rank ?? ""}${cards[0]?.suit ?? ""}-${cards[1]?.rank ?? ""}${cards[1]?.suit ?? ""}|`;
   }
-  // Include winners for uncontested detection
+  // Include winners so showdown payout updates invalidate the cache
   if (gs.winners) {
     key += gs.winners.map(w => `${w.playerId}:${w.hand}`).join(",");
   }
   return key;
 }
 
-function getOrCreateUserId(): string {
-  if (typeof window === "undefined") return "server";
-  let id = localStorage.getItem("pokington_user_id");
-  if (!id) {
-    id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    localStorage.setItem("pokington_user_id", id);
-  }
-  return id;
-}
-
 export const useGameStore = create<GameStore>((set, get) => {
 
-  // Called on every STATE message from the server.
+  // Called on every TABLE_STATE message from the server.
   // Detects phase transitions and fires UI-layer side effects (animations, timers, announcements).
   function handleIncomingState(prev: PublicGameState | null, next: PublicGameState, isFirstReceive = false) {
     // On page reload: skip all animation triggers and jump straight to settled state.
@@ -239,8 +262,6 @@ export const useGameStore = create<GameStore>((set, get) => {
           knownCardCountAtRunIt: hasRunResults ? next.communityCards.length : 0,
         } : {}),
         ...(viewingSeat === -1 && myPlayer ? { viewingSeat: myPlayer.seatIndex } : {}),
-        // Sync turn timer start for ongoing hands (only when timer is enabled)
-        ...(get().turnTimerEnabled && next.needsToAct.length > 0 ? { turnStartedAt: Date.now() } : { turnStartedAt: null }),
       });
       return;
     }
@@ -250,6 +271,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     const hadSevenTwoTrigger = !!prev?.sevenTwoBountyTrigger;
     const hadBombPotNextHand = !!prev?.bombPotNextHand;
     const wasBombPot = prev?.isBombPot ?? false;
+    const advancedHand = (next.handNumber ?? 0) > (prev?.handNumber ?? 0);
 
     // ── Street transition: live bets cleared ──
     const prevBets = prev ? Object.values(prev.players).reduce((s, p) => s + p.currentBet, 0) : 0;
@@ -304,13 +326,50 @@ export const useGameStore = create<GameStore>((set, get) => {
     if (!hadBombPotNextHand && next.bombPotNextHand) {
       const anteCents = next.bombPotNextHand.anteBB * next.blinds.big;
       if (bombPotAnnouncementTimer) clearTimeout(bombPotAnnouncementTimer);
-      set({ bombPotAnnouncement: { anteBB: next.bombPotNextHand.anteBB, anteCents } });
+      set({
+        bombPotAnnouncement: {
+          kind: "scheduled",
+          anteBB: next.bombPotNextHand.anteBB,
+          anteCents,
+          title: "BOMB POT!",
+          detail: `${next.bombPotNextHand.anteBB}x BB ante next hand`,
+        },
+      });
       bombPotAnnouncementTimer = setTimeout(() => set({ bombPotAnnouncement: null }), 3_000);
+    }
+
+    // ── Bomb pot canceled before hand start ──
+    if (hadBombPotNextHand && !next.bombPotNextHand && !next.isBombPot && advancedHand && prev?.bombPotNextHand) {
+      const anteCents = prev.bombPotNextHand.anteBB * next.blinds.big;
+      if (bombPotAnnouncementTimer) clearTimeout(bombPotAnnouncementTimer);
+      set({
+        bombPotAnnouncement: {
+          kind: "canceled",
+          anteBB: prev.bombPotNextHand.anteBB,
+          anteCents,
+          title: "Bomb Pot Canceled",
+          detail: "A stack (or more) came up short, so this hand returns to standard blinds.",
+        },
+      });
+      bombPotAnnouncementTimer = setTimeout(() => set({ bombPotAnnouncement: null }), 4_000);
     }
 
     // ── Bomb pot hand started ──
     if (!wasBombPot && next.isBombPot) {
       set({ bombPotAnnouncement: null, isRunItBoard: true, knownCardCountAtRunIt: 5 });
+    }
+
+    // ── Table fully cleared between hands ──
+    if (isTableClearedForNextHand(next)) {
+      set({
+        runAnnouncement: null,
+        votingStartedAt: null,
+        isRunItBoard: false,
+        knownCardCountAtRunIt: 0,
+        runDealStartedAt: null,
+        showdownStartedAt: null,
+        myRevealedCardIndices: new Set(),
+      });
     }
 
     // ── New hand: reset animation state and per-card reveal ──
@@ -329,16 +388,11 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ leaveQueued: false, viewingSeat: -1 });
     }
 
-    // ── Turn timer: reset when actor changes ──
-    if (next.needsToAct[0] !== prev?.needsToAct[0]) {
-      set({ turnStartedAt: get().turnTimerEnabled && next.needsToAct.length > 0 ? Date.now() : null });
-    }
-
     set({ gameState: next });
   }
 
   return {
-    gameState: toPublicGameState(createInitialState("", { small: 10, big: 25 })),
+    gameState: createPlaceholderPublicGameState(),
     myUserId: null,
     myPlayerId: null,
     connectionStatus: "disconnected",
@@ -348,11 +402,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     revealedHoleCards: {},
     myRevealedCardIndices: new Set<0 | 1>(),
     viewingSeat: -1,
-    turnStartedAt: null,
     votingStartedAt: null,
     streetPauseChips: null,
     streetSweeping: false,
-    turnTimerEnabled: true,
+
     runAnnouncement: null,
     isRunItBoard: false,
     knownCardCountAtRunIt: 0,
@@ -369,145 +422,209 @@ export const useGameStore = create<GameStore>((set, get) => {
     connect: (tableCode) => {
       if (_socket) { _socket.close(); _socket = null; }
 
-      const userId = getOrCreateUserId();
-      const playerId = `user_${userId.slice(0, 8)}`;
-      set({ myUserId: userId, myPlayerId: playerId, connectionStatus: "connecting" });
-
-      const host = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_PARTYKIT_HOST)
-        || "localhost:1999";
-
-      _socket = new PartySocket({ host, room: tableCode });
-
-      _socket.addEventListener("open", () => {
-        set({ connectionStatus: "connected" });
-        _socket!.send(JSON.stringify({ type: "AUTH", userId }));
+      const clientId = getOrCreateClientId();
+      set({
+        gameState: createPlaceholderPublicGameState(),
+        myUserId: clientId,
+        myPlayerId: null,
+        connectionStatus: "connecting",
+        isCreator: false,
+        myHoleCards: null,
+        revealedHoleCards: {},
+        myRevealedCardIndices: new Set<0 | 1>(),
+        tableNotFound: false,
+        viewingSeat: -1,
+        votingStartedAt: null,
+        streetPauseChips: null,
+        streetSweeping: false,
+        runAnnouncement: null,
+        isRunItBoard: false,
+        knownCardCountAtRunIt: 0,
+        runDealStartedAt: null,
+        showdownStartedAt: null,
+        sevenTwoAnnouncement: null,
+        bombPotAnnouncement: null,
+        ledger: [],
+        awayPlayerIds: [],
+        peekedCounts: {},
+        leaveQueued: false,
+        isFirstStateReceived: false,
       });
 
-      _socket.addEventListener("message", (evt: MessageEvent) => {
-        let msg: ServerMessage;
-        try { msg = JSON.parse(evt.data as string) as ServerMessage; } catch { return; }
-
-        switch (msg.type) {
-          case "WELCOME": {
-            set({ isCreator: msg.isCreator });
-            if (msg.isCreator && typeof window !== "undefined") {
-              const raw = sessionStorage.getItem(`table_config_${tableCode}`);
-              if (raw) {
-                _socket?.send(JSON.stringify({ type: "CONFIGURE", ...JSON.parse(raw) }));
-                sessionStorage.removeItem(`table_config_${tableCode}`);
-              }
-            }
-            break;
-          }
-          case "STATE": {
-            const { gameState: prev, isFirstStateReceived } = get();
-            handleIncomingState(prev, msg.state, !isFirstStateReceived);
-            break;
-          }
-          case "PRIVATE": {
-            set({ myHoleCards: msg.holeCards, revealedHoleCards: msg.revealedHoleCards });
-            break;
-          }
-          case "ROOM_META": {
-            const newTimerEnabled = msg.turnTimerEnabled;
-            const newAwayIds: string[] = msg.awayPlayerIds ?? [];
-            const newPeekedCounts: Record<string, number> = msg.peekedCounts ?? {};
-            const {
-              turnTimerEnabled: wasEnabled,
-              awayPlayerIds: prevAwayIds,
-              peekedCounts: prevPeekedCounts,
-              gameState: gs,
-              turnStartedAt: existingTimer,
-            } = get();
-            const currentActor = gs.needsToAct[0] ?? null;
-            const isActorAway = currentActor != null && newAwayIds.includes(currentActor);
-
-            let timerUpdate: { turnStartedAt: number | null } | Record<string, never> = {};
-            if (!newTimerEnabled && !isActorAway) {
-              if (existingTimer !== null) timerUpdate = { turnStartedAt: null };
-            } else if ((!wasEnabled && newTimerEnabled && gs.needsToAct.length > 0) ||
-                       (isActorAway && !existingTimer)) {
-              timerUpdate = { turnStartedAt: Date.now() };
-            }
-
-            // Diff fields to skip no-op set() (ROOM_META fires on every peek).
-            const timerChanged = newTimerEnabled !== wasEnabled;
-            const awayChanged =
-              prevAwayIds.length !== newAwayIds.length ||
-              prevAwayIds.some((id, i) => id !== newAwayIds[i]);
-            const prevPeekKeys = Object.keys(prevPeekedCounts);
-            const newPeekKeys = Object.keys(newPeekedCounts);
-            const peekedChanged =
-              prevPeekKeys.length !== newPeekKeys.length ||
-              newPeekKeys.some(k => prevPeekedCounts[k] !== newPeekedCounts[k]);
-            const hasTimerUpdate = Object.keys(timerUpdate).length > 0;
-
-            if (!timerChanged && !awayChanged && !peekedChanged && !hasTimerUpdate) break;
-
-            const patch: Record<string, unknown> = { ...timerUpdate };
-            if (timerChanged) patch.turnTimerEnabled = newTimerEnabled;
-            if (awayChanged) patch.awayPlayerIds = newAwayIds;
-            if (peekedChanged) patch.peekedCounts = newPeekedCounts;
-            set(patch);
-            break;
-          }
-          case "LEDGER":
-            set({ ledger: msg.entries });
-            break;
-          case "ERROR":
-            if (msg.code === "TABLE_NOT_FOUND") set({ tableNotFound: true });
-            break;
+      const host = getPartyKitHost();
+      void (async () => {
+        let joinToken: Awaited<ReturnType<typeof createJoinToken>>;
+        try {
+          joinToken = await createJoinToken(tableCode, { clientId });
+        } catch (error) {
+          const code = error instanceof Error ? error.message : "";
+          set({
+            connectionStatus: "disconnected",
+            tableNotFound: code === "TABLE_NOT_FOUND" || code === "TABLE_NOT_ACTIVE",
+          });
+          return;
         }
-      });
 
-      _socket.addEventListener("close", () => set({ connectionStatus: "disconnected" }));
+        set({
+          myPlayerId: joinToken.playerSessionId,
+          isCreator: joinToken.isCreator,
+        });
 
-      // Page Visibility API: notify server when tab goes away/returns
-      if (typeof document !== "undefined") {
-        // Tear down any handlers left over from a previous connect()
-        if (_visibilityHandler) document.removeEventListener("visibilitychange", _visibilityHandler);
-        if (_idleCleanup) _idleCleanup();
+        _socket = new PartySocket({ host, room: tableCode });
 
-        const handleVisibilityChange = () => {
-          if (_socket) {
-            _socket.send(JSON.stringify({ type: "SET_AWAY", away: document.hidden }));
+        _socket.addEventListener("open", () => {
+          set({ connectionStatus: "connected" });
+          _socket?.send(JSON.stringify({ type: "AUTH", token: joinToken.token, protocolVersion: PROTOCOL_VERSION }));
+          _socket?.send(JSON.stringify({ type: "SET_AWAY", away: typeof document !== "undefined" ? document.hidden : false }));
+        });
+
+        _socket.addEventListener("message", (evt: MessageEvent) => {
+          let msg: ServerMessage;
+          try { msg = JSON.parse(evt.data as string) as ServerMessage; } catch { return; }
+
+          switch (msg.type) {
+            case "WELCOME":
+              set({ isCreator: msg.isCreator, myPlayerId: msg.playerSessionId });
+              break;
+            case "TABLE_STATE": {
+              const { gameState: prev, isFirstStateReceived } = get();
+              if (get().tableNotFound) set({ tableNotFound: false });
+              handleIncomingState(prev, msg.state, !isFirstStateReceived);
+              break;
+            }
+            case "PRIVATE_STATE":
+              set((state) => ({
+                myHoleCards: msg.holeCards,
+                revealedHoleCards: msg.revealedHoleCards,
+                myRevealedCardIndices: getRevealedCardIndices(
+                  state.myPlayerId ? msg.revealedHoleCards[state.myPlayerId] : null
+                ),
+              }));
+              break;
+            case "ROOM_PRESENCE": {
+              const newAwayIds: string[] = msg.awayPlayerIds ?? [];
+              const newPeekedCounts: Record<string, number> = msg.peekedCounts ?? {};
+              const {
+                awayPlayerIds: prevAwayIds,
+                peekedCounts: prevPeekedCounts,
+              } = get();
+
+              const awayChanged =
+                prevAwayIds.length !== newAwayIds.length ||
+                prevAwayIds.some((id, i) => id !== newAwayIds[i]);
+              const prevPeekKeys = Object.keys(prevPeekedCounts);
+              const newPeekKeys = Object.keys(newPeekedCounts);
+              const peekedChanged =
+                prevPeekKeys.length !== newPeekKeys.length ||
+                newPeekKeys.some(k => prevPeekedCounts[k] !== newPeekedCounts[k]);
+
+              if (!awayChanged && !peekedChanged) break;
+
+              const patch: Record<string, unknown> = {};
+              if (awayChanged) patch.awayPlayerIds = newAwayIds;
+              if (peekedChanged) patch.peekedCounts = newPeekedCounts;
+              set(patch);
+              break;
+            }
+            case "LEDGER_STATE":
+              set({ ledger: msg.entries });
+              break;
+            case "ERROR": {
+              const isTableError = msg.code === "TABLE_NOT_FOUND" || msg.code === "TABLE_NOT_ACTIVE";
+              const shouldDisconnect =
+                isTableError || msg.code === "INVALID_JOIN_TOKEN" || msg.code === "PROTOCOL_VERSION_MISMATCH";
+              if (shouldDisconnect) {
+                if (typeof document !== "undefined") {
+                  if (_visibilityHandler) {
+                    document.removeEventListener("visibilitychange", _visibilityHandler);
+                    _visibilityHandler = null;
+                  }
+                  if (_idleCleanup) {
+                    _idleCleanup();
+                    _idleCleanup = null;
+                  }
+                }
+                if (_socket) {
+                  _socket.close();
+                  _socket = null;
+                }
+                set({
+                  gameState: createPlaceholderPublicGameState(),
+                  connectionStatus: "disconnected",
+                  isCreator: false,
+                  myHoleCards: null,
+                  revealedHoleCards: {},
+                  myRevealedCardIndices: new Set<0 | 1>(),
+                  tableNotFound: isTableError,
+                  viewingSeat: -1,
+                  votingStartedAt: null,
+                  streetPauseChips: null,
+                  streetSweeping: false,
+                  runAnnouncement: null,
+                  isRunItBoard: false,
+                  knownCardCountAtRunIt: 0,
+                  runDealStartedAt: null,
+                  showdownStartedAt: null,
+                  sevenTwoAnnouncement: null,
+                  bombPotAnnouncement: null,
+                  ledger: [],
+                  awayPlayerIds: [],
+                  peekedCounts: {},
+                  leaveQueued: false,
+                  isFirstStateReceived: false,
+                });
+              }
+              break;
+            }
           }
-        };
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        _visibilityHandler = handleVisibilityChange;
+        });
 
-        // Inactivity-based away: 2 minutes of no interaction → away
-        const IDLE_MS = 120_000;
-        const THROTTLE_MS = 200;
-        let lastActivity = Date.now();
-        let lastThrottleTime = 0;
-        let idleAway = false;
-        const onActivity = () => {
-          const now = Date.now();
-          if (now - lastThrottleTime < THROTTLE_MS) return;
-          lastThrottleTime = now;
-          lastActivity = now;
-          if (idleAway) {
-            idleAway = false;
-            if (_socket) _socket.send(JSON.stringify({ type: "SET_AWAY", away: false }));
-          }
-        };
-        const idleInterval = setInterval(() => {
-          if (!idleAway && Date.now() - lastActivity > IDLE_MS) {
-            idleAway = true;
-            if (_socket) _socket.send(JSON.stringify({ type: "SET_AWAY", away: true }));
-          }
-        }, 10_000);
-        document.addEventListener("mousemove", onActivity, { passive: true });
-        document.addEventListener("keydown", onActivity);
-        document.addEventListener("touchstart", onActivity, { passive: true });
-        _idleCleanup = () => {
-          clearInterval(idleInterval);
-          document.removeEventListener("mousemove", onActivity);
-          document.removeEventListener("keydown", onActivity);
-          document.removeEventListener("touchstart", onActivity);
-        };
-      }
+        _socket.addEventListener("close", () => set({ connectionStatus: "disconnected" }));
+
+        if (typeof document !== "undefined") {
+          if (_visibilityHandler) document.removeEventListener("visibilitychange", _visibilityHandler);
+          if (_idleCleanup) _idleCleanup();
+
+          const handleVisibilityChange = () => {
+            if (_socket) {
+              _socket.send(JSON.stringify({ type: "SET_AWAY", away: document.hidden }));
+            }
+          };
+          document.addEventListener("visibilitychange", handleVisibilityChange);
+          _visibilityHandler = handleVisibilityChange;
+
+          const IDLE_MS = 120_000;
+          const THROTTLE_MS = 200;
+          let lastActivity = Date.now();
+          let lastThrottleTime = 0;
+          let idleAway = false;
+          const onActivity = () => {
+            const now = Date.now();
+            if (now - lastThrottleTime < THROTTLE_MS) return;
+            lastThrottleTime = now;
+            lastActivity = now;
+            if (idleAway) {
+              idleAway = false;
+              if (_socket) _socket.send(JSON.stringify({ type: "SET_AWAY", away: false }));
+            }
+          };
+          const idleInterval = setInterval(() => {
+            if (!idleAway && Date.now() - lastActivity > IDLE_MS) {
+              idleAway = true;
+              if (_socket) _socket.send(JSON.stringify({ type: "SET_AWAY", away: true }));
+            }
+          }, 10_000);
+          document.addEventListener("mousemove", onActivity, { passive: true });
+          document.addEventListener("keydown", onActivity);
+          document.addEventListener("touchstart", onActivity, { passive: true });
+          _idleCleanup = () => {
+            clearInterval(idleInterval);
+            document.removeEventListener("mousemove", onActivity);
+            document.removeEventListener("keydown", onActivity);
+            document.removeEventListener("touchstart", onActivity);
+          };
+        }
+      })();
     },
 
     disconnect: () => {
@@ -522,7 +639,33 @@ export const useGameStore = create<GameStore>((set, get) => {
         }
       }
       if (_socket) { _socket.close(); _socket = null; }
-      set({ connectionStatus: "disconnected", isFirstStateReceived: false, awayPlayerIds: [], peekedCounts: {}, ledger: [] });
+      set({
+        gameState: createPlaceholderPublicGameState(),
+        myUserId: null,
+        myPlayerId: null,
+        connectionStatus: "disconnected",
+        isCreator: false,
+        myHoleCards: null,
+        revealedHoleCards: {},
+        myRevealedCardIndices: new Set<0 | 1>(),
+        tableNotFound: false,
+        viewingSeat: -1,
+        votingStartedAt: null,
+        streetPauseChips: null,
+        streetSweeping: false,
+        runAnnouncement: null,
+        isRunItBoard: false,
+        knownCardCountAtRunIt: 0,
+        runDealStartedAt: null,
+        showdownStartedAt: null,
+        sevenTwoAnnouncement: null,
+        bombPotAnnouncement: null,
+        ledger: [],
+        awayPlayerIds: [],
+        peekedCounts: {},
+        leaveQueued: false,
+        isFirstStateReceived: false,
+      });
     },
 
     sendEvent: (event) => {
@@ -600,32 +743,32 @@ export const useGameStore = create<GameStore>((set, get) => {
     voteRun: (count) => {
       const myPlayerId = get().myPlayerId;
       if (!myPlayerId) return;
-      const player = get().gameState.players[myPlayerId];
-      if (!player || player.isFolded || get().gameState.phase !== "voting") return;
       get().sendEvent({ type: "VOTE_RUN", playerId: myPlayerId, count });
     },
 
     resolveVote: () => {
-      if (get().gameState.phase !== "voting") return;
       get().sendEvent({ type: "RESOLVE_VOTE" });
     },
 
     showCards: () => {
-      const myPlayerId = get().myPlayerId;
-      if (!myPlayerId) return;
-      get().sendEvent({ type: "SHOW_CARDS", playerId: myPlayerId });
+      const hiddenIndices = ([0, 1] as const).filter((index) => !get().myRevealedCardIndices.has(index));
+      for (const index of hiddenIndices) {
+        get().revealCard(index);
+      }
     },
 
     revealCard: (cardIndex) => {
       if (!_socket) return;
-      if (get().myRevealedCardIndices.has(cardIndex)) return;
-      set((s) => ({ myRevealedCardIndices: new Set([...s.myRevealedCardIndices, cardIndex]) }));
       _socket.send(JSON.stringify({ type: "REVEAL_CARD", cardIndex }));
     },
 
     peekCard: (cardIndex) => {
       if (!_socket) return;
-      _socket.send(JSON.stringify({ type: "PEEK_CARD", cardIndex }));
+      _socket.send(JSON.stringify({
+        type: "PEEK_CARD",
+        cardIndex,
+        handNumber: get().gameState.handNumber,
+      }));
     },
 
     setSevenTwoBounty: (bountyBB) => {
@@ -650,11 +793,6 @@ export const useGameStore = create<GameStore>((set, get) => {
       get().sendEvent({ type: "VOTE_BOMB_POT", playerId: myPlayerId, approve });
     },
 
-    getTurnElapsedMs: () => {
-      const { turnStartedAt } = get();
-      return turnStartedAt != null ? Date.now() - turnStartedAt : 0;
-    },
-
     // ── Derived selectors ──
 
     getPlayers: () => {
@@ -666,7 +804,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (key === _cachedPlayersKey) return _cachedPlayers;
 
       const players = Object.values(gameState.players);
-      const currentActorId = gameState.needsToAct[0] ?? null;
+      const currentActorId = getActionableActor(gameState)?.id ?? null;
 
       const result: (UIPlayer | null)[] = Array(TOTAL_SEATS).fill(null);
       for (const p of players) {
@@ -689,12 +827,9 @@ export const useGameStore = create<GameStore>((set, get) => {
           isSittingOut: p.sitOutUntilBB,
           peekedCount: state.peekedCounts[p.id] ?? 0,
           isAway: awayPlayerIds.includes(p.id),
-          // Never expose own hole cards in the player array — they're shown exclusively in the
-          // hand panel via the separate `holeCards` prop (store.myHoleCards). Only include
-          // other players' voluntarily or auto-revealed cards at showdown.
-          holeCards: gameState.phase === "showdown" && p.id !== myPlayerId
-            ? (revealedHoleCards[p.id] ?? null)
-            : null,
+          // Only expose public card slots in the player array. The viewer's private hand still
+          // lives in `myHoleCards`, but any public reveal should mirror back onto their table seat.
+          holeCards: revealedHoleCards[p.id] ?? null,
         };
       }
       _cachedPlayers = result;
@@ -726,18 +861,16 @@ export const useGameStore = create<GameStore>((set, get) => {
     getRunCount: () => get().gameState.runCount,
     getRunResults: () => get().gameState.runResults,
 
-    getCurrentActorId: () => get().gameState.needsToAct[0] ?? null,
+    getCurrentActorId: () => getActionableActor(get().gameState)?.id ?? null,
 
     isViewerTurn: () => {
       const { myPlayerId, gameState } = get();
-      return !!myPlayerId && gameState.needsToAct[0] === myPlayerId;
+      return !!myPlayerId && getActionableActor(gameState)?.id === myPlayerId;
     },
 
     getCallAmount: () => {
       const { gameState } = get();
-      const actorId = gameState.needsToAct[0];
-      if (!actorId) return 0;
-      const actor = gameState.players[actorId];
+      const actor = getActionableActor(gameState);
       if (!actor) return 0;
       return Math.min(gameState.roundBet - actor.currentBet, actor.stack);
     },
@@ -751,25 +884,21 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     canCheck: () => {
       const { gameState } = get();
-      const actorId = gameState.needsToAct[0];
-      if (!actorId) return false;
-      const actor = gameState.players[actorId];
+      const actor = getActionableActor(gameState);
       if (!actor) return false;
       return actor.currentBet === gameState.roundBet;
     },
 
     canRaise: () => {
       const { gameState } = get();
-      const actorId = gameState.needsToAct[0];
-      if (!actorId) return false;
-      return !gameState.closedActors.includes(actorId);
+      const actor = getActionableActor(gameState);
+      if (!actor) return false;
+      return !gameState.closedActors.includes(actor.id);
     },
 
     canAllIn: () => {
       const { gameState } = get();
-      const actorId = gameState.needsToAct[0];
-      if (!actorId) return false;
-      const actor = gameState.players[actorId];
+      const actor = getActionableActor(gameState);
       return !!actor && actor.stack > 0 && !actor.isAllIn;
     },
 
@@ -782,11 +911,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     getHandNumber: () => get().gameState.handNumber,
     getViewerStack: () => get().getViewingPlayer()?.stack ?? 0,
     isViewerAdmin: () => get().isCreator,
-    setTurnTimerEnabled: (enabled) => set({ turnTimerEnabled: enabled }),
-    toggleTimer: (enabled) => {
-      set({ turnTimerEnabled: enabled });
-      if (_socket) _socket.send(JSON.stringify({ type: "SET_TIMER", enabled }));
-    },
+
     getSevenTwoBountyBB: () => get().gameState.sevenTwoBountyBB,
     getVoluntaryShownPlayerIds: () => get().gameState.voluntaryShownPlayerIds,
     getSevenTwoBountyTrigger: () => get().gameState.sevenTwoBountyTrigger,
@@ -796,27 +921,8 @@ export const useGameStore = create<GameStore>((set, get) => {
     getCommunityCards2: () => get().gameState.communityCards2,
     getBombPotCooldown: () => get().gameState.bombPotCooldown,
 
-    getLedgerRows: () => get().ledger.map((entry): LedgerRow => {
-      const totalBuyIn = entry.buyIns.reduce((s, v) => s + v, 0);
-      const totalCashOut = entry.cashOuts.reduce((s, v) => s + v, 0) + entry.currentStack;
-      return { playerId: entry.playerId, name: entry.name, totalBuyIn, totalCashOut, net: totalCashOut - totalBuyIn, isSeated: entry.isSeated };
-    }),
+    getLedgerRows: () => deriveLedgerRows(get().ledger),
 
-    getPayoutInstructions: () => {
-      const rows = get().getLedgerRows();
-      const creditors = rows.filter(r => r.net > 0).map(r => ({ ...r, rem: r.net })).sort((a, b) => b.rem - a.rem);
-      const debtors = rows.filter(r => r.net < 0).map(r => ({ ...r, rem: -r.net })).sort((a, b) => b.rem - a.rem);
-      const out: PayoutInstruction[] = [];
-      let ci = 0, di = 0;
-      while (ci < creditors.length && di < debtors.length) {
-        const amount = Math.min(creditors[ci].rem, debtors[di].rem);
-        if (amount > 0) out.push({ fromPlayerId: debtors[di].playerId, fromName: debtors[di].name, toPlayerId: creditors[ci].playerId, toName: creditors[ci].name, amount });
-        creditors[ci].rem -= amount;
-        debtors[di].rem -= amount;
-        if (creditors[ci].rem === 0) ci++;
-        if (debtors[di].rem === 0) di++;
-      }
-      return out;
-    },
+    getPayoutInstructions: () => derivePayoutInstructions(get().getLedgerRows()),
   };
 });

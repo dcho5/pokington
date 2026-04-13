@@ -2,7 +2,7 @@
 
 A real-time multiplayer Texas Hold'em poker app for home games. Players share a link, sit down, and play — no accounts required. Supports up to 10 players per table with full cash game mechanics including blinds, side pots, and optional house rules.
 
-**Features:** run-it-multiple-times · 7-2 offsuit bounty · bomb pots · turn timers · away status · per-player session ledger · responsive desktop and mobile layouts
+**Features:** run-it-multiple-times · 7-2 offsuit bounty · bomb pots · away status · per-player session ledger · responsive desktop and mobile layouts
 
 ---
 
@@ -60,14 +60,34 @@ Turn timers and voting timers fire on the server, not the client. This prevents 
 
 ## Running Locally
 
-**Prerequisites:** Node 18+, pnpm, PartyKit CLI
+**Prerequisites:** Node 18+, pnpm
 
 ```bash
 pnpm install
 pnpm dev
 ```
 
-This starts the Next.js dev server and the PartyKit backend in parallel via Turborepo.
+This starts PartyKit first, waits for a healthcheck at `http://127.0.0.1:1999/parties/main/__control__/health`, then starts Next.js.
+
+To verify the realtime backend directly during local development:
+
+```bash
+curl http://127.0.0.1:1999/parties/main/__control__/health
+```
+
+Expected response:
+
+```json
+{"ok":true,"roomId":"__control__","protocolVersion":2}
+```
+
+Useful maintenance commands:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm build
+```
 
 To run the production build with Cloudflare tunnels (as used for actual home games):
 

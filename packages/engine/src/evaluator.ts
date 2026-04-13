@@ -17,6 +17,22 @@ const FULL_HOUSE = 6;
 const FOUR_KIND = 7;
 const STRAIGHT_FLUSH = 8;
 
+const VALUE_LABEL: Record<number, string> = {
+  2: "2",
+  3: "3",
+  4: "4",
+  5: "5",
+  6: "6",
+  7: "7",
+  8: "8",
+  9: "9",
+  10: "10",
+  11: "Jack",
+  12: "Queen",
+  13: "King",
+  14: "Ace",
+};
+
 // ── 5-card evaluator ──
 function evaluate5(cards: Card[]): HandResult {
   const values = cards.map((c) => RANK_VALUE[c.rank]).sort((a, b) => b - a);
@@ -59,7 +75,7 @@ function evaluate5(cards: Card[]): HandResult {
     return {
       rank: STRAIGHT_FLUSH,
       tiebreakers: [straightHigh],
-      label: straightHigh === 14 ? "Royal Flush" : "Straight Flush",
+      label: "Straight Flush",
     };
   }
   if (groups[0][1] === 4) {
@@ -112,7 +128,7 @@ function evaluate5(cards: Card[]): HandResult {
       label: "One Pair",
     };
   }
-  return { rank: HIGH_CARD, tiebreakers: values, label: "High Card" };
+  return { rank: HIGH_CARD, tiebreakers: values, label: `${VALUE_LABEL[values[0]]} High` };
 }
 
 // ── Compare two hand results: positive if a wins, negative if b wins, 0 = tie ──

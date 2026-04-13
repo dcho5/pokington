@@ -3,32 +3,8 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { computeSeatCoords, type TableGeometry } from "lib/seatLayout";
 import { formatCents } from "lib/formatCents";
+import { ANNOUNCE_DELAY_S, CHIP_DURATION_S, getRunTimings } from "lib/showdownTiming";
 import type { WinnerInfo } from "@pokington/engine";
-
-// Wait for "Running it N times!" announcement banner before multi-run chips
-export const ANNOUNCE_DELAY_S = 3.5;
-
-// Chip animation duration (seconds)
-const CHIP_DURATION_S = 2.4;
-
-/**
- * Returns chip/run timing based on how many community cards were already known
- * (revealed before the all-in). Only the new cards need to be dealt, so timing
- * shortens when fewer cards remain.
- *
- *  knownCardCount=0 → deal flop+turn+river → last card at 5400ms → chipStartS=5.9
- *  knownCardCount=3 → deal turn+river      → last card at 2900ms → chipStartS=3.4
- *  knownCardCount=4 → deal river only      → last card at  400ms → chipStartS=0.9
- */
-export function getRunTimings(knownCardCount: number): {
-  chipStartS: number;
-  runIntervalS: number;
-} {
-  const lastCardMs = knownCardCount >= 4 ? 400 : knownCardCount >= 3 ? 2900 : 5400;
-  const chipStartS = lastCardMs / 1000 + 0.5;
-  const runIntervalS = chipStartS + CHIP_DURATION_S + 0.7; // 700ms buffer after chips land
-  return { chipStartS, runIntervalS };
-}
 
 interface WinnerChipsAnimationProps {
   winners: WinnerInfo[];
@@ -41,12 +17,10 @@ interface WinnerChipsAnimationProps {
   runResults?: { winners: WinnerInfo[] }[];
   // How many community cards were already visible before the all-in board was run
   knownCardCount?: number;
+  tableAspectRatio?: number;
+  potTopPct?: number;
+  potLeftPct?: number;
 }
-
-// Table aspect ratio (height / width)
-const AR = 9 / 21;
-// Pot display is positioned at top-[62%] of the table container
-const POT_TOP_FRAC = 0.62;
 
 export const WinnerChipsAnimation: React.FC<WinnerChipsAnimationProps> = ({
   winners,
@@ -57,12 +31,15 @@ export const WinnerChipsAnimation: React.FC<WinnerChipsAnimationProps> = ({
   containerWidth,
   handNumber,
   knownCardCount = 0,
+  tableAspectRatio = 21 / 9,
+  potTopPct = 62,
+  potLeftPct = 50,
 }) => {
   if (containerWidth === 0) return null;
 
-  const containerHeight = containerWidth * AR;
-  const potPxX = containerWidth * 0.5;
-  const potPxY = containerHeight * POT_TOP_FRAC;
+  const containerHeight = containerWidth / tableAspectRatio;
+  const potPxX = containerWidth * (potLeftPct / 100);
+  const potPxY = containerHeight * (potTopPct / 100);
 
   const { chipStartS, runIntervalS } = getRunTimings(knownCardCount);
 

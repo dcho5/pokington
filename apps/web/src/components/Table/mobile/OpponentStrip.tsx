@@ -10,6 +10,7 @@ interface OpponentStripProps {
   smallBlindIndex?: number;
   bigBlindIndex?: number;
   emptySeats?: number[];
+  seatSelectionLocked?: boolean;
   onEmptySeatTap?: (seatIndex: number) => void;
 }
 
@@ -24,6 +25,7 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
   smallBlindIndex,
   bigBlindIndex,
   emptySeats = [],
+  seatSelectionLocked = false,
   onEmptySeatTap,
 }) => {
   const items: SeatItem[] = [
@@ -54,20 +56,21 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
   const renderItem = (item: SeatItem) => {
     if (item.type === "player") {
       return (
-        <PlayerBubble
-          player={item.player}
-          isDealer={item.seatIndex === dealerIndex}
-          isSmallBlind={item.seatIndex === smallBlindIndex}
-          isBigBlind={item.seatIndex === bigBlindIndex}
-        />
-      );
-    }
-    return (
       <PlayerBubble
-        player={null}
-        emptySeatIndex={item.seatIndex}
-        onEmptyTap={() => onEmptySeatTap?.(item.seatIndex)}
+        player={item.player}
+        isDealer={item.seatIndex === dealerIndex}
+        isSmallBlind={item.seatIndex === smallBlindIndex}
+        isBigBlind={item.seatIndex === bigBlindIndex}
       />
+    );
+  }
+  return (
+    <PlayerBubble
+      player={null}
+      emptySeatIndex={item.seatIndex}
+      seatSelectionLocked={seatSelectionLocked}
+      onEmptyTap={seatSelectionLocked ? undefined : () => onEmptySeatTap?.(item.seatIndex)}
+    />
     );
   };
 

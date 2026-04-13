@@ -1,9 +1,37 @@
 import type * as Party from "partykit/server";
-import { gameReducer, createInitialState } from "@pokington/engine";
+import { gameReducer, createInitialState, shouldAutoRevealWinningHands } from "@pokington/engine";
 import type { GameState, GameEvent } from "@pokington/engine";
 import type { Card } from "@pokington/shared";
-import { toPublicGameState } from "./types";
-import type { ClientMessage, ServerMessage, LedgerEntry } from "./types";
+import {
+  CORE_SEVEN_TWO_BOUNTY_BB,
+  PROTOCOL_VERSION,
+  toPublicGameState,
+} from "./types";
+import { canAcceptPeek, getBroadcastPeekedCounts } from "./peekTracking.mjs";
+import {
+  authenticatePresence,
+  buildRoomPresenceSnapshot,
+  disconnectPresence,
+  setAwayPresence,
+} from "./presenceTracking.mjs";
+import {
+  buildPublicRevealedHoleCards,
+  canPubliclyRevealCard,
+  cardIndexToMask,
+} from "./revealTracking.mjs";
+import { getAllInShowdownRevealDelayMs } from "../lib/showdownTiming";
+import type {
+  ClientMessage,
+  ServerMessage,
+  LedgerEntry,
+  CreateTableRequest,
+  CreateTableResponse,
+  GetTableResponse,
+  JoinTableRequest,
+  JoinTableResponse,
+  TableStatus,
+  TableBlinds,
+} from "./types";
 
 interface PlayerStats {
   name: string;
@@ -15,90 +43,181 @@ interface PlayerStats {
   sessions: number;
 }
 
-const TURN_TIMEOUT_MS = 30_000;
+interface PlayerSessionRecord {
+  clientId: string;
+  playerSessionId: string;
+  createdAt: number;
+  lastIssuedAt: number;
+}
+
+interface JoinTokenRecord {
+  token: string;
+  clientId: string;
+  playerSessionId: string;
+  expiresAt: number | null;
+}
+
+interface ControlPlaneTableRecord {
+  code: string;
+  status: TableStatus;
+  tableName: string;
+  blinds: TableBlinds;
+  creatorClientId: string;
+  createdAt: number;
+  playerSessions: PlayerSessionRecord[];
+  joinTokens: JoinTokenRecord[];
+}
+
+interface TableBootstrapResponse {
+  exists: boolean;
+  status: TableStatus | null;
+  tableName: string | null;
+  blinds: TableBlinds | null;
+  creatorClientId: string | null;
+}
+
+interface TokenAuthResponse {
+  ok: boolean;
+  code?: string;
+  message?: string;
+  clientId?: string;
+  playerSessionId?: string;
+  isCreator?: boolean;
+}
+
+interface PersistedRoomState {
+  version: 2 | 3;
+  status: TableStatus;
+  creatorClientId: string | null;
+  gameState: GameState | null;
+  sessionLedger: LedgerEntry[];
+  pendingLeavePlayerIds: string[];
+  playerSessions: PlayerSessionRecord[];
+  joinTokens: JoinTokenRecord[];
+  peekedCardMasks: Array<[string, number]>;
+  publicShownCardMasks?: Array<[string, number]>;
+}
+
+const CONTROL_ROOM_ID = "__control__";
+const ROOM_STATE_KEY = "roomDocument";
 const VOTING_TIMEOUT_MS = 30_000;
+const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting"]);
+const JOIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;
+const ROOM_HTTP_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Accept",
+  "Cache-Control": "no-store",
+  "Content-Type": "application/json",
+};
+const TABLE_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const TABLE_CODE_LENGTH = 6;
+const TABLE_CODE_RE = /^[A-Z0-9]{6}$/;
+const EMPTY_PEEK_COUNTS: Record<string, number> = {};
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: ROOM_HTTP_HEADERS });
+}
+
+function errorResponse(code: string, message: string, status = 400) {
+  return jsonResponse({ code, message }, status);
+}
+
+function generateTableCode() {
+  let code = "";
+  for (let i = 0; i < TABLE_CODE_LENGTH; i += 1) {
+    code += TABLE_CODE_ALPHABET[Math.floor(Math.random() * TABLE_CODE_ALPHABET.length)];
+  }
+  return code;
+}
+
+function parseRouteSegments(req: Party.Request, roomId: string) {
+  const segments = new URL(req.url).pathname.split("/").filter(Boolean);
+  const roomIndex = segments.indexOf(roomId);
+  return roomIndex === -1 ? segments : segments.slice(roomIndex + 1);
+}
+
+function controlTableKey(code: string) {
+  return `table:${code}`;
+}
 
 export default class PokerRoom implements Party.Server {
   private gameState: GameState;
-  private creatorUserId: string | null = null;
-  private isConfigured = false;
+  private roomStatus: TableStatus = "creating";
+  private creatorClientId: string | null = null;
 
-  // userId ↔ connectionId maps
-  private userIdToConnId = new Map<string, string>();
-  private connIdToUserId = new Map<string, string>();
-
-  // userId → stable playerId ("user_XXXXXXXX")
-  private userIdToPlayerId = new Map<string, string>();
-
-  // Live connection objects (cleared on close)
+  private clientIdToConnId = new Map<string, string>();
+  private connIdToClientId = new Map<string, string>();
+  private clientIdToPlayerSessionId = new Map<string, string>();
   private connections = new Map<string, Party.Connection>();
 
-  // Per-card voluntary reveals (server-side only, not in engine)
-  private revealedCardsByPlayerId = new Map<string, Set<0 | 1>>();
+  private playerSessions = new Map<string, PlayerSessionRecord>();
+  private joinTokens = new Map<string, JoinTokenRecord>();
 
-  // Per-card peek tracking (which cards each player has peeked at)
-  private peekedCardsByPlayerId = new Map<string, Set<0 | 1>>();
-
-  // Turn timer setting (synced to all clients)
-  private turnTimerEnabled = true;
-
-  // Session ledger
   private sessionLedger = new Map<string, LedgerEntry>();
   private sessionTrackedPlayerIds = new Set<string>();
-  // Previous broadcasted phase — used to gate ledger broadcast to hand boundaries
-  private lastBroadcastedPhase: string = "waiting";
-
-  // Away status
-  private awayUserIds = new Set<string>();
-
-  // Pending leave queue: players who requested to leave mid-hand
+  private awayClientIds = new Set<string>();
   private pendingLeavePlayerIds = new Set<string>();
-
-  // Server-side timers
-  private turnTimer: ReturnType<typeof setTimeout> | null = null;
+  private peekedCardMasks = new Map<string, number>();
+  private publicShownCardMasks = new Map<string, number>();
   private votingTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingTurnActorId: string | null = null;
+  private winnerRevealTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(readonly room: Party.Room) {
-    this.gameState = createInitialState(room.id, { small: 25, big: 50 });
+    this.gameState = createInitialState(room.id, { small: 25, big: 50 }, { sevenTwoBountyBB: CORE_SEVEN_TWO_BOUNTY_BB });
   }
 
   async onStart() {
-    const [saved, savedLedger] = await Promise.all([
-      this.room.storage.get<boolean>("turnTimerEnabled"),
-      this.room.storage.get<LedgerEntry[]>("sessionLedger"),
-    ]);
-    if (saved !== undefined) this.turnTimerEnabled = saved;
+    if (this.isControlRoom()) return;
+    const saved = await this.room.storage.get<PersistedRoomState>(ROOM_STATE_KEY);
+    if (!saved) return;
 
-    // Restore persisted ledger (survives server restarts)
-    if (savedLedger && savedLedger.length > 0) {
-      for (const entry of savedLedger) {
-        this.sessionLedger.set(entry.playerId, entry);
+    this.roomStatus = saved.status;
+    this.creatorClientId = saved.creatorClientId;
+    if (saved.gameState) {
+      this.gameState = saved.gameState;
+      if (
+        this.gameState.showdownKind !== "none" &&
+        this.gameState.showdownKind !== "contested" &&
+        this.gameState.showdownKind !== "uncontested"
+      ) {
+        this.gameState.showdownKind = this.gameState.winners?.length
+          ? shouldAutoRevealWinningHands(this.gameState.winners) ? "contested" : "uncontested"
+          : "none";
+      }
+      if (typeof this.gameState.autoRevealWinningHands !== "boolean") {
+        this.gameState.autoRevealWinningHands = shouldAutoRevealWinningHands(
+          this.gameState.winners,
+          this.gameState.showdownKind,
+        );
+      }
+      if (typeof this.gameState.autoRevealWinningHandsAt !== "number") {
+        this.gameState.autoRevealWinningHandsAt = null;
       }
     }
-    // If ledger is still empty but players are seated, rebuild from gameState
-    if (this.sessionLedger.size === 0) {
-      for (const [id, player] of Object.entries(this.gameState.players)) {
-        if (player) {
-          this.sessionLedger.set(id, {
-            playerId: id,
-            name: player.name,
-            buyIns: [player.stack],
-            cashOuts: [],
-            isSeated: true,
-            currentStack: player.stack,
-          });
-        }
-      }
-    }
+
+    this.sessionLedger = new Map(saved.sessionLedger.map((entry) => [entry.playerId, entry]));
+    this.sessionTrackedPlayerIds = new Set(saved.sessionLedger.map((entry) => entry.playerId));
+    this.pendingLeavePlayerIds = new Set(saved.pendingLeavePlayerIds);
+    this.playerSessions = new Map(saved.playerSessions.map((session) => [session.clientId, session]));
+    this.joinTokens = new Map(saved.joinTokens.map((token) => [token.token, token]));
+    this.peekedCardMasks = new Map(saved.peekedCardMasks ?? []);
+    this.publicShownCardMasks = new Map(saved.publicShownCardMasks ?? []);
+    this.cleanExpiredJoinTokens();
+    this.scheduleWinnerReveal();
   }
 
   onConnect(conn: Party.Connection) {
+    if (this.isControlRoom()) {
+      conn.close();
+      return;
+    }
     this.connections.set(conn.id, conn);
-    // Wait for AUTH before sending anything
   }
 
-  onMessage(rawMessage: string | ArrayBuffer, sender: Party.Connection) {
+  async onMessage(rawMessage: string | ArrayBuffer, sender: Party.Connection) {
+    if (this.isControlRoom()) return;
+
     let msg: ClientMessage;
     try {
       msg = JSON.parse(typeof rawMessage === "string" ? rawMessage : new TextDecoder().decode(rawMessage)) as ClientMessage;
@@ -107,115 +226,483 @@ export default class PokerRoom implements Party.Server {
     }
 
     if (msg.type === "AUTH") {
-      this.handleAuth(sender, msg.userId);
-    } else if (msg.type === "CONFIGURE") {
-      this.handleConfigure(sender, msg);
-    } else if (msg.type === "GAME_EVENT") {
-      this.handleGameEvent(sender, msg.event);
-    } else if (msg.type === "REVEAL_CARD") {
+      void this.handleAuth(sender, msg.token, msg.protocolVersion);
+      return;
+    }
+
+    if (msg.type === "REVEAL_CARD") {
       this.handleRevealCard(sender, msg.cardIndex);
-    } else if (msg.type === "SET_TIMER") {
-      this.handleSetTimer(sender, msg.enabled);
-    } else if (msg.type === "SET_AWAY") {
+      return;
+    }
+
+    if (msg.type === "PEEK_CARD") {
+      this.handlePeekCard(sender, msg.cardIndex, msg.handNumber);
+      return;
+    }
+
+    if (msg.type === "GAME_EVENT") {
+      this.handleGameEvent(sender, msg.event);
+      return;
+    }
+
+    if (msg.type === "SET_AWAY") {
       this.handleSetAway(sender, msg.away);
-    } else if (msg.type === "PEEK_CARD") {
-      this.handlePeekCard(sender, msg.cardIndex);
-    } else if (msg.type === "QUEUE_LEAVE") {
+      return;
+    }
+
+    if (msg.type === "QUEUE_LEAVE") {
       this.handleQueueLeave(sender);
     }
   }
 
   onClose(conn: Party.Connection) {
+    if (this.isControlRoom()) return;
+
     this.connections.delete(conn.id);
-    const userId = this.connIdToUserId.get(conn.id);
-    if (userId) {
-      this.connIdToUserId.delete(conn.id);
-      // Only clear the userId→connId mapping if it points to THIS connection
-      if (this.userIdToConnId.get(userId) === conn.id) {
-        this.userIdToConnId.delete(userId);
+    const clientId = disconnectPresence(
+      {
+        clientIdToConnId: this.clientIdToConnId,
+        connIdToClientId: this.connIdToClientId,
+        awayClientIds: this.awayClientIds,
+      },
+      conn.id,
+    );
+    if (!clientId) return;
+    this.broadcastRoomPresence();
+  }
+
+  async onRequest(req: Party.Request) {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: ROOM_HTTP_HEADERS });
+    }
+    if (this.isControlRoom()) {
+      return this.handleControlRequest(req);
+    }
+    return this.handleGameplayRequest(req);
+  }
+
+  private isControlRoom() {
+    return this.room.id === CONTROL_ROOM_ID;
+  }
+
+  private async handleControlRequest(req: Party.Request) {
+    const segments = parseRouteSegments(req, this.room.id);
+    if (req.method === "GET" && segments.length === 1 && segments[0] === "health") {
+      return jsonResponse({
+        ok: true,
+        roomId: this.room.id,
+        protocolVersion: PROTOCOL_VERSION,
+      });
+    }
+    if (req.method === "GET" && segments.length === 4 && segments[0] === "internal" && segments[1] === "tables" && segments[3] === "bootstrap") {
+      return this.handleBootstrapLookup(segments[2].toUpperCase());
+    }
+    if (req.method === "POST" && segments.length === 4 && segments[0] === "internal" && segments[1] === "tables" && segments[3] === "auth") {
+      return this.handleTokenAuth(segments[2].toUpperCase(), req);
+    }
+    if (req.method === "POST" && segments.length === 1 && segments[0] === "tables") {
+      return this.handleCreateTable(req);
+    }
+    if (req.method === "GET" && segments.length === 2 && segments[0] === "tables") {
+      return this.handleGetTable(segments[1].toUpperCase());
+    }
+    if (req.method === "POST" && segments.length === 3 && segments[0] === "tables" && segments[2] === "join-token") {
+      return this.handleJoinTokenIssue(segments[1].toUpperCase(), req);
+    }
+    return errorResponse("NOT_FOUND", "Unknown control-plane route", 404);
+  }
+
+  private async handleCreateTable(req: Party.Request) {
+    let body: CreateTableRequest;
+    try {
+      body = await req.json<CreateTableRequest>();
+    } catch {
+      return errorResponse("INVALID_REQUEST", "Invalid create-table payload", 400);
+    }
+
+    const tableName = body.tableName.trim();
+    if (!body.creatorClientId || !body.blinds?.small || !body.blinds?.big) {
+      return errorResponse("INVALID_REQUEST", "Missing create-table fields", 400);
+    }
+
+    for (let attempt = 0; attempt < 32; attempt += 1) {
+      const code = generateTableCode();
+      const key = controlTableKey(code);
+      const existing = await this.room.storage.get<ControlPlaneTableRecord>(key);
+      if (existing) {
+        continue;
       }
-      this.awayUserIds.delete(userId);
+
+      const now = Date.now();
+      const record: ControlPlaneTableRecord = {
+        code,
+        status: "active",
+        tableName: tableName || `Table ${code}`,
+        blinds: body.blinds,
+        creatorClientId: body.creatorClientId,
+        createdAt: now,
+        playerSessions: [],
+        joinTokens: [],
+      };
+      const createResponse = await this.forwardToGameplayRoom(code, "internal/create", {
+        method: "POST",
+        body: JSON.stringify({
+          tableName: record.tableName,
+          blinds: record.blinds,
+          creatorClientId: record.creatorClientId,
+          sevenTwoBountyBB: body.sevenTwoBountyBB ?? CORE_SEVEN_TWO_BOUNTY_BB,
+        } satisfies CreateTableRequest),
+      });
+      if (createResponse.status !== 201) {
+        const text = await createResponse.text();
+        return new Response(text, { status: createResponse.status, headers: ROOM_HTTP_HEADERS });
+      }
+
+      await this.room.storage.put<ControlPlaneTableRecord>(key, record);
+      return jsonResponse(
+        {
+          code,
+          tableId: code,
+          joinUrl: `/t/${code}`,
+          status: record.status,
+        } satisfies CreateTableResponse,
+        201,
+      );
     }
-    this.broadcastRoomMeta();
+
+    return errorResponse("CODE_ALLOCATION_FAILED", "Could not allocate a unique table code", 503);
   }
 
-  // ── Auth ──
-
-  private handleAuth(conn: Party.Connection, userId: string) {
-    const playerId = `user_${userId.slice(0, 8)}`;
-
-    // Evict any stale mapping for this userId
-    const oldConnId = this.userIdToConnId.get(userId);
-    if (oldConnId && oldConnId !== conn.id) {
-      this.connIdToUserId.delete(oldConnId);
+  private async forwardToGameplayRoom(code: string, path: string, init: RequestInit) {
+    if (!TABLE_CODE_RE.test(code)) {
+      return errorResponse("INVALID_TABLE_CODE", "Invalid table code", 400);
     }
 
-    this.connIdToUserId.set(conn.id, userId);
-    this.userIdToConnId.set(userId, conn.id);
-    this.userIdToPlayerId.set(userId, playerId);
+    const stub = this.room.context.parties.main.get(code);
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    const response = await stub.fetch(normalizedPath, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...(init.headers ?? {}),
+      },
+    });
 
-    if (!this.creatorUserId) this.creatorUserId = userId;
-    const isCreator = userId === this.creatorUserId;
+    const text = await response.text();
+    return new Response(text, {
+      status: response.status,
+      headers: ROOM_HTTP_HEADERS,
+    });
+  }
 
-    // Reject non-creators joining a room that hasn't been configured yet
-    if (!this.isConfigured && !isCreator) {
-      this.send(conn, { type: "ERROR", code: "TABLE_NOT_FOUND", message: "Table not found" });
+  private async handleGetTable(code: string) {
+    if (!TABLE_CODE_RE.test(code)) {
+      return errorResponse("INVALID_TABLE_CODE", "Invalid table code", 400);
+    }
+    const record = await this.room.storage.get<ControlPlaneTableRecord>(controlTableKey(code));
+    if (!record || record.status !== "active") {
+      return jsonResponse({
+        exists: false,
+        status: null,
+        tableName: null,
+        blinds: null,
+      } satisfies GetTableResponse);
+    }
+    return jsonResponse({
+      exists: true,
+      status: record.status,
+      tableName: record.tableName,
+      blinds: record.blinds,
+    } satisfies GetTableResponse);
+  }
+
+  private async handleJoinTokenIssue(code: string, req: Party.Request) {
+    if (!TABLE_CODE_RE.test(code)) {
+      return errorResponse("INVALID_TABLE_CODE", "Invalid table code", 400);
+    }
+
+    const record = await this.room.storage.get<ControlPlaneTableRecord>(controlTableKey(code));
+    if (!record || record.status !== "active") {
+      return errorResponse("TABLE_NOT_FOUND", "Table not found", 404);
+    }
+
+    const gameplayResponse = await this.forwardToGameplayRoom(code, "internal/join-token", {
+      method: "POST",
+      body: await req.text(),
+    });
+    const gameplayText = await gameplayResponse.text();
+    return new Response(gameplayText, {
+      status: gameplayResponse.status,
+      headers: ROOM_HTTP_HEADERS,
+    });
+  }
+
+  private async handleBootstrapLookup(code: string) {
+    if (!TABLE_CODE_RE.test(code)) {
+      return jsonResponse({
+        exists: false,
+        status: null,
+        tableName: null,
+        blinds: null,
+        creatorClientId: null,
+      } satisfies TableBootstrapResponse);
+    }
+    const record = await this.room.storage.get<ControlPlaneTableRecord>(controlTableKey(code));
+    if (!record) {
+      return jsonResponse({
+        exists: false,
+        status: null,
+        tableName: null,
+        blinds: null,
+        creatorClientId: null,
+      } satisfies TableBootstrapResponse);
+    }
+    return jsonResponse({
+      exists: true,
+      status: record.status,
+      tableName: record.tableName,
+      blinds: record.blinds,
+      creatorClientId: record.creatorClientId,
+    } satisfies TableBootstrapResponse);
+  }
+
+  private async handleTokenAuth(code: string, req: Party.Request) {
+    if (!TABLE_CODE_RE.test(code)) {
+      return jsonResponse({ ok: false, code: "INVALID_TABLE_CODE", message: "Invalid table code" } satisfies TokenAuthResponse, 400);
+    }
+
+    const record = await this.room.storage.get<ControlPlaneTableRecord>(controlTableKey(code));
+    if (!record || record.status !== "active") {
+      return jsonResponse({ ok: false, code: "TABLE_NOT_ACTIVE", message: "Table is not active" } satisfies TokenAuthResponse, 404);
+    }
+
+    let body: { token?: string };
+    try {
+      body = await req.json<{ token?: string }>();
+    } catch {
+      return jsonResponse({ ok: false, code: "INVALID_REQUEST", message: "Invalid auth payload" } satisfies TokenAuthResponse, 400);
+    }
+
+    const now = Date.now();
+    record.joinTokens = record.joinTokens.filter((token) => token.expiresAt === null || token.expiresAt > now);
+    const joinToken = body.token ? record.joinTokens.find((candidate) => candidate.token === body.token) : null;
+    if (!joinToken) {
+      await this.room.storage.put<ControlPlaneTableRecord>(controlTableKey(code), record);
+      return jsonResponse({ ok: false, code: "INVALID_JOIN_TOKEN", message: "Join token is invalid or expired" } satisfies TokenAuthResponse, 401);
+    }
+
+    await this.room.storage.put<ControlPlaneTableRecord>(controlTableKey(code), record);
+    return jsonResponse({
+      ok: true,
+      clientId: joinToken.clientId,
+      playerSessionId: joinToken.playerSessionId,
+      isCreator: joinToken.clientId === record.creatorClientId,
+    } satisfies TokenAuthResponse);
+  }
+
+  private async handleGameplayRequest(req: Party.Request) {
+    const segments = parseRouteSegments(req, this.room.id);
+    if (req.method === "GET" && segments.length === 2 && segments[0] === "internal" && segments[1] === "status") {
+      return jsonResponse(this.getTableStatusResponse());
+    }
+    if (req.method === "POST" && segments.length === 2 && segments[0] === "internal" && segments[1] === "create") {
+      return this.handleGameplayCreate(req);
+    }
+    if (req.method === "POST" && segments.length === 2 && segments[0] === "internal" && segments[1] === "join-token") {
+      return this.handleJoinTokenRequest(req);
+    }
+    return errorResponse("NOT_FOUND", "Unknown room route", 404);
+  }
+
+  private getTableStatusResponse(): GetTableResponse {
+    if (this.roomStatus !== "active") {
+      return {
+        exists: false,
+        status: null,
+        tableName: null,
+        blinds: null,
+      };
+    }
+    return {
+      exists: true,
+      status: this.roomStatus,
+      tableName: this.gameState.tableName,
+      blinds: this.gameState.blinds,
+    };
+  }
+
+  private async handleGameplayCreate(req: Party.Request) {
+    let body: CreateTableRequest;
+    try {
+      body = await req.json<CreateTableRequest>();
+    } catch {
+      return errorResponse("INVALID_REQUEST", "Invalid room create payload", 400);
+    }
+
+    if (this.roomStatus === "active") {
+      return errorResponse("TABLE_ALREADY_EXISTS", "Table code already in use", 409);
+    }
+    if (!TABLE_CODE_RE.test(this.room.id)) {
+      return errorResponse("INVALID_TABLE_CODE", "Game rooms must use a 6-character code", 400);
+    }
+
+    const tableName = body.tableName.trim() || `Table ${this.room.id}`;
+    const blinds: TableBlinds = body.blinds;
+    this.gameState = createInitialState(tableName, blinds, {
+      sevenTwoBountyBB: body.sevenTwoBountyBB ?? CORE_SEVEN_TWO_BOUNTY_BB,
+    });
+    this.roomStatus = "active";
+    this.creatorClientId = body.creatorClientId;
+    this.sessionLedger.clear();
+    this.sessionTrackedPlayerIds.clear();
+    this.pendingLeavePlayerIds.clear();
+    this.playerSessions.clear();
+    this.joinTokens.clear();
+    this.peekedCardMasks.clear();
+    this.publicShownCardMasks.clear();
+    await this.persistRoomState();
+
+    return jsonResponse(
+      {
+        code: this.room.id,
+        tableId: this.room.id,
+        joinUrl: `/t/${this.room.id}`,
+        status: this.roomStatus,
+      } satisfies CreateTableResponse,
+      201,
+    );
+  }
+
+  private async handleJoinTokenRequest(req: Party.Request) {
+    if (this.roomStatus !== "active") {
+      return errorResponse("TABLE_NOT_FOUND", "Table not found", 404);
+    }
+
+    let body: JoinTableRequest;
+    try {
+      body = await req.json<JoinTableRequest>();
+    } catch {
+      return errorResponse("INVALID_REQUEST", "Invalid join-token payload", 400);
+    }
+    if (!body.clientId) {
+      return errorResponse("INVALID_REQUEST", "Missing clientId", 400);
+    }
+
+    const now = Date.now();
+    this.cleanExpiredJoinTokens();
+    let session = this.playerSessions.get(body.clientId);
+    if (!session) {
+      session = {
+        clientId: body.clientId,
+        playerSessionId: `player_${crypto.randomUUID().replace(/-/g, "").slice(0, 16)}`,
+        createdAt: now,
+        lastIssuedAt: now,
+      };
+      this.playerSessions.set(body.clientId, session);
+      this.clientIdToPlayerSessionId.set(body.clientId, session.playerSessionId);
+    } else {
+      session.lastIssuedAt = now;
+      this.clientIdToPlayerSessionId.set(body.clientId, session.playerSessionId);
+    }
+
+    const token = crypto.randomUUID();
+    this.joinTokens.set(token, {
+      token,
+      clientId: body.clientId,
+      playerSessionId: session.playerSessionId,
+      expiresAt: now + JOIN_TOKEN_TTL_MS,
+    });
+    await this.persistRoomState();
+
+    return jsonResponse({
+      token,
+      tableId: this.room.id,
+      playerSessionId: session.playerSessionId,
+      isCreator: body.clientId === this.creatorClientId,
+    } satisfies JoinTableResponse);
+  }
+
+  private async handleAuth(conn: Party.Connection, token: string, protocolVersion: number) {
+    if (protocolVersion !== PROTOCOL_VERSION) {
+      this.send(conn, { type: "ERROR", code: "PROTOCOL_VERSION_MISMATCH", message: "Client protocol mismatch" });
+      conn.close();
+      return;
+    }
+    if (this.roomStatus !== "active") {
+      this.send(conn, { type: "ERROR", code: "TABLE_NOT_ACTIVE", message: "Table is not active" });
+      conn.close();
       return;
     }
 
-    this.send(conn, { type: "WELCOME", yourUserId: userId, isCreator });
-    this.send(conn, { type: "STATE", state: toPublicGameState(this.gameState) });
-    this.sendPrivateTo(conn, userId);
-    const ledgerEntries = Array.from(this.sessionLedger.values());
-    this.send(conn, { type: "LEDGER", entries: ledgerEntries });
-    this.broadcastRoomMeta();
-  }
-
-  // ── Configure ──
-
-  private handleConfigure(conn: Party.Connection, msg: Extract<ClientMessage, { type: "CONFIGURE" }>) {
-    const userId = this.connIdToUserId.get(conn.id);
-    if (!userId || userId !== this.creatorUserId) {
-      this.send(conn, { type: "ERROR", code: "NOT_AUTHORIZED", message: "Only the creator can configure the table" });
+    this.cleanExpiredJoinTokens();
+    const joinToken = this.joinTokens.get(token);
+    if (!joinToken) {
+      this.send(conn, { type: "ERROR", code: "INVALID_JOIN_TOKEN", message: "Join token is invalid or expired" });
+      conn.close();
       return;
     }
-    if (this.gameState.handNumber > 0) {
-      this.send(conn, { type: "ERROR", code: "GAME_STARTED", message: "Cannot configure after first hand" });
-      return;
-    }
-    this.gameState = createInitialState(msg.tableName, msg.blinds, { sevenTwoBountyBB: msg.sevenTwoBountyBB });
-    this.isConfigured = true;
-    this.broadcastState();
-  }
 
-  // ── Game events ──
+    const { clientId, playerSessionId } = joinToken;
+    this.clientIdToPlayerSessionId.set(clientId, playerSessionId);
+    authenticatePresence(
+      {
+        clientIdToConnId: this.clientIdToConnId,
+        connIdToClientId: this.connIdToClientId,
+        awayClientIds: this.awayClientIds,
+      },
+      clientId,
+      conn.id,
+    );
+
+    this.send(conn, {
+      type: "WELCOME",
+      playerSessionId,
+      isCreator: clientId === this.creatorClientId,
+    });
+    this.send(conn, { type: "TABLE_STATE", state: toPublicGameState(this.gameState) });
+    this.sendPrivateTo(conn, clientId);
+    this.send(conn, { type: "LEDGER_STATE", entries: Array.from(this.sessionLedger.values()) });
+    this.broadcastRoomPresence();
+  }
 
   private handleGameEvent(conn: Party.Connection, event: GameEvent) {
-    const userId = this.connIdToUserId.get(conn.id);
-    if (!userId) {
-      this.send(conn, { type: "ERROR", code: "NOT_AUTHENTICATED", message: "Must AUTH first" });
+    const clientId = this.connIdToClientId.get(conn.id);
+    if (!clientId) {
+      this.send(conn, { type: "ERROR", code: "INVALID_JOIN_TOKEN", message: "Must authenticate first" });
       return;
     }
 
-    const myPlayerId = this.userIdToPlayerId.get(userId) ?? "";
+    const myPlayerId = this.clientIdToPlayerSessionId.get(clientId) ?? "";
     const isDebug = process.env.PARTYKIT_DEBUG_MODE === "true";
 
-    // Validate / enrich event
-    const enriched = this.enrichEvent(event, myPlayerId, userId, isDebug);
+    const enriched = this.enrichEvent(event, myPlayerId, clientId, isDebug);
     if (!enriched) {
-      this.send(conn, { type: "ERROR", code: "NOT_AUTHORIZED", message: "Not authorized" });
+      this.send(conn, { type: "ERROR", code: "ACTION_REJECTED", message: "Action rejected" });
       return;
     }
 
-    // Validate turn for PLAYER_ACTION
-    if (enriched.type === "PLAYER_ACTION" && !isDebug) {
-      if (this.gameState.needsToAct[0] !== enriched.playerId) {
-        this.send(conn, { type: "ERROR", code: "NOT_YOUR_TURN", message: "Not your turn" });
+    if (enriched.type === "PLAYER_ACTION" && !isDebug && this.gameState.needsToAct[0] !== enriched.playerId) {
+      this.send(conn, { type: "ERROR", code: "ACTION_REJECTED", message: "Not your turn" });
+      return;
+    }
+
+    if (enriched.type === "STAND_UP") {
+      const player = this.gameState.players[enriched.playerId];
+      const mustWaitForHandEnd =
+        !!player &&
+        ACTIVE_HAND_PHASES.has(this.gameState.phase) &&
+        (player.holeCards !== null || player.currentBet > 0 || player.totalContribution > 0 || !player.sitOutUntilBB);
+      if (mustWaitForHandEnd) {
+        this.send(conn, {
+          type: "ERROR",
+          code: "ACTION_REJECTED",
+          message: "Use Leave Next Hand while a hand is in progress",
+        });
         return;
       }
     }
 
-    // Rebuy: if player tries to SIT_DOWN but is already seated with $0, stand them up first
     if (enriched.type === "SIT_DOWN") {
       const existing = this.gameState.players[enriched.playerId];
       if (existing && existing.stack === 0) {
@@ -225,11 +712,7 @@ export default class PokerRoom implements Party.Server {
       }
     }
 
-    // Reset per-card reveals on new hand
     if (enriched.type === "START_HAND") {
-      this.revealedCardsByPlayerId.clear();
-      this.peekedCardsByPlayerId.clear();
-      // Process pending leaves (players who chose "Leave Next Hand")
       for (const pid of this.pendingLeavePlayerIds) {
         const player = this.gameState.players[pid];
         if (player) {
@@ -239,7 +722,6 @@ export default class PokerRoom implements Party.Server {
         }
       }
       this.pendingLeavePlayerIds.clear();
-      // Auto-kick $0 players
       for (const player of Object.values(this.gameState.players)) {
         if (player.stack === 0) {
           this.onStandUp(player.id, 0);
@@ -250,169 +732,120 @@ export default class PokerRoom implements Party.Server {
     }
 
     const prevState = this.gameState;
-    this.gameState = gameReducer(this.gameState, enriched);
-
-    // Ledger hooks
-    if (enriched.type === "SIT_DOWN") {
-      this.onSitDown(enriched.playerId, enriched.name, enriched.buyIn);
+    try {
+      this.gameState = gameReducer(this.gameState, enriched);
+    } catch {
+      this.send(conn, { type: "ERROR", code: "ACTION_REJECTED", message: "Engine rejected action" });
+      return;
     }
-    if (enriched.type === "STAND_UP") {
+
+    if (enriched.type === "SIT_DOWN" && !prevState.players[enriched.playerId] && this.gameState.players[enriched.playerId]) {
+      const buyInValue = enriched.buyIn ?? (enriched as GameEvent & { amount?: number }).amount ?? 0;
+      this.onSitDown(enriched.playerId, enriched.name, buyInValue);
+    }
+    if (enriched.type === "STAND_UP" && prevState.players[enriched.playerId] && !this.gameState.players[enriched.playerId]) {
       const player = prevState.players[enriched.playerId];
       if (player) {
         this.onStandUp(enriched.playerId, player.stack);
         void this.persistCashOut(enriched.playerId, player.stack);
+        this.peekedCardMasks.delete(enriched.playerId);
+        this.publicShownCardMasks.delete(enriched.playerId);
       }
     }
     if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
+      this.gameState.autoRevealWinningHandsAt = this.computeWinnerRevealAt(prevState, this.gameState);
+      this.promoteFullyShownCardsAtShowdown();
+      this.scheduleWinnerReveal();
       void this.persistShowdownStats(this.gameState);
     }
+    if (this.gameState.handNumber !== prevState.handNumber) {
+      this.peekedCardMasks.clear();
+      this.publicShownCardMasks.clear();
+      this.clearWinnerRevealTimer();
+    }
 
-    this.manageTurnTimer(prevState, this.gameState);
     this.manageVotingTimer(prevState, this.gameState);
-
     this.broadcastState();
     this.broadcastAllPrivate();
+    this.broadcastRoomPresence();
+    void this.persistRoomState();
   }
 
-  private enrichEvent(event: GameEvent, myPlayerId: string, userId: string, isDebug: boolean): GameEvent | null {
+  private enrichEvent(event: GameEvent, myPlayerId: string, clientId: string, isDebug: boolean): GameEvent | null {
+    if (event.type === "RESOLVE_VOTE") {
+      return null;
+    }
+    if (event.type === "SET_HOLE_CARDS") {
+      return isDebug || clientId === this.creatorClientId ? event : null;
+    }
     if (event.type === "SET_SEVEN_TWO_BOUNTY") {
-      if (!isDebug && userId !== this.creatorUserId) return null;
-      return event;
+      return !isDebug && clientId !== this.creatorClientId ? null : event;
     }
-
-    // Events with a playerId field — validate ownership
     if ("playerId" in event) {
-      const claimed = (event as { playerId: string }).playerId;
-      if (!isDebug && claimed !== myPlayerId) return null;
-      return event; // playerId already matches (server computed same hash)
+      return !isDebug && event.playerId !== myPlayerId ? null : event;
     }
-
-    // Events without playerId: START_HAND, RESOLVE_VOTE
+    if (event.type === "START_HAND" && !isDebug && clientId !== this.creatorClientId) {
+      return null;
+    }
     return event;
   }
 
-  // ── Timer setting ──
-
-  private handleSetTimer(conn: Party.Connection, enabled: boolean) {
-    const userId = this.connIdToUserId.get(conn.id);
-    if (!userId || userId !== this.creatorUserId) return;
-    this.turnTimerEnabled = enabled;
-    this.room.storage.put("turnTimerEnabled", enabled);
-    this.broadcastRoomMeta();
-  }
-
-  // ── Away status ──
-
   private handleSetAway(conn: Party.Connection, away: boolean) {
-    const userId = this.connIdToUserId.get(conn.id);
-    if (!userId) return;
-    if (away) {
-      this.awayUserIds.add(userId);
-    } else {
-      this.awayUserIds.delete(userId);
-    }
-    this.broadcastRoomMeta();
-
-    // If the player who just went away is the current actor, start a timer
-    if (away && !this.turnTimerEnabled && !this.turnTimer) {
-      const playerId = this.userIdToPlayerId.get(userId);
-      const currentActor = this.gameState.needsToAct[0];
-      if (playerId && playerId === currentActor) {
-        this.manageTurnTimer({ ...this.gameState, needsToAct: [] }, this.gameState);
-      }
-    }
+    const clientId = this.connIdToClientId.get(conn.id);
+    if (!clientId) return;
+    setAwayPresence(this.awayClientIds, clientId, away);
+    this.broadcastRoomPresence();
   }
-
-  // ── Queue leave (mid-hand) ──
 
   private handleQueueLeave(conn: Party.Connection) {
-    const userId = this.connIdToUserId.get(conn.id);
-    if (!userId) return;
-    const playerId = this.userIdToPlayerId.get(userId);
+    const clientId = this.connIdToClientId.get(conn.id);
+    if (!clientId) return;
+    const playerId = this.clientIdToPlayerSessionId.get(clientId);
     if (!playerId || !this.gameState.players[playerId]) return;
     this.pendingLeavePlayerIds.add(playerId);
   }
 
-  // ── Per-card peek tracking ──
-
-  private handlePeekCard(conn: Party.Connection, cardIndex: 0 | 1) {
-    const userId = this.connIdToUserId.get(conn.id);
-    if (!userId) return;
-    const playerId = this.userIdToPlayerId.get(userId);
-    if (!playerId) return;
-    const player = this.gameState.players[playerId];
-    if (!player?.holeCards) return;
-
-    let peeked = this.peekedCardsByPlayerId.get(playerId);
-    if (!peeked) {
-      peeked = new Set<0 | 1>();
-      this.peekedCardsByPlayerId.set(playerId, peeked);
-    }
-    if (peeked.has(cardIndex)) return;
-    peeked.add(cardIndex);
-    this.broadcastRoomMeta();
-  }
-
-  // ── Per-card voluntary reveal ──
-
   private handleRevealCard(conn: Party.Connection, cardIndex: 0 | 1) {
-    const userId = this.connIdToUserId.get(conn.id);
-    if (!userId) return;
-    const playerId = this.userIdToPlayerId.get(userId);
+    const clientId = this.connIdToClientId.get(conn.id);
+    if (!clientId) return;
+    const playerId = this.clientIdToPlayerSessionId.get(clientId);
     if (!playerId) return;
-    if (this.gameState.phase !== "showdown") return;
 
-    const player = this.gameState.players[playerId];
-    if (!player?.holeCards) return;
-
-    let revealed = this.revealedCardsByPlayerId.get(playerId);
-    if (!revealed) {
-      revealed = new Set<0 | 1>();
-      this.revealedCardsByPlayerId.set(playerId, revealed);
-    }
-    revealed.add(cardIndex);
-
-    // When both cards are revealed, also dispatch SHOW_CARDS engine event (triggers 7-2 bounty)
-    if (revealed.size === 2 && !this.gameState.voluntaryShownPlayerIds.includes(playerId)) {
-      const prev = this.gameState;
-      this.gameState = gameReducer(this.gameState, { type: "SHOW_CARDS", playerId });
-      this.manageTurnTimer(prev, this.gameState);
-      this.broadcastState();
+    if (!canPubliclyRevealCard({
+      gameState: this.gameState,
+      playerId,
+      cardIndex,
+      publicShownCardMasks: this.publicShownCardMasks,
+    })) {
+      return;
     }
 
-    // Push updated PRIVATE to all connections
+    const nextMask = (this.publicShownCardMasks.get(playerId) ?? 0) | cardIndexToMask(cardIndex);
+    this.publicShownCardMasks.set(playerId, nextMask);
+
+    if (this.gameState.phase === "showdown" && nextMask === 3) {
+      this.promoteFullyShownCardsAtShowdown([playerId]);
+    }
+
+    this.broadcastState();
     this.broadcastAllPrivate();
+    void this.persistRoomState();
   }
 
-  // ── Server-side timers ──
+  private handlePeekCard(conn: Party.Connection, cardIndex: 0 | 1, handNumber: number) {
+    const clientId = this.connIdToClientId.get(conn.id);
+    if (!clientId) return;
+    const playerId = this.clientIdToPlayerSessionId.get(clientId);
+    if (!playerId || !canAcceptPeek({ gameState: this.gameState, playerId, handNumber })) return;
 
-  private manageTurnTimer(prev: GameState, next: GameState) {
-    const nextActor = next.needsToAct[0] ?? null;
-    const prevActor = prev.needsToAct[0] ?? null;
+    const bit = cardIndex === 0 ? 1 : 2;
+    const prevMask = this.peekedCardMasks.get(playerId) ?? 0;
+    const nextMask = prevMask | bit;
+    if (nextMask === prevMask) return;
 
-    if (nextActor === prevActor && nextActor !== null) return; // no change
-
-    // Clear existing timer
-    if (this.turnTimer) { clearTimeout(this.turnTimer); this.turnTimer = null; }
-    this.pendingTurnActorId = null;
-
-    const isPlayingPhase = ["pre-flop", "flop", "turn", "river"].includes(next.phase);
-    const isActorAway = nextActor ? this.isPlayerAway(nextActor) : false;
-    if (!nextActor || !isPlayingPhase || (!this.turnTimerEnabled && !isActorAway)) return;
-
-    this.pendingTurnActorId = nextActor;
-    this.turnTimer = setTimeout(() => {
-      this.turnTimer = null;
-      if (this.gameState.needsToAct[0] !== this.pendingTurnActorId) return;
-      const actorId = this.pendingTurnActorId!;
-      this.pendingTurnActorId = null;
-      const prev2 = this.gameState;
-      this.gameState = gameReducer(this.gameState, { type: "PLAYER_ACTION", playerId: actorId, action: "fold" });
-      this.manageTurnTimer(prev2, this.gameState);
-      this.manageVotingTimer(prev2, this.gameState);
-      this.broadcastState();
-      this.broadcastAllPrivate();
-    }, TURN_TIMEOUT_MS);
+    this.peekedCardMasks.set(playerId, nextMask);
+    this.broadcastRoomPresence();
+    void this.persistRoomState();
   }
 
   private manageVotingTimer(prev: GameState, next: GameState) {
@@ -421,31 +854,70 @@ export default class PokerRoom implements Party.Server {
       this.votingTimer = setTimeout(() => {
         this.votingTimer = null;
         if (this.gameState.phase !== "voting") return;
-        const prev2 = this.gameState;
+        const prevState = this.gameState;
         this.gameState = gameReducer(this.gameState, { type: "RESOLVE_VOTE" });
-        this.manageTurnTimer(prev2, this.gameState);
+        if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
+          this.gameState.autoRevealWinningHandsAt = this.computeWinnerRevealAt(prevState, this.gameState);
+          this.scheduleWinnerReveal();
+        }
         this.broadcastState();
         this.broadcastAllPrivate();
+        void this.persistRoomState();
       }, VOTING_TIMEOUT_MS);
     }
-    if (prev.phase === "voting" && next.phase !== "voting") {
-      if (this.votingTimer) { clearTimeout(this.votingTimer); this.votingTimer = null; }
+    if (prev.phase === "voting" && next.phase !== "voting" && this.votingTimer) {
+      clearTimeout(this.votingTimer);
+      this.votingTimer = null;
     }
   }
 
-  // ── Session ledger ──
+  private clearWinnerRevealTimer() {
+    if (this.winnerRevealTimer) {
+      clearTimeout(this.winnerRevealTimer);
+      this.winnerRevealTimer = null;
+    }
+  }
+
+  private computeWinnerRevealAt(prev: GameState, next: GameState): number | null {
+    if (next.phase !== "showdown" || !next.autoRevealWinningHands) return null;
+
+    const knownCardCount = prev.communityCards.length;
+    const runCount = Math.max(1, next.runResults.length);
+    const isAnimatedRunout = knownCardCount < 5 || runCount > 1;
+    if (!isAnimatedRunout) return Date.now();
+
+    return Date.now() + getAllInShowdownRevealDelayMs(knownCardCount, runCount);
+  }
+
+  private scheduleWinnerReveal() {
+    this.clearWinnerRevealTimer();
+    if (this.gameState.phase !== "showdown" || !this.gameState.autoRevealWinningHands) return;
+
+    const revealAt = this.gameState.autoRevealWinningHandsAt;
+    if (revealAt == null || revealAt <= Date.now()) {
+      this.broadcastAllPrivate();
+      return;
+    }
+
+    const handNumber = this.gameState.handNumber;
+    this.winnerRevealTimer = setTimeout(() => {
+      this.winnerRevealTimer = null;
+      if (
+        this.gameState.phase !== "showdown" ||
+        !this.gameState.autoRevealWinningHands ||
+        this.gameState.handNumber !== handNumber
+      ) {
+        return;
+      }
+      this.broadcastAllPrivate();
+    }, Math.max(0, revealAt - Date.now()));
+  }
 
   private broadcastLedger() {
     const entries = Array.from(this.sessionLedger.values());
-    this.broadcast({ type: "LEDGER", entries });
-    this.room.storage.put("sessionLedger", entries);
+    this.broadcast({ type: "LEDGER_STATE", entries });
   }
 
-  /**
-   * Updates in-memory ledger stacks to match the engine. Only broadcasts (which
-   * writes to DO storage) at hand boundaries — mid-hand stack shifts from
-   * individual bets would otherwise cause a storage write per action.
-   */
   private syncLedgerStacks() {
     let changed = false;
     for (const entry of this.sessionLedger.values()) {
@@ -457,8 +929,6 @@ export default class PokerRoom implements Party.Server {
       }
     }
     if (!changed) return;
-    // Broadcast only at hand boundaries (waiting / showdown). Mid-hand stack
-    // deltas from individual bets stay in-memory until the hand resolves.
     const phase = this.gameState.phase;
     if (phase === "waiting" || phase === "showdown") {
       this.broadcastLedger();
@@ -473,7 +943,14 @@ export default class PokerRoom implements Party.Server {
       entry.currentStack = buyIn;
       entry.name = name;
     } else {
-      this.sessionLedger.set(playerId, { playerId, name, buyIns: [buyIn], cashOuts: [], isSeated: true, currentStack: buyIn });
+      this.sessionLedger.set(playerId, {
+        playerId,
+        name,
+        buyIns: [buyIn],
+        cashOuts: [],
+        isSeated: true,
+        currentStack: buyIn,
+      });
     }
     if (!this.sessionTrackedPlayerIds.has(playerId)) {
       this.sessionTrackedPlayerIds.add(playerId);
@@ -493,12 +970,18 @@ export default class PokerRoom implements Party.Server {
     this.broadcastLedger();
   }
 
-  // ── Player stats persistence ──
-
   private async incrementSession(playerId: string, name: string, buyIn: number) {
     const key = `stats:${playerId}`;
     const existing = await this.room.storage.get<PlayerStats>(key);
-    const stats: PlayerStats = existing ?? { name, handsPlayed: 0, handsWon: 0, totalAmountWon: 0, totalBuyIns: 0, totalCashOuts: 0, sessions: 0 };
+    const stats: PlayerStats = existing ?? {
+      name,
+      handsPlayed: 0,
+      handsWon: 0,
+      totalAmountWon: 0,
+      totalBuyIns: 0,
+      totalCashOuts: 0,
+      sessions: 0,
+    };
     stats.sessions += 1;
     stats.totalBuyIns += buyIn;
     stats.name = name;
@@ -523,8 +1006,8 @@ export default class PokerRoom implements Party.Server {
 
   private async persistShowdownStats(state: GameState) {
     const winAmounts = new Map<string, number>();
-    for (const w of state.winners ?? []) {
-      winAmounts.set(w.playerId, (winAmounts.get(w.playerId) ?? 0) + w.amount);
+    for (const winner of state.winners ?? []) {
+      winAmounts.set(winner.playerId, (winAmounts.get(winner.playerId) ?? 0) + winner.amount);
     }
     await Promise.all(Object.keys(state.players).map((id) => this.updateHandStats(id, winAmounts.get(id) ?? 0)));
   }
@@ -541,75 +1024,84 @@ export default class PokerRoom implements Party.Server {
     await this.room.storage.put<PlayerStats>(key, existing);
   }
 
-  // ── Broadcasting ──
-
   private broadcastState() {
     this.syncLedgerStacks();
-    this.lastBroadcastedPhase = this.gameState.phase;
-    this.broadcast({ type: "STATE", state: toPublicGameState(this.gameState) });
+    this.broadcast({ type: "TABLE_STATE", state: toPublicGameState(this.gameState) });
+  }
+
+  private async persistRoomState() {
+    const snapshot: PersistedRoomState = {
+      version: 3,
+      status: this.roomStatus,
+      creatorClientId: this.creatorClientId,
+      gameState: this.roomStatus === "active" ? this.gameState : null,
+      sessionLedger: Array.from(this.sessionLedger.values()),
+      pendingLeavePlayerIds: Array.from(this.pendingLeavePlayerIds),
+      playerSessions: Array.from(this.playerSessions.values()),
+      joinTokens: Array.from(this.joinTokens.values()),
+      peekedCardMasks: Array.from(this.peekedCardMasks.entries()),
+      publicShownCardMasks: Array.from(this.publicShownCardMasks.entries()),
+    };
+    await this.room.storage.put<PersistedRoomState>(ROOM_STATE_KEY, snapshot);
   }
 
   private broadcastAllPrivate() {
-    for (const [userId, connId] of this.userIdToConnId) {
+    for (const [clientId, connId] of this.clientIdToConnId) {
       const conn = this.connections.get(connId);
-      if (conn) this.sendPrivateTo(conn, userId);
+      if (conn) this.sendPrivateTo(conn, clientId);
     }
   }
 
-  private sendPrivateTo(conn: Party.Connection, userId: string) {
-    const playerId = this.userIdToPlayerId.get(userId);
+  private sendPrivateTo(conn: Party.Connection, clientId: string) {
+    const playerId = this.clientIdToPlayerSessionId.get(clientId);
     const player = playerId ? this.gameState.players[playerId] : null;
     const holeCards = player?.holeCards ?? null;
+    const revealedHoleCards = buildPublicRevealedHoleCards({
+      gameState: this.gameState,
+      publicShownCardMasks: this.publicShownCardMasks,
+    }) as Record<string, [Card | null, Card | null]>;
 
-    const revealedHoleCards: Record<string, [Card | null, Card | null]> = {};
-    const state = this.gameState;
+    this.send(conn, { type: "PRIVATE_STATE", holeCards, revealedHoleCards });
+  }
 
-    if (state.phase === "showdown") {
-      const isContested = !(
-        state.winners?.length === 1 &&
-        (state.winners[0].hand === "Uncontested" || state.winners[0].hand === "Last standing")
-      );
-      for (const [id, p] of Object.entries(state.players)) {
-        if (id === playerId || !p.holeCards) continue;
-        // Auto-reveal all non-folded cards in contested showdown
-        if (!p.isFolded && isContested) {
-          revealedHoleCards[id] = [p.holeCards[0], p.holeCards[1]];
-          continue;
-        }
-        // Voluntary per-card reveals
-        const revealed = this.revealedCardsByPlayerId.get(id);
-        if (revealed && revealed.size > 0) {
-          revealedHoleCards[id] = [
-            revealed.has(0) ? p.holeCards[0] : null,
-            revealed.has(1) ? p.holeCards[1] : null,
-          ];
-        }
+  private promoteFullyShownCardsAtShowdown(playerIds?: string[]) {
+    if (this.gameState.phase !== "showdown") return;
+
+    const candidateIds = playerIds ?? Array.from(this.publicShownCardMasks.entries())
+      .filter(([, mask]) => mask === 3)
+      .map(([playerId]) => playerId);
+
+    let nextState = this.gameState;
+    for (const playerId of candidateIds) {
+      if ((this.publicShownCardMasks.get(playerId) ?? 0) !== 3) continue;
+      if (nextState.voluntaryShownPlayerIds.includes(playerId)) continue;
+      nextState = gameReducer(nextState, { type: "SHOW_CARDS", playerId });
+    }
+    this.gameState = nextState;
+  }
+
+  private broadcastRoomPresence() {
+    const { connectedPlayerIds, awayPlayerIds } = buildRoomPresenceSnapshot(
+      this.clientIdToConnId,
+      this.clientIdToPlayerSessionId,
+      this.awayClientIds,
+    );
+    const peekedCounts = getBroadcastPeekedCounts(this.gameState, this.peekedCardMasks);
+    this.broadcast({
+      type: "ROOM_PRESENCE",
+      connectedPlayerIds,
+      awayPlayerIds,
+      peekedCounts,
+    });
+  }
+
+  private cleanExpiredJoinTokens() {
+    const now = Date.now();
+    for (const [token, record] of this.joinTokens) {
+      if (record.expiresAt !== null && record.expiresAt <= now) {
+        this.joinTokens.delete(token);
       }
     }
-
-    this.send(conn, { type: "PRIVATE", holeCards, revealedHoleCards });
-  }
-
-  private broadcastRoomMeta() {
-    const connectedUserIds = Array.from(this.userIdToConnId.keys());
-    const awayPlayerIds = Array.from(this.awayUserIds)
-      .filter(uid => this.userIdToConnId.has(uid))
-      .map(uid => this.userIdToPlayerId.get(uid))
-      .filter((pid): pid is string => pid != null);
-    const peekedCounts: Record<string, number> = {};
-    for (const [pid, set] of this.peekedCardsByPlayerId) {
-      peekedCounts[pid] = set.size;
-    }
-    this.broadcast({ type: "ROOM_META", creatorUserId: this.creatorUserId, connectedUserIds, turnTimerEnabled: this.turnTimerEnabled, awayPlayerIds, peekedCounts });
-  }
-
-  // ── Helpers ──
-
-  private isPlayerAway(playerId: string): boolean {
-    for (const uid of this.awayUserIds) {
-      if (this.userIdToPlayerId.get(uid) === playerId) return true;
-    }
-    return false;
   }
 
   private send(conn: Party.Connection, msg: ServerMessage) {
