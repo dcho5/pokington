@@ -18,7 +18,7 @@ CLAUDE.md
 node_modules/
 .turbo/
 dist/
-lib/
+/lib/
 out/
 *.tsbuildinfo
 

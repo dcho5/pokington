@@ -24,28 +24,6 @@ import { deriveLedgerRows, derivePayoutInstructions } from "lib/ledger";
 import { createJoinToken, getOrCreateClientId, getPartyKitHost } from "lib/party";
 import { isTableClearedForNextHand } from "lib/tableVisualState";
 
-// ── UI-facing player shape ──
-export interface UIPlayer {
-  id: string;
-  name: string;
-  stack: number;
-  seatIndex: number;
-  isAdmin?: boolean;
-  isYou?: boolean;
-  isCurrentActor?: boolean;
-  currentBet?: number;
-  isFolded?: boolean;
-  isAllIn?: boolean;
-  lastAction?: string | null;
-  hasCards?: boolean;
-  isSittingOut?: boolean;
-  peekedCount?: number;
-  /** Hole cards — populated for any public opponent card slots (null slot = card not revealed) */
-  holeCards?: [Card | null, Card | null] | null;
-  handLabel?: string;
-  isAway?: boolean;
-}
-
 export interface BombPotAnnouncement {
   kind: "scheduled" | "canceled";
   anteBB: number;
@@ -113,10 +91,8 @@ interface GameStore {
   voteBombPot: (approve: boolean) => void;
 
   // Derived selectors
-  getPlayers: () => (UIPlayer | null)[];
   getViewingPlayer: () => PublicEnginePlayer | null;
   getHoleCards: () => [Card, Card] | null;
-  getHandStrength: () => string | null;
   getCommunityCards: () => Card[];
   getPot: () => number;
   getTotalPotWithBets: () => number;
@@ -161,7 +137,6 @@ interface GameStore {
   isFirstStateReceived: boolean;
 }
 
-const TOTAL_SEATS = 10;
 const STREET_PAUSE_MS = 1200;
 const SWEEP_DURATION_MS = 450;
 const ANNOUNCEMENT_MS = 3500;
@@ -200,42 +175,6 @@ function getActionableActor(gameState: PublicGameState): PublicEnginePlayer | nu
   }
   if (hasNoFurtherActionAgainstAllIn(gameState)) return null;
   return actor;
-}
-
-// getPlayers() memoization cache — returns stable references when inputs haven't changed
-let _cachedPlayers: (UIPlayer | null)[] = Array(TOTAL_SEATS).fill(null);
-let _cachedPlayersKey = "";
-
-function playersKey(s: {
-  gameState: PublicGameState;
-  viewingSeat: number;
-  myPlayerId: string | null;
-  isCreator: boolean;
-  streetPauseChips: { id: string; seatIndex: number; amount: number }[] | null;
-  revealedHoleCards: Record<string, [Card | null, Card | null]>;
-  awayPlayerIds: string[];
-  peekedCounts: Record<string, number>;
-}): string {
-  const gs = s.gameState;
-  const players = Object.values(gs.players);
-  // Build a fingerprint of all inputs that affect getPlayers() output
-  let key = `${gs.phase}|${gs.needsToAct[0] ?? ""}|${s.viewingSeat}|${s.myPlayerId}|${s.isCreator}|`;
-  key += s.awayPlayerIds.join(",") + "|";
-  key += JSON.stringify(s.peekedCounts) + "|";
-  if (s.streetPauseChips) key += s.streetPauseChips.map(c => `${c.id}:${c.amount}`).join(",");
-  key += "|";
-  for (const p of players) {
-    key += `${p.id}:${p.seatIndex}:${p.stack}:${p.currentBet}:${p.isFolded}:${p.isAllIn}:${p.lastAction}:${p.hasCards}:${p.sitOutUntilBB}|`;
-  }
-  // Include any public hole-card slots shared by the server.
-  for (const [id, cards] of Object.entries(s.revealedHoleCards)) {
-    key += `${id}:${cards[0]?.rank ?? ""}${cards[0]?.suit ?? ""}-${cards[1]?.rank ?? ""}${cards[1]?.suit ?? ""}|`;
-  }
-  // Include winners so showdown payout updates invalidate the cache
-  if (gs.winners) {
-    key += gs.winners.map(w => `${w.playerId}:${w.hand}`).join(",");
-  }
-  return key;
 }
 
 export const useGameStore = create<GameStore>((set, get) => {
@@ -795,56 +734,12 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     // ── Derived selectors ──
 
-    getPlayers: () => {
-      const state = get();
-      const { gameState, viewingSeat, myPlayerId, revealedHoleCards, streetPauseChips, isCreator, awayPlayerIds } = state;
-
-      // Return cached result if inputs haven't changed
-      const key = playersKey(state);
-      if (key === _cachedPlayersKey) return _cachedPlayers;
-
-      const players = Object.values(gameState.players);
-      const currentActorId = getActionableActor(gameState)?.id ?? null;
-
-      const result: (UIPlayer | null)[] = Array(TOTAL_SEATS).fill(null);
-      for (const p of players) {
-        const pauseBet = streetPauseChips?.find((c) => c.id === p.id)?.amount;
-
-        result[p.seatIndex] = {
-          id: p.id,
-          name: p.name,
-          stack: p.stack,
-          seatIndex: p.seatIndex,
-          isAdmin: isCreator && p.id === myPlayerId,
-          // Use myPlayerId for identity when available (real multiplayer), fall back to viewingSeat (DebugPanel)
-          isYou: myPlayerId ? p.id === myPlayerId : p.seatIndex === viewingSeat,
-          isCurrentActor: p.id === currentActorId,
-          currentBet: pauseBet ?? p.currentBet,
-          isFolded: p.isFolded,
-          isAllIn: p.isAllIn,
-          lastAction: p.lastAction,
-          hasCards: p.hasCards && !p.isFolded,
-          isSittingOut: p.sitOutUntilBB,
-          peekedCount: state.peekedCounts[p.id] ?? 0,
-          isAway: awayPlayerIds.includes(p.id),
-          // Only expose public card slots in the player array. The viewer's private hand still
-          // lives in `myHoleCards`, but any public reveal should mirror back onto their table seat.
-          holeCards: revealedHoleCards[p.id] ?? null,
-        };
-      }
-      _cachedPlayers = result;
-      _cachedPlayersKey = key;
-      return result;
-    },
-
     getViewingPlayer: () => {
       const { gameState, viewingSeat } = get();
       return Object.values(gameState.players).find((p) => p.seatIndex === viewingSeat) ?? null;
     },
 
     getHoleCards: () => get().myHoleCards,
-
-    getHandStrength: () => null,
 
     getCommunityCards: () => get().gameState.communityCards,
     getPot: () => get().gameState.pot,

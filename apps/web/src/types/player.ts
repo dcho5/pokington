@@ -5,6 +5,7 @@ export interface Player {
   id?: string;
   name: string;
   stack: number;
+  seatIndex?: number;
   isAdmin?: boolean;
   isYou?: boolean;
   isCurrentActor?: boolean;

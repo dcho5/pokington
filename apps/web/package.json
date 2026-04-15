@@ -7,7 +7,7 @@
     "start": "next start",
     "party": "partykit dev --port 1999",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node --test src/**/*.test.mjs"
+    "test": "node --test src/lib/*.test.mjs src/party/*.test.mjs src/components/Table/*.test.mjs"
   },
   "dependencies": {
     "partysocket": "^1.0.2",

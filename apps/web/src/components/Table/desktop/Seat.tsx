@@ -3,6 +3,7 @@
 import React, { useEffect } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { computeSeatPosition, type TableGeometry } from "lib/seatLayout";
+import { getDesktopSeatBadgeMetrics } from "lib/desktopSeatBadgeLayout.mjs";
 import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_DESKTOP as ACTION_COLORS } from "lib/actionColors";
 import type { Player } from "types/player";
@@ -204,8 +205,8 @@ const Seat: React.FC<SeatProps> = ({
   const clusterWidth = cardWidth * 2 - overlap;
   const clusterHeight = cardHeight + Math.round(seatSize * 0.18);
   const nameFontSize = seatSize >= 146 ? 14 : seatSize >= 136 ? 13 : 12;
-  const stackFontSize = seatSize >= 146 ? 20 : seatSize >= 136 ? 19 : 18;
-  const badgeFontSize = seatSize >= 146 ? 10 : 9;
+  const { outerWidth, stackFontSize, badgeFontSize, statusBadgeRightPx, statusBadgeBottomPx } =
+    getDesktopSeatBadgeMetrics(seatSize);
   const peekEyeSize = seatSize >= 136 ? 36 : 32;
   const seatOpacity = player.isFolded ? 0.42 : player.isAway ? 0.72 : 1;
   const statusBadges: Array<{
@@ -268,7 +269,7 @@ const Seat: React.FC<SeatProps> = ({
           key="occupied"
           animate={bounceControls}
           className="relative"
-          style={{ width: clusterWidth + 38, opacity: seatOpacity }}
+          style={{ width: outerWidth, opacity: seatOpacity }}
         >
           <div
             className="relative mx-auto"
@@ -439,8 +440,8 @@ const Seat: React.FC<SeatProps> = ({
             <div
               className="absolute z-20 flex flex-col items-end gap-1.5"
               style={{
-                right: 6,
-                bottom: Math.round(stackFontSize + 40),
+                right: statusBadgeRightPx,
+                bottom: statusBadgeBottomPx,
               }}
             >
               {statusBadges.map((badge) => (

@@ -2,91 +2,13 @@
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { useIsMobileLayout } from "hooks/useIsMobileLayout";
+import type { TableActions, TableSceneModel } from "./tableScene";
 import MobileTableLayout from "./mobile/MobileTableLayout";
 import DesktopTableLayout from "./desktop/DesktopTableLayout";
-import type { HandIndicator } from "lib/handIndicators";
-import type { Card as CardType } from "@pokington/shared";
-import type { RunResult, WinnerInfo, GameState, SevenTwoBountyBB, BombPotAnteBB } from "@pokington/engine";
-import type { Player } from "types/player";
-export type { Player };
 
 export interface TableLayoutProps {
-  onSitDown: (seatIndex: number, name?: string, buyInCents?: number) => void;
-  seatSelectionLocked?: boolean;
-  onStandUp?: () => void;
-  players?: Player[];
-  dealerIndex?: number;
-  tableName?: string;
-  blinds?: { small: number; big: number };
-  pot?: number;
-  smallBlindIndex?: number;
-  bigBlindIndex?: number;
-  communityCards?: CardType[];
-  holeCards?: [CardType, CardType] | null;
-  handStrength?: string | null;
-  handIndicators?: HandIndicator[];
-  phase?: string;
-  winners?: WinnerInfo[] | null;
-  onFold?: () => void;
-  onCheck?: () => void;
-  onCall?: () => void;
-  onRaise?: (amount: number) => void;
-  onAllIn?: () => void;
-  onStartHand?: () => void;
-  callAmount?: number;
-  minRaise?: number;
-  canCheck?: boolean;
-  canRaise?: boolean;
-  canAllIn?: boolean;
-  isYourTurn?: boolean;
-  currentActorName?: string;
-  isFirstBet?: boolean;
-  handNumber?: number;
-  viewerStack?: number;
-  viewerCurrentBet?: number;
-  showdownCountdown?: number | null;
-  isAdmin?: boolean;
-  streetSweeping?: boolean;
-  // Run-it-multiple-times
-  runItVotes?: Record<string, 1 | 2 | 3>;
-  onVoteRun?: (count: 1 | 2 | 3) => void;
-  runResults?: RunResult[];
-  runCount?: 1 | 2 | 3;
-  runAnnouncement?: 1 | 2 | 3 | null;
-  votingStartedAt?: number | null;
-  viewerCanVote?: boolean;
-  isRunItBoard?: boolean;
-  knownCardCount?: number;
-  runDealStartedAt?: number | null;
-  showNextHand?: boolean;
-  // 7-2 Offsuit side game
-  sevenTwoBountyBB?: SevenTwoBountyBB;
-  sevenTwoAnnouncement?: { winnerName: string; perPlayer: number; total: number } | null;
-  sevenTwoBountyTrigger?: { winnerId: string; perPlayer: number; totalCollected: number } | null;
-  canShowCards?: boolean;
-  onRevealCard?: (cardIndex: 0 | 1) => void;
-  myRevealedCardIndices?: Set<0 | 1>;
-  sevenTwoEligible?: boolean;
-  voluntaryShownPlayerIds?: string[];
-  // Bomb pot
-  bombPotVote?: GameState["bombPotVote"];
-  bombPotNextHand?: GameState["bombPotNextHand"];
-  isBombPotHand?: boolean;
-  communityCards2?: CardType[];
-  bombPotCooldown?: string[];
-  bombPotAnnouncement?: {
-    kind: "scheduled" | "canceled";
-    anteBB: number;
-    anteCents: number;
-    title: string;
-    detail: string;
-  } | null;
-  onProposeBombPot?: (anteBB: BombPotAnteBB) => void;
-  onVoteBombPot?: (approve: boolean) => void;
-  onPeekCard?: (index: 0 | 1) => void;
-  onQueueLeave?: () => void;
-  leaveQueued?: boolean;
-  cardPeelPersistenceKey?: string | null;
+  scene: TableSceneModel["layout"];
+  actions: TableActions;
 }
 
 const TOTAL_SEATS = 10;
@@ -97,7 +19,7 @@ const TOTAL_SEATS = 10;
 const DESKTOP_REF_W = 2560;
 const DESKTOP_REF_H = 1440;  // 2560 × 9/16
 
-const TableLayout: React.FC<TableLayoutProps> = (props) => {
+const TableLayout: React.FC<TableLayoutProps> = ({ scene, actions }) => {
   const isMobileLayout = useIsMobileLayout();
   const [desktopScale, setDesktopScale] = useState(1);
   // Desktop-only: scale wrapper refs + ResizeObserver
@@ -135,7 +57,7 @@ const TableLayout: React.FC<TableLayoutProps> = (props) => {
           className="relative w-full h-full overflow-hidden"
           style={{ maxWidth: "calc(100dvh * 10 / 16)" }}
         >
-          <MobileTableLayout {...props} totalSeats={TOTAL_SEATS} />
+          <MobileTableLayout scene={scene} actions={actions} totalSeats={TOTAL_SEATS} />
         </div>
       </div>
     );
@@ -161,7 +83,7 @@ const TableLayout: React.FC<TableLayoutProps> = (props) => {
             ["--desktop-scale" as string]: `${desktopScale}`,
           }}
         >
-          <DesktopTableLayout {...props} desktopScale={desktopScale} />
+          <DesktopTableLayout scene={scene} actions={actions} desktopScale={desktopScale} />
         </div>
       </div>
     </div>
