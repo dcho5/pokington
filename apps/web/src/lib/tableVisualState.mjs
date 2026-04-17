@@ -56,6 +56,25 @@ export function shouldRenderRunItBoard({
     runAnnouncement == null;
 }
 
+export function isAnimatedShowdownReveal({
+  phase,
+  knownCardCount = 0,
+  runResults = [],
+  runAnnouncement = null,
+  runDealStartedAt = null,
+  showdownStartedAt = null,
+} = {}) {
+  const runCount = Math.max(1, runResults.length);
+  const hasTimingAnchor =
+    runAnnouncement != null ||
+    runDealStartedAt != null ||
+    showdownStartedAt != null;
+
+  return phase === "showdown" &&
+    hasTimingAnchor &&
+    (knownCardCount < 5 || runCount > 1);
+}
+
 // A run-it showdown remains "active" for the entire showdown lifecycle once
 // results exist, even during the pre-deal announcement window where the center
 // board intentionally has not switched into run-it layout yet.
@@ -78,6 +97,21 @@ export function isAnimatedRunItShowdown({
   runResults = [],
 } = {}) {
   return isRunItShowdownSequence({
+    phase,
+    isRunItBoard,
+    isBombPotHand,
+    runResults,
+  });
+}
+
+export function isRunItAnnouncementPhase({
+  phase,
+  isRunItBoard = false,
+  isBombPotHand = false,
+  runAnnouncement = null,
+  runResults = [],
+} = {}) {
+  return runAnnouncement != null && isRunItShowdownSequence({
     phase,
     isRunItBoard,
     isBombPotHand,

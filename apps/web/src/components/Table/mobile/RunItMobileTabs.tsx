@@ -2,8 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Card from "components/poker/Card";
-import { deriveRunAnimation } from "lib/runAnimation";
-import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
+import { deriveVisibleRunState } from "lib/runAnimation";
 import type { RunResult } from "@pokington/engine";
 
 const CARD_COUNT = 5;
@@ -23,14 +22,8 @@ export default function RunItMobileTabs({
   handNumber,
   onViewingRunChange,
 }: RunItMobileTabsProps) {
-  const { currentRun, revealedCount } = deriveRunAnimation(
-    runDealStartedAt,
-    knownCardCount,
-    runResults.length,
-  );
+  const { currentRun, revealedCount } = deriveVisibleRunState(runResults, knownCardCount);
   const totalRuns = runResults.length;
-  const animationComplete = currentRun === totalRuns - 1 && revealedCount === CARD_COUNT;
-  useRunAnimationTicker(runDealStartedAt, knownCardCount, totalRuns, !animationComplete);
 
   const [viewingRun, setViewingRun] = useState(0);
   const prevViewingRun = useRef(0);
@@ -106,7 +99,7 @@ export default function RunItMobileTabs({
       >
         {Array.from({ length: totalRuns }, (_, r) => {
           const isActive = r === viewingRun;
-          const isSettled = r <= currentRun;
+          const isSettled = (runResults[r]?.board.length ?? 0) >= CARD_COUNT;
           return (
             <motion.button
               key={r}

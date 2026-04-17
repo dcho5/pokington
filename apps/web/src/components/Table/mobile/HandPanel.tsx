@@ -8,6 +8,7 @@ import { isActivePhase } from "lib/phases";
 import type { HandIndicator } from "lib/handIndicators";
 import type { Player } from "types/player";
 import type { Card as CardType } from "@pokington/shared";
+import { useGameStore } from "store/useGameStore";
 
 interface HandPanelProps {
   player: Player | null;
@@ -47,9 +48,10 @@ const HandPanel: React.FC<HandPanelProps> = ({
   cardPeelPersistenceKey,
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
-  const [autoFlip, setAutoFlip] = useState(false);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
   const cardHeight = 100;
+  const autoPeelEnabled = useGameStore((state) => state.autoPeelEnabled);
+  const setAutoPeelEnabled = useGameStore((state) => state.setAutoPeelEnabled);
 
   if (!player) return null;
 
@@ -91,14 +93,14 @@ const HandPanel: React.FC<HandPanelProps> = ({
           {/* Bottom: auto-flip toggle + leave seat */}
           <div className="flex gap-1">
             <button
-              onClick={() => setAutoFlip((a) => !a)}
+              onClick={() => setAutoPeelEnabled(!autoPeelEnabled)}
               className={`flex-1 flex items-center justify-center gap-1 rounded-lg font-black uppercase tracking-wide transition-colors py-1 text-[8px] ${
-                autoFlip
+                autoPeelEnabled
                   ? "bg-red-500 text-white"
                   : "bg-gray-100 dark:bg-white/[0.07] text-gray-400 dark:text-gray-500"
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${autoFlip ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${autoPeelEnabled ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`} />
               peel
             </button>
             {onStandUp && (
@@ -124,7 +126,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
               key={handNumber}
               cards={holeCards}
               cardHeight={cardHeight}
-              autoReveal={autoFlip}
+              autoReveal={autoPeelEnabled}
               onRevealChange={setBothRevealed}
               canRevealToOthers={canRevealToOthers}
               revealedToOthersIndices={revealedToOthersIndices}

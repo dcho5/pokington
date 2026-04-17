@@ -6,8 +6,8 @@ import {
   NORMAL_LAND_MS,
   WINNER_STAGGER_BUFFER_S,
 } from "lib/showdownTiming";
-import { deriveRunAnimation } from "lib/runAnimation";
-import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
+import { deriveVisibleRunState } from "lib/runAnimation";
+import type { RunResult } from "@pokington/engine";
 
 /**
  * Returns how many runs have "settled" (winning chips have landed).
@@ -17,10 +17,11 @@ import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
  */
 export function useSettledRunsCount(
   phase: string,
-  isRunItBoard: boolean,
+  hasAnimatedShowdown: boolean,
   showdownStartedAt: number | null,
   knownCardCount: number,
   runCount: number,
+  revealRunsConcurrently = false,
 ): number {
   const [settled, setSettled] = useState(0);
 
@@ -32,7 +33,7 @@ export function useSettledRunsCount(
 
     const elapsed = Date.now() - showdownStartedAt;
 
-    if (!isRunItBoard) {
+    if (!hasAnimatedShowdown) {
       // Single-run: one transition at NORMAL_LAND_MS
       if (elapsed >= NORMAL_LAND_MS) {
         setSettled(1);
@@ -44,7 +45,7 @@ export function useSettledRunsCount(
     }
 
     // Multi-run: compute all landing times, schedule timeouts for future ones
-    const { chipStartS, runIntervalS } = getRunTimings(knownCardCount);
+    const { chipStartS, runIntervalS } = getRunTimings(knownCardCount, { revealRunsConcurrently });
     const landTimes: number[] = [];
     for (let r = 0; r < runCount; r++) {
       landTimes.push(
@@ -67,7 +68,7 @@ export function useSettledRunsCount(
     }
 
     return () => timeoutIds.forEach(clearTimeout);
-  }, [phase, showdownStartedAt, isRunItBoard, knownCardCount, runCount]);
+  }, [phase, showdownStartedAt, hasAnimatedShowdown, knownCardCount, runCount, revealRunsConcurrently]);
 
   return settled;
 }
@@ -78,15 +79,11 @@ export function useSettledRunsCount(
 export function useCurrentRun(
   phase: string,
   isRunItBoard: boolean,
-  runDealStartedAt: number | null,
   knownCardCount: number,
-  runCount: number,
+  runResults: RunResult[],
 ): { currentRun: number; revealedCount: number } {
-  const enabled = phase === "showdown" && isRunItBoard && runDealStartedAt != null;
-  useRunAnimationTicker(runDealStartedAt, knownCardCount, runCount, enabled);
-
-  if (!enabled || runDealStartedAt == null) {
+  if (phase !== "showdown" || !isRunItBoard) {
     return { currentRun: 0, revealedCount: knownCardCount };
   }
-  return deriveRunAnimation(runDealStartedAt, knownCardCount, runCount);
+  return deriveVisibleRunState(runResults, knownCardCount);
 }

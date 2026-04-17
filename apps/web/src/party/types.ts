@@ -1,5 +1,6 @@
 import type { GameState, EnginePlayer, GameEvent, WinnerInfo, RunResult, SidePot, SevenTwoBountyBB } from "@pokington/engine";
 import type { Card, GamePhase } from "@pokington/shared";
+import { buildPublicGameState } from "./publicState.mjs";
 
 // Re-export so consumers only need to import from one place
 export type { GameEvent, WinnerInfo, RunResult, SidePot, GamePhase };
@@ -19,12 +20,7 @@ export type PublicGameState = Omit<GameState, "deck" | "players"> & {
 };
 
 export function toPublicGameState(state: GameState): PublicGameState {
-  const { deck, players, ...rest } = state;
-  const publicPlayers: Record<string, PublicEnginePlayer> = {};
-  for (const [id, p] of Object.entries(players)) {
-    publicPlayers[id] = { ...p, holeCards: null, hasCards: p.holeCards !== null };
-  }
-  return { ...rest, deckSize: deck.length, players: publicPlayers };
+  return buildPublicGameState(state) as PublicGameState;
 }
 
 export type TableStatus = "creating" | "active" | "archived" | "error";

@@ -56,6 +56,9 @@ export interface GameState {
   runResults: RunResult[]; // per-run boards + winners, populated at showdown
   autoRevealWinningHands: boolean; // true only when showdown is contested and winners must table
   autoRevealWinningHandsAt: number | null; // server-side release time for auto-revealed winning hands
+  knownCardCountAtRunIt: number; // server-owned public board visibility anchor for animated runouts
+  runDealStartedAt: number | null; // server-owned start timestamp for public board dealing
+  showdownStartedAt: number | null; // server-owned showdown timestamp for synchronized reconnects
   // 7-2 Offsuit side game (table-level, set before first hand)
   sevenTwoBountyBB: SevenTwoBountyBB;  // 0 = off; N = N × bigBlind per player
   sevenTwoBountyTrigger: {           // non-null at showdown when bounty fires
@@ -142,7 +145,6 @@ export type GameEvent =
   | { type: "RESOLVE_VOTE" }  // force-resolve with current votes (timer expired)
   | { type: "SET_SEVEN_TWO_BOUNTY"; bountyBB: SevenTwoBountyBB } // pre-game config only
   | { type: "SHOW_CARDS"; playerId: string }   // voluntary card reveal at showdown
-  | { type: "SET_HOLE_CARDS"; playerId: string; cards: [Card, Card] } // debug: force a player's hole cards
   | { type: "PROPOSE_BOMB_POT"; playerId: string; anteBB: BombPotAnteBB }
   | { type: "VOTE_BOMB_POT"; playerId: string; approve: boolean };
 
@@ -177,6 +179,9 @@ export function createInitialState(
     runResults: [],
     autoRevealWinningHands: false,
     autoRevealWinningHandsAt: null,
+    knownCardCountAtRunIt: 0,
+    runDealStartedAt: null,
+    showdownStartedAt: null,
     sevenTwoBountyBB: options?.sevenTwoBountyBB ?? 0,
     sevenTwoBountyTrigger: null,
     voluntaryShownPlayerIds: [],

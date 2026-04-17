@@ -8,18 +8,53 @@ import type {
 
 const LOCAL_PARTYKIT_HOST = "127.0.0.1:1999";
 
+declare global {
+  interface Window {
+    __POKINGTON_RUNTIME_CONFIG__?: {
+      partykitHost?: string | null;
+    };
+  }
+}
+
+export function normalizePartyKitHost(host: string | null | undefined): string | null {
+  if (!host) return null;
+  const trimmed = host.trim();
+  if (!trimmed) return null;
+  return trimmed
+    .replace(/^(https?|wss?):\/\//i, "")
+    .replace(/\/+$/, "");
+}
+
+function isLocalHost(host: string | null | undefined): boolean {
+  if (!host) return false;
+  const hostname = host.trim().replace(/^(https?|wss?):\/\//i, "").split("/")[0]?.split(":")[0] ?? "";
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+export function getServerPartyKitHost(requestHost?: string | null): string {
+  if (isLocalHost(requestHost)) {
+    return LOCAL_PARTYKIT_HOST;
+  }
+
+  return normalizePartyKitHost(process.env.PARTYKIT_HOST)
+    || normalizePartyKitHost(process.env.NEXT_PUBLIC_PARTYKIT_HOST)
+    || LOCAL_PARTYKIT_HOST;
+}
+
 export function getPartyKitHost(): string {
   if (typeof window !== "undefined") {
     const { hostname } = window.location;
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return LOCAL_PARTYKIT_HOST;
     }
-    return process.env.NEXT_PUBLIC_PARTYKIT_HOST || LOCAL_PARTYKIT_HOST;
+    return normalizePartyKitHost(window.__POKINGTON_RUNTIME_CONFIG__?.partykitHost)
+      || normalizePartyKitHost(process.env.NEXT_PUBLIC_PARTYKIT_HOST)
+      || LOCAL_PARTYKIT_HOST;
   }
   if (process.env.NODE_ENV !== "production") {
     return LOCAL_PARTYKIT_HOST;
   }
-  return process.env.PARTYKIT_HOST || process.env.NEXT_PUBLIC_PARTYKIT_HOST || LOCAL_PARTYKIT_HOST;
+  return getServerPartyKitHost();
 }
 
 async function requestControlPlane<T>(path: string, init?: RequestInit): Promise<T> {

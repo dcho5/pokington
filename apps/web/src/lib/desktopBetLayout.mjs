@@ -1,5 +1,3 @@
-import { getDesktopSeatBadgeMetrics } from "./desktopSeatBadgeLayout.mjs";
-
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
@@ -36,6 +34,34 @@ function seatCoords(seatIndex, totalSeats, geometry) {
   return { x, y };
 }
 
+function getBetBadgeMetrics(seatSize = 150) {
+  const cardWidth = Math.round(seatSize * 0.68);
+  const cardHeight = Math.round(cardWidth * 1.4);
+  const overlap = Math.round(cardWidth * 0.38);
+  const clusterWidth = cardWidth * 2 - overlap;
+  const clusterHeight = cardHeight + Math.round(seatSize * 0.18);
+  const stackFontSize = seatSize >= 146 ? 20 : seatSize >= 136 ? 19 : 18;
+  const badgeFontSize = seatSize >= 146 ? 10 : 9;
+  const outerWidth = clusterWidth + 38;
+  const stackPanelHeightPx = stackFontSize + 28;
+  const seatFrameHeightPx = clusterHeight + 16 + stackPanelHeightPx;
+
+  const betBadgeMarginPx = 10;
+  const betBadgeHeightPx = badgeFontSize + 10;
+  const betBadgeBottomPx = Math.round(stackFontSize + 40 + betBadgeHeightPx + 8);
+  const betBadgeReferenceWidthPx = Math.round(Math.max(52, Math.min(72, seatSize * 0.42)));
+
+  const betBadgeCenterOffsetXPx = -((outerWidth / 2) - betBadgeMarginPx - (betBadgeReferenceWidthPx / 2));
+  const betBadgeCenterOffsetYPx = (seatFrameHeightPx / 2) - betBadgeBottomPx - (betBadgeHeightPx / 2);
+
+  return {
+    betBadgeCenterOffsetXPx: Math.round(betBadgeCenterOffsetXPx * 1000) / 1000,
+    betBadgeCenterOffsetYPx: Math.round(betBadgeCenterOffsetYPx * 1000) / 1000,
+    betBadgeReferenceWidthPx,
+    betBadgeHeightPx,
+  };
+}
+
 export function getDesktopBetAnchorSide() {
   return "left";
 }
@@ -52,18 +78,18 @@ export function computeDesktopBetBeaconLayout({
 }) {
   const { x: sx, y: sy } = seatCoords(seatIndex, totalSeats, geometry);
   const {
-    leftBadgeCenterOffsetXPx,
-    badgeCenterOffsetYPx,
-    statusBadgeReferenceWidthPx,
-    statusBadgeHeightPx,
-  } = getDesktopSeatBadgeMetrics(seatSize);
+    betBadgeCenterOffsetXPx,
+    betBadgeCenterOffsetYPx,
+    betBadgeReferenceWidthPx,
+    betBadgeHeightPx,
+  } = getBetBadgeMetrics(seatSize);
   const anchorSide = getDesktopBetAnchorSide();
 
-  const beaconX = sx + (leftBadgeCenterOffsetXPx / tableWidth) * 100;
-  const beaconY = sy + (badgeCenterOffsetYPx / tableHeight) * 100;
+  const beaconX = sx + ((betBadgeCenterOffsetXPx - 36) / tableWidth) * 100;
+  const beaconY = sy + ((betBadgeCenterOffsetYPx + 6) / tableHeight) * 100;
 
-  const horizontalMarginPct = (((statusBadgeReferenceWidthPx / 2) + 72) / tableWidth) * 100;
-  const verticalMarginPct = (((statusBadgeHeightPx / 2) + 32) / tableHeight) * 100;
+  const horizontalMarginPct = (((betBadgeReferenceWidthPx / 2) + 4) / tableWidth) * 100;
+  const verticalMarginPct = (((betBadgeHeightPx / 2) + 32) / tableHeight) * 100;
   const leftPct = clamp(50 + beaconX, horizontalMarginPct, 100 - horizontalMarginPct);
   const topPct = clamp(50 + beaconY, verticalMarginPct, 100 - verticalMarginPct);
 

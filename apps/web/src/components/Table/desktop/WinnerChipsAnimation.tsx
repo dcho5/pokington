@@ -17,6 +17,7 @@ interface WinnerChipsAnimationProps {
   runResults?: { winners: WinnerInfo[] }[];
   // How many community cards were already visible before the all-in board was run
   knownCardCount?: number;
+  revealRunsConcurrently?: boolean;
   tableAspectRatio?: number;
   potTopPct?: number;
   potLeftPct?: number;
@@ -31,6 +32,7 @@ export const WinnerChipsAnimation: React.FC<WinnerChipsAnimationProps> = ({
   containerWidth,
   handNumber,
   knownCardCount = 0,
+  revealRunsConcurrently = false,
   tableAspectRatio = 21 / 9,
   potTopPct = 62,
   potLeftPct = 50,
@@ -41,7 +43,7 @@ export const WinnerChipsAnimation: React.FC<WinnerChipsAnimationProps> = ({
   const potPxX = containerWidth * (potLeftPct / 100);
   const potPxY = containerHeight * (potTopPct / 100);
 
-  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount);
+  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount, { revealRunsConcurrently });
 
   // Build a flat list of chips with individual delays.
   // For all-in showdowns, split winners into pot tiers: tier0 = first occurrence per player

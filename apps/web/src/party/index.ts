@@ -1,5 +1,14 @@
 import type * as Party from "partykit/server";
-import { gameReducer, createInitialState, shouldAutoRevealWinningHands } from "@pokington/engine";
+import {
+  ANNOUNCE_DELAY_MS,
+  computeRunTransitions,
+  createInitialState,
+  gameReducer,
+  getAllInShowdownRevealDelayMs,
+  hasAnimatedRunout,
+  shouldRevealRunsConcurrently,
+  shouldAutoRevealWinningHands,
+} from "@pokington/engine";
 import type { GameState, GameEvent } from "@pokington/engine";
 import type { Card } from "@pokington/shared";
 import {
@@ -19,7 +28,6 @@ import {
   canPubliclyRevealCard,
   cardIndexToMask,
 } from "./revealTracking.mjs";
-import { getAllInShowdownRevealDelayMs } from "../lib/showdownTiming";
 import type {
   ClientMessage,
   ServerMessage,
@@ -162,6 +170,7 @@ export default class PokerRoom implements Party.Server {
   private publicShownCardMasks = new Map<string, number>();
   private votingTimer: ReturnType<typeof setTimeout> | null = null;
   private winnerRevealTimer: ReturnType<typeof setTimeout> | null = null;
+  private publicRevealTimers: ReturnType<typeof setTimeout>[] = [];
 
   constructor(readonly room: Party.Room) {
     this.gameState = createInitialState(room.id, { small: 25, big: 50 }, { sevenTwoBountyBB: CORE_SEVEN_TWO_BOUNTY_BB });
@@ -205,6 +214,7 @@ export default class PokerRoom implements Party.Server {
     this.publicShownCardMasks = new Map(saved.publicShownCardMasks ?? []);
     this.cleanExpiredJoinTokens();
     this.scheduleWinnerReveal();
+    this.schedulePublicRevealBroadcasts();
   }
 
   onConnect(conn: Party.Connection) {
@@ -753,15 +763,18 @@ export default class PokerRoom implements Party.Server {
       }
     }
     if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
+      this.initializeShowdownRevealState(prevState, this.gameState);
       this.gameState.autoRevealWinningHandsAt = this.computeWinnerRevealAt(prevState, this.gameState);
       this.promoteFullyShownCardsAtShowdown();
       this.scheduleWinnerReveal();
+      this.schedulePublicRevealBroadcasts();
       void this.persistShowdownStats(this.gameState);
     }
     if (this.gameState.handNumber !== prevState.handNumber) {
       this.peekedCardMasks.clear();
       this.publicShownCardMasks.clear();
       this.clearWinnerRevealTimer();
+      this.clearPublicRevealTimers();
     }
 
     this.manageVotingTimer(prevState, this.gameState);
@@ -774,9 +787,6 @@ export default class PokerRoom implements Party.Server {
   private enrichEvent(event: GameEvent, myPlayerId: string, clientId: string, isDebug: boolean): GameEvent | null {
     if (event.type === "RESOLVE_VOTE") {
       return null;
-    }
-    if (event.type === "SET_HOLE_CARDS") {
-      return isDebug || clientId === this.creatorClientId ? event : null;
     }
     if (event.type === "SET_SEVEN_TWO_BOUNTY") {
       return !isDebug && clientId !== this.creatorClientId ? null : event;
@@ -857,8 +867,12 @@ export default class PokerRoom implements Party.Server {
         const prevState = this.gameState;
         this.gameState = gameReducer(this.gameState, { type: "RESOLVE_VOTE" });
         if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
+          this.initializeShowdownRevealState(prevState, this.gameState);
           this.gameState.autoRevealWinningHandsAt = this.computeWinnerRevealAt(prevState, this.gameState);
+          this.promoteFullyShownCardsAtShowdown();
           this.scheduleWinnerReveal();
+          this.schedulePublicRevealBroadcasts();
+          void this.persistShowdownStats(this.gameState);
         }
         this.broadcastState();
         this.broadcastAllPrivate();
@@ -878,15 +892,102 @@ export default class PokerRoom implements Party.Server {
     }
   }
 
+  private clearPublicRevealTimers() {
+    for (const timer of this.publicRevealTimers) {
+      clearTimeout(timer);
+    }
+    this.publicRevealTimers = [];
+  }
+
+  private initializeShowdownRevealState(prev: GameState, next: GameState) {
+    next.knownCardCountAtRunIt = 0;
+    next.runDealStartedAt = null;
+    next.showdownStartedAt = null;
+
+    if (next.phase !== "showdown") return;
+
+    const runCount = Math.max(1, next.runResults.length);
+    const knownCardCount = Math.max(prev.communityCards.length, prev.communityCards2.length);
+    if (!hasAnimatedRunout(knownCardCount, runCount)) return;
+
+    const now = Date.now();
+    next.knownCardCountAtRunIt = knownCardCount;
+    next.showdownStartedAt = now;
+    next.runDealStartedAt = prev.phase === "voting" ? null : now;
+  }
+
+  private schedulePublicRevealBroadcasts() {
+    this.clearPublicRevealTimers();
+
+    if (this.gameState.phase !== "showdown") return;
+
+    const runCount = Math.max(1, this.gameState.runResults.length);
+    const knownCardCount = this.gameState.knownCardCountAtRunIt;
+    if (!hasAnimatedRunout(knownCardCount, runCount)) return;
+    const revealRunsConcurrently = shouldRevealRunsConcurrently(this.gameState.isBombPot, runCount);
+
+    const handNumber = this.gameState.handNumber;
+    const showdownStartedAt = this.gameState.showdownStartedAt;
+    if (showdownStartedAt == null) return;
+
+    if (this.gameState.runDealStartedAt == null) {
+      const revealStartAt = showdownStartedAt + ANNOUNCE_DELAY_MS;
+      const delay = revealStartAt - Date.now();
+
+      if (delay <= 0) {
+        this.gameState.runDealStartedAt = Date.now();
+        this.broadcastState();
+        void this.persistRoomState();
+        this.schedulePublicRevealBroadcasts();
+        return;
+      }
+
+      this.publicRevealTimers.push(setTimeout(() => {
+        if (
+          this.gameState.phase !== "showdown" ||
+          this.gameState.handNumber !== handNumber ||
+          this.gameState.showdownStartedAt !== showdownStartedAt ||
+          this.gameState.runDealStartedAt != null
+        ) {
+          return;
+        }
+        this.gameState.runDealStartedAt = Date.now();
+        this.broadcastState();
+        void this.persistRoomState();
+        this.schedulePublicRevealBroadcasts();
+      }, delay));
+      return;
+    }
+
+    const runDealStartedAt = this.gameState.runDealStartedAt;
+    const transitions = computeRunTransitions(knownCardCount, runCount, { revealRunsConcurrently });
+    for (const transitionMs of transitions) {
+      const delay = runDealStartedAt + transitionMs - Date.now();
+      if (delay <= 0) continue;
+
+      this.publicRevealTimers.push(setTimeout(() => {
+        if (
+          this.gameState.phase !== "showdown" ||
+          this.gameState.handNumber !== handNumber ||
+          this.gameState.runDealStartedAt !== runDealStartedAt
+        ) {
+          return;
+        }
+        this.broadcastState();
+      }, delay));
+    }
+  }
+
   private computeWinnerRevealAt(prev: GameState, next: GameState): number | null {
     if (next.phase !== "showdown" || !next.autoRevealWinningHands) return null;
 
-    const knownCardCount = prev.communityCards.length;
+    const knownCardCount = Math.max(prev.communityCards.length, prev.communityCards2.length);
     const runCount = Math.max(1, next.runResults.length);
     const isAnimatedRunout = knownCardCount < 5 || runCount > 1;
     if (!isAnimatedRunout) return Date.now();
+    const revealRunsConcurrently = shouldRevealRunsConcurrently(next.isBombPot, runCount);
 
-    return Date.now() + getAllInShowdownRevealDelayMs(knownCardCount, runCount);
+    return Date.now() + getAllInShowdownRevealDelayMs(knownCardCount, runCount, { revealRunsConcurrently });
   }
 
   private scheduleWinnerReveal() {

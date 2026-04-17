@@ -2,8 +2,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import Card from "components/poker/Card";
-import { deriveRunAnimation } from "lib/runAnimation";
-import { useRunAnimationTicker } from "hooks/useRunAnimationTicker";
+import { deriveVisibleRunState } from "lib/runAnimation";
 import type { RunResult } from "@pokington/engine";
 import type { DesktopRunItCenterStage } from "lib/desktopTableLayout";
 
@@ -30,14 +29,8 @@ export default function RunItBoard({
   compact = false,
   desktopLayout,
 }: RunItBoardProps) {
-  const { currentRun, revealedCount } = deriveRunAnimation(
-    runDealStartedAt,
-    knownCardCount,
-    runResults.length,
-  );
+  const { currentRun, revealedCount } = deriveVisibleRunState(runResults, knownCardCount);
   const totalRuns = runResults.length;
-  const animationComplete = currentRun === totalRuns - 1 && revealedCount === CARD_COUNT;
-  useRunAnimationTicker(runDealStartedAt, knownCardCount, totalRuns, !animationComplete);
 
   const desktopCardStyle = compact || !desktopLayout
     ? undefined

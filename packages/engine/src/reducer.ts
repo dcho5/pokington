@@ -264,6 +264,9 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
   }));
   state.autoRevealWinningHands = shouldAutoRevealWinningHands(state.winners, state.showdownKind);
   state.autoRevealWinningHandsAt = null;
+  state.knownCardCountAtRunIt = 0;
+  state.runDealStartedAt = null;
+  state.showdownStartedAt = null;
   state.sevenTwoBountyTrigger = null;
   state.voluntaryShownPlayerIds = [];
 
@@ -475,6 +478,9 @@ function resetTableToWaiting(state: GameState): GameState {
   state.runResults = [];
   state.autoRevealWinningHands = false;
   state.autoRevealWinningHandsAt = null;
+  state.knownCardCountAtRunIt = 0;
+  state.runDealStartedAt = null;
+  state.showdownStartedAt = null;
   state.sevenTwoBountyTrigger = null;
   state.voluntaryShownPlayerIds = [];
   state.smallBlindSeatIndex = -1;
@@ -570,6 +576,9 @@ export function gameReducer(
       state.runResults = [];
       state.autoRevealWinningHands = false;
       state.autoRevealWinningHandsAt = null;
+      state.knownCardCountAtRunIt = 0;
+      state.runDealStartedAt = null;
+      state.showdownStartedAt = null;
       state.sevenTwoBountyTrigger = null;
       state.voluntaryShownPlayerIds = [];
       state.isBlindIncomplete = false;
@@ -879,6 +888,9 @@ export function gameReducer(
         state.showdownKind = "uncontested";
         state.autoRevealWinningHands = false;
         state.autoRevealWinningHandsAt = null;
+        state.knownCardCountAtRunIt = 0;
+        state.runDealStartedAt = null;
+        state.showdownStartedAt = null;
         state.sevenTwoBountyTrigger = null;
         state.voluntaryShownPlayerIds = [];
         return state;
@@ -962,15 +974,6 @@ export function gameReducer(
       ) {
         applySevenTwoBounty(state, event.playerId);
       }
-      return state;
-    }
-
-    case "SET_HOLE_CARDS": {
-      // Debug-only: force a player's hole cards (only valid during pre-flop)
-      if (state.phase !== "pre-flop") return prevState;
-      const player = state.players[event.playerId];
-      if (!player) return prevState;
-      player.holeCards = event.cards;
       return state;
     }
 

@@ -28,6 +28,15 @@ export function shouldRenderRunItBoard(options?: {
   runAnnouncement?: number | null;
 }): boolean;
 
+export function isAnimatedShowdownReveal(options?: {
+  phase?: string | null;
+  knownCardCount?: number;
+  runResults?: unknown[];
+  runAnnouncement?: number | null;
+  runDealStartedAt?: number | null;
+  showdownStartedAt?: number | null;
+}): boolean;
+
 export function isAnimatedRunItShowdown(options?: {
   phase?: string | null;
   isRunItBoard?: boolean;
@@ -39,6 +48,14 @@ export function isRunItShowdownSequence(options?: {
   phase?: string | null;
   isRunItBoard?: boolean;
   isBombPotHand?: boolean;
+  runResults?: unknown[];
+}): boolean;
+
+export function isRunItAnnouncementPhase(options?: {
+  phase?: string | null;
+  isRunItBoard?: boolean;
+  isBombPotHand?: boolean;
+  runAnnouncement?: number | null;
   runResults?: unknown[];
 }): boolean;
 

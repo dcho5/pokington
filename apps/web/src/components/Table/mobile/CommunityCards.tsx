@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Card from "components/poker/Card";
 import RunItMobileTabs from "./RunItMobileTabs";
-import { getCenterBoardMode } from "lib/tableVisualState";
+import { getCenterBoardMode, isRunItAnnouncementPhase } from "lib/tableVisualState";
 import type { Card as CardType } from "@pokington/shared";
 import type { RunResult } from "@pokington/engine";
 
@@ -139,7 +139,13 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
   // During the "Running it N times!" announcement the engine has already dealt
   // the full board, but we should only show the cards that were known before
   // the all-in — the rest stay face-down until RunItMobileTabs takes over.
-  const isRunItAnnouncing = isRunItBoard && runAnnouncement != null;
+  const isRunItAnnouncing = isRunItAnnouncementPhase({
+    phase,
+    isRunItBoard,
+    isBombPotHand: isBombPot,
+    runAnnouncement,
+    runResults,
+  });
 
   return (
     <div className="relative flex flex-col items-center w-full px-2 min-h-0">

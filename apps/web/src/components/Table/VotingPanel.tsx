@@ -39,7 +39,7 @@ export default function VotingPanel({
   const isMobile = variant === "mobile";
   const wrapperClass =
     isMobile
-      ? "elevated-surface-dark relative w-full rounded-[1.7rem] border p-4"
+      ? "elevated-surface-dark relative w-full max-h-[min(72dvh,34rem)] overflow-y-auto overscroll-contain rounded-[1.7rem] border p-4"
       : "elevated-surface-dark relative w-full rounded-[2rem] border";
   const title = isMobile ? "Run it vote" : "How many boards?";
   const subtitle = canVote

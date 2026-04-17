@@ -6,6 +6,7 @@ import type { Player } from "types/player";
 
 interface OpponentStripProps {
   players: Array<{ player: Player; seatIndex: number }>;
+  playerCount?: number;
   dealerIndex?: number;
   smallBlindIndex?: number;
   bigBlindIndex?: number;
@@ -21,6 +22,7 @@ type SeatItem =
 
 const OpponentStrip: React.FC<OpponentStripProps> = ({
   players,
+  playerCount,
   dealerIndex,
   smallBlindIndex,
   bigBlindIndex,
@@ -58,6 +60,7 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
       return (
       <PlayerBubble
         player={item.player}
+        playerCount={playerCount}
         isDealer={item.seatIndex === dealerIndex}
         isSmallBlind={item.seatIndex === smallBlindIndex}
         isBigBlind={item.seatIndex === bigBlindIndex}

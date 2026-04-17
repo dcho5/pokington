@@ -22,6 +22,10 @@ import {
 } from "party/types";
 import { deriveLedgerRows, derivePayoutInstructions } from "lib/ledger";
 import { createJoinToken, getOrCreateClientId, getPartyKitHost } from "lib/party";
+import {
+  readPersistedAutoPeelPreference,
+  writePersistedAutoPeelPreference,
+} from "lib/holeCardReveal.mjs";
 import { isTableClearedForNextHand } from "lib/tableVisualState";
 
 export interface BombPotAnnouncement {
@@ -63,6 +67,7 @@ interface GameStore {
   showdownStartedAt: number | null;
   sevenTwoAnnouncement: { winnerName: string; perPlayer: number; total: number } | null;
   bombPotAnnouncement: BombPotAnnouncement | null;
+  autoPeelEnabled: boolean;
 
   // Actions
   connect: (tableCode: string) => void;
@@ -85,10 +90,10 @@ interface GameStore {
   revealCard: (cardIndex: 0 | 1) => void;
   peekCard: (cardIndex: 0 | 1) => void;
   setSevenTwoBounty: (bountyBB: SevenTwoBountyBB) => void;
-  debugSetHoleCards: (playerId: string, cards: [Card, Card]) => void;
   setViewingSeat: (seat: number) => void;
   proposeBombPot: (anteBB: BombPotAnteBB) => void;
   voteBombPot: (approve: boolean) => void;
+  setAutoPeelEnabled: (enabled: boolean) => void;
 
   // Derived selectors
   getViewingPlayer: () => PublicEnginePlayer | null;
@@ -139,7 +144,32 @@ interface GameStore {
 
 const STREET_PAUSE_MS = 1200;
 const SWEEP_DURATION_MS = 450;
-const ANNOUNCEMENT_MS = 3500;
+
+function deriveServerRunTiming(next: PublicGameState): Pick<
+  GameStore,
+  "runAnnouncement" | "isRunItBoard" | "knownCardCountAtRunIt" | "runDealStartedAt" | "showdownStartedAt"
+> {
+  const isVotingReveal = next.phase === "voting";
+  const hasAnimatedShowdownReveal =
+    next.phase === "showdown" &&
+    (next.showdownStartedAt != null || next.runDealStartedAt != null) &&
+    ((next.runResults?.length ?? 0) > 1 || (next.knownCardCountAtRunIt ?? 0) < 5);
+
+  return {
+    runAnnouncement:
+      next.phase === "showdown" &&
+      !next.isBombPot &&
+      (next.runResults?.length ?? 0) > 1 &&
+      next.showdownStartedAt != null &&
+      next.runDealStartedAt == null
+        ? (next.runCount as 1 | 2 | 3)
+        : null,
+    isRunItBoard: isVotingReveal || next.isBombPot || hasAnimatedShowdownReveal,
+    knownCardCountAtRunIt: isVotingReveal ? next.communityCards.length : next.knownCardCountAtRunIt ?? 0,
+    runDealStartedAt: next.runDealStartedAt ?? null,
+    showdownStartedAt: next.showdownStartedAt ?? null,
+  };
+}
 
 // Module-level — not reactive state
 let _socket: PartySocket | null = null;
@@ -182,24 +212,15 @@ export const useGameStore = create<GameStore>((set, get) => {
   // Called on every TABLE_STATE message from the server.
   // Detects phase transitions and fires UI-layer side effects (animations, timers, announcements).
   function handleIncomingState(prev: PublicGameState | null, next: PublicGameState, isFirstReceive = false) {
-    // On page reload: skip all animation triggers and jump straight to settled state.
-    // Without this guard, the dummy "waiting" prev state causes all animation branches to fire.
+    const timingPatch = deriveServerRunTiming(next);
+
     if (isFirstReceive) {
-      const isShowdown = next.phase === "showdown";
-      const hasRunResults = (next.runResults?.length ?? 0) > 0;
-      // Auto-sync viewingSeat from myPlayerId
       const { viewingSeat, myPlayerId } = get();
       const myPlayer = myPlayerId ? next.players[myPlayerId] : null;
       set({
         gameState: next,
         isFirstStateReceived: true,
-        ...(isShowdown ? {
-          // Use timestamp 0 so elapsed time is huge → useSettledRunsCount returns max settled
-          showdownStartedAt: 0,
-          runDealStartedAt: hasRunResults ? 0 : null,
-          isRunItBoard: hasRunResults,
-          knownCardCountAtRunIt: hasRunResults ? next.communityCards.length : 0,
-        } : {}),
+        ...timingPatch,
         ...(viewingSeat === -1 && myPlayer ? { viewingSeat: myPlayer.seatIndex } : {}),
       });
       return;
@@ -229,27 +250,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     // ── Voting phase entered ──
     const PLAYING_PHASES = ["pre-flop", "flop", "turn", "river"];
     if (PLAYING_PHASES.includes(beforePhase) && next.phase === "voting") {
-      set({ votingStartedAt: Date.now(), isRunItBoard: true, knownCardCountAtRunIt: beforeCardCount });
+      set({ votingStartedAt: Date.now() });
     }
-
-    // ── Direct showdown (all-in or bomb pot) ──
-    if (PLAYING_PHASES.includes(beforePhase) && next.phase === "showdown") {
-      const now = Date.now();
-      set({ showdownStartedAt: now });
-      const activePlayers = Object.values(next.players).filter((p) => !p.isFolded);
-      const allInCount = activePlayers.filter((p) => p.isAllIn).length;
-      if (activePlayers.length >= 2 && allInCount === activePlayers.length) {
-        set({ isRunItBoard: true, knownCardCountAtRunIt: beforeCardCount, runDealStartedAt: now });
-      } else if (next.isBombPot) {
-        set({ isRunItBoard: true, knownCardCountAtRunIt: beforeCardCount, runDealStartedAt: now });
-      }
-    }
-
-    // ── Voting resolved → showdown ──
-    if (beforePhase === "voting" && next.phase === "showdown") {
-      set({ votingStartedAt: null, showdownStartedAt: Date.now() });
-      set({ runAnnouncement: next.runCount as 1 | 2 | 3 });
-      setTimeout(() => set({ runAnnouncement: null, runDealStartedAt: Date.now() }), ANNOUNCEMENT_MS);
+    if (beforePhase === "voting" && next.phase !== "voting") {
+      set({ votingStartedAt: null });
     }
 
     // ── 7-2 bounty triggered ──
@@ -295,7 +299,7 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     // ── Bomb pot hand started ──
     if (!wasBombPot && next.isBombPot) {
-      set({ bombPotAnnouncement: null, isRunItBoard: true, knownCardCountAtRunIt: 5 });
+      set({ bombPotAnnouncement: null });
     }
 
     // ── Table fully cleared between hands ──
@@ -327,7 +331,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ leaveQueued: false, viewingSeat: -1 });
     }
 
-    set({ gameState: next });
+    set({ gameState: next, ...timingPatch });
   }
 
   return {
@@ -352,6 +356,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     showdownStartedAt: null,
     sevenTwoAnnouncement: null,
     bombPotAnnouncement: null,
+    autoPeelEnabled: readPersistedAutoPeelPreference(),
     ledger: [],
     awayPlayerIds: [],
     peekedCounts: {},
@@ -714,10 +719,6 @@ export const useGameStore = create<GameStore>((set, get) => {
       get().sendEvent({ type: "SET_SEVEN_TWO_BOUNTY", bountyBB });
     },
 
-    debugSetHoleCards: (playerId, cards) => {
-      get().sendEvent({ type: "SET_HOLE_CARDS", playerId, cards });
-    },
-
     setViewingSeat: (seat) => set({ viewingSeat: seat }),
 
     proposeBombPot: (anteBB) => {
@@ -730,6 +731,11 @@ export const useGameStore = create<GameStore>((set, get) => {
       const myPlayerId = get().myPlayerId;
       if (!myPlayerId) return;
       get().sendEvent({ type: "VOTE_BOMB_POT", playerId: myPlayerId, approve });
+    },
+
+    setAutoPeelEnabled: (enabled) => {
+      writePersistedAutoPeelPreference(enabled);
+      set({ autoPeelEnabled: enabled });
     },
 
     // ── Derived selectors ──

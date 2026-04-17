@@ -112,27 +112,6 @@ export default function TablePageClient({ code }: { code: string }) {
         </div>
       )}
 
-      {scene.debug.showDealSevenTwoControl && scene.viewingPlayer?.id && (
-        <div className="fixed top-3 left-3 z-40 flex flex-col gap-1">
-          <button
-            type="button"
-            onClick={actions.onDebugDealSevenTwo}
-            disabled={!scene.debug.canDealSevenTwo}
-            className={`rounded-xl px-3 py-2 text-[11px] font-black uppercase tracking-[0.18em] shadow-lg backdrop-blur-sm transition ${
-              scene.debug.canDealSevenTwo
-                ? "bg-amber-400/95 text-black hover:bg-amber-300"
-                : "bg-gray-900/80 text-gray-400 cursor-not-allowed"
-            }`}
-            title={scene.debug.canDealSevenTwo ? "Force your current hand to 7-2 offsuit" : "Available during pre-flop only"}
-          >
-            Debug: Deal Me 7-2o
-          </button>
-          <div className="px-2 text-[10px] font-semibold text-white/75">
-            {scene.debug.canDealSevenTwo ? "Pre-flop debug hand injector" : "Pre-flop only"}
-          </div>
-        </div>
-      )}
-
       <TableLayout scene={scene.layout} actions={tableActions} />
 
       {scene.showBlockingConnectionOverlay && (

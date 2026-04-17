@@ -3,11 +3,12 @@
 // No side effects. If you are adding a socket call or timer here, it belongs in useTableActions or TablePageClient instead.
 
 import { useMemo } from "react";
-import { isAnimatedRunItShowdown } from "lib/tableVisualState";
+import { isAnimatedRunItShowdown, isAnimatedShowdownReveal } from "lib/tableVisualState";
 import { deriveTableScene, type TableSceneModel } from "components/Table/tableScene";
 import { useGameStore } from "store/useGameStore";
 import { useCurrentRun, useSettledRunsCount } from "hooks/useSettledRunsCount";
 import { useTableRuntimeState } from "hooks/useTableRuntimeState";
+import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
 
 export function useTableSceneModel(code: string): TableSceneModel {
   const gameState = useGameStore((state) => state.gameState);
@@ -41,20 +42,32 @@ export function useTableSceneModel(code: string): TableSceneModel {
     isBombPotHand: gameState.isBombPot,
     runResults: gameState.runResults,
   });
+  const animatedShowdownReveal = isAnimatedShowdownReveal({
+    phase: gameState.phase,
+    knownCardCount: timingFlags.knownCardCountAtRunIt,
+    runResults: gameState.runResults,
+    runAnnouncement: timingFlags.runAnnouncement,
+    runDealStartedAt: timingFlags.runDealStartedAt,
+    showdownStartedAt: timingFlags.showdownStartedAt,
+  });
+  const revealRunsConcurrently = shouldRevealRunsConcurrently(
+    gameState.isBombPot,
+    gameState.runResults.length,
+  );
 
   const settledRunCount = useSettledRunsCount(
     gameState.phase,
-    animatedRunItShowdown,
+    animatedShowdownReveal,
     timingFlags.showdownStartedAt,
     timingFlags.knownCardCountAtRunIt,
     gameState.runCount as 1 | 2 | 3,
+    revealRunsConcurrently,
   );
   const { currentRun, revealedCount } = useCurrentRun(
     gameState.phase,
     animatedRunItShowdown,
-    timingFlags.runDealStartedAt,
     timingFlags.knownCardCountAtRunIt,
-    gameState.runCount as 1 | 2 | 3,
+    gameState.runResults,
   );
 
   const clientUiState = {
@@ -84,10 +97,8 @@ export function useTableSceneModel(code: string): TableSceneModel {
     phase: gameState.phase,
     handNumber: gameState.handNumber,
     runCount: gameState.runCount as 1 | 2 | 3,
-    runResults: gameState.runResults,
-    isBombPotHand: gameState.isBombPot,
-    isRunItBoard: timingFlags.isRunItBoard,
-    showdownStartedAt: timingFlags.showdownStartedAt,
+    animatedShowdownReveal,
+    revealRunsConcurrently,
     knownCardCount: timingFlags.knownCardCountAtRunIt,
     settledRunCount,
     viewingPlayer: baseScene.viewingPlayer,

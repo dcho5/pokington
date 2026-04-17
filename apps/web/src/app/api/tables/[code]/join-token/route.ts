@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { getPartyKitHost } from "lib/party";
+import { getServerPartyKitHost } from "lib/party";
 
-async function forwardToPartyKit(path: string, init?: RequestInit) {
+async function forwardToPartyKit(path: string, requestHost?: string | null, init?: RequestInit) {
   try {
-    const response = await fetch(`http://${getPartyKitHost()}/parties/main/${path}`, {
+    const response = await fetch(`http://${getServerPartyKitHost(requestHost)}/parties/main/${path}`, {
       cache: "no-store",
       ...init,
       headers: {
@@ -30,7 +30,7 @@ async function forwardToPartyKit(path: string, init?: RequestInit) {
 }
 
 export async function POST(req: Request, { params }: { params: { code: string } }) {
-  return forwardToPartyKit(`__control__/tables/${params.code.toUpperCase()}/join-token`, {
+  return forwardToPartyKit(`__control__/tables/${params.code.toUpperCase()}/join-token`, req.headers.get("host"), {
     method: "POST",
     body: await req.text(),
   });

@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   getCenterBoardMode,
+  isAnimatedShowdownReveal,
   isAnimatedRunItShowdown,
+  isRunItAnnouncementPhase,
   isRunItShowdownSequence,
   isTableClearedForNextHand,
   shouldRenderRunItBoard,
@@ -101,6 +103,26 @@ test("bomb pots do not use animated run-it showdown timing", () => {
   );
 });
 
+test("bomb pot all-in showdowns still use shared animated showdown timing", () => {
+  assert.equal(
+    isAnimatedShowdownReveal({
+      phase: "showdown",
+      knownCardCount: 3,
+      runResults: [{ winners: [] }, { winners: [] }],
+      runDealStartedAt: Date.now(),
+    }),
+    true,
+  );
+  assert.equal(
+    isAnimatedShowdownReveal({
+      phase: "showdown",
+      knownCardCount: 3,
+      runResults: [{ winners: [] }, { winners: [] }],
+    }),
+    false,
+  );
+});
+
 test("run-it showdown stays active during the announcement window before the board renders", () => {
   const options = {
     phase: "showdown",
@@ -113,6 +135,7 @@ test("run-it showdown stays active during the announcement window before the boa
 
   assert.equal(isRunItShowdownSequence(options), true);
   assert.equal(isAnimatedRunItShowdown(options), true);
+  assert.equal(isRunItAnnouncementPhase(options), true);
   assert.equal(shouldUseRunItCenterStage(options), false);
   assert.equal(getCenterBoardMode(options), "single");
 });

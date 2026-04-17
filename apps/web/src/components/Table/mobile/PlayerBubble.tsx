@@ -5,6 +5,7 @@ import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_MOBILE as ACTION_BADGE } from "lib/actionColors";
 import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
+import PlayerPositionMarkers from "../PlayerPositionMarkers";
 import type { Player } from "types/player";
 import type { Card } from "@pokington/shared";
 
@@ -32,6 +33,7 @@ function ShowdownCard({ card }: { card: Card }) {
 
 interface PlayerBubbleProps {
   player: Player | null;
+  playerCount?: number;
   isDealer?: boolean;
   isSmallBlind?: boolean;
   isBigBlind?: boolean;
@@ -42,6 +44,7 @@ interface PlayerBubbleProps {
 
 const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   player,
+  playerCount,
   isDealer = false,
   isSmallBlind = false,
   isBigBlind = false,
@@ -277,19 +280,13 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
             );
           })()}
 
-          {isDealer && (
-            <div className="absolute -bottom-0.5 -right-0.5 w-[16px] h-[16px] rounded-full bg-white dark:bg-gray-800 border border-red-500 flex items-center justify-center z-20 shadow">
-              <span className="text-[7px] font-black text-red-600">D</span>
-            </div>
-          )}
-
-          {(isSmallBlind || isBigBlind) && !isDealer && (
-            <div className="absolute -top-0.5 -right-0.5 min-w-[22px] h-[16px] px-1 rounded-full bg-gray-200 dark:bg-gray-800 border border-gray-400 dark:border-gray-600 hidden xs:flex items-center justify-center z-20">
-              <span className="text-[7px] font-black text-yellow-600 dark:text-yellow-400 leading-none">
-                {isSmallBlind ? "SB" : "BB"}
-              </span>
-            </div>
-          )}
+          <PlayerPositionMarkers
+            isDealer={isDealer}
+            isSmallBlind={isSmallBlind}
+            isBigBlind={isBigBlind}
+            playerCount={playerCount}
+            variant="mobile"
+          />
         </div>
 
         <span

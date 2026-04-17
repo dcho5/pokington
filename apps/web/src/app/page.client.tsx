@@ -1,6 +1,5 @@
 "use client";
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import PokerChip from "components/poker/PokerChip";
 import CreateTableCard from "components/home/CreateTableCard";
 import JoinTableCard from "components/home/JoinTableCard";
@@ -8,7 +7,6 @@ import { BLIND_OPTIONS, BLIND_CENTS, BOUNTY_OPTIONS, BOUNTY_VALUES } from "const
 import { createTable, getOrCreateClientId, getTable } from "lib/party";
 
 export default function HomePage() {
-  const router = useRouter();
   const [blindIdx, setBlindIdx] = useState(0);
   const [bountyIdx, setBountyIdx] = useState(0);
   const [tableName, setTableName] = useState("");
@@ -17,6 +15,10 @@ export default function HomePage() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+
+  const navigateToTable = useCallback((code: string) => {
+    window.location.assign(`/t/${code.toUpperCase()}`);
+  }, []);
 
   const handleCreate = useCallback(async () => {
     setCreateError(null);
@@ -29,7 +31,7 @@ export default function HomePage() {
         creatorClientId: getOrCreateClientId(),
         sevenTwoBountyBB: BOUNTY_VALUES[bountyIdx],
       });
-      router.push(`/t/${response.code}`);
+      navigateToTable(response.code);
     } catch (error) {
       const message = error instanceof Error
         ? error.message === "CODE_ALLOCATION_FAILED"
@@ -42,7 +44,7 @@ export default function HomePage() {
     } finally {
       setIsCreating(false);
     }
-  }, [blindIdx, bountyIdx, tableName, router]);
+  }, [blindIdx, bountyIdx, navigateToTable, tableName]);
 
   const handleJoin = useCallback(async () => {
     const code = tableCode.trim().toUpperCase();
@@ -58,7 +60,7 @@ export default function HomePage() {
         setJoinError("Table not found. Check the code and try again.");
         return;
       }
-      router.push(`/t/${code}`);
+      navigateToTable(code);
     } catch (error) {
       setJoinError(
         error instanceof Error && error.message === "PARTYKIT_UNAVAILABLE"
@@ -68,7 +70,7 @@ export default function HomePage() {
     } finally {
       setIsJoining(false);
     }
-  }, [tableCode, router]);
+  }, [navigateToTable, tableCode]);
 
   return (
     <div className="relative w-full min-h-screen overflow-x-hidden

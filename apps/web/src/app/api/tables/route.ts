@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getPartyKitHost } from "lib/party";
+import { getServerPartyKitHost } from "lib/party";
 import type { CreateTableRequest } from "party/types";
 
 export async function POST(req: Request) {
@@ -19,7 +19,7 @@ export async function POST(req: Request) {
   } satisfies CreateTableRequest);
 
   try {
-    const response = await fetch(`http://${getPartyKitHost()}/parties/main/__control__/tables`, {
+    const response = await fetch(`http://${getServerPartyKitHost(req.headers.get("host"))}/parties/main/__control__/tables`, {
       method: "POST",
       cache: "no-store",
       headers: {

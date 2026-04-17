@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 import { shouldUseMobileTableLayout } from "lib/tableLayoutMode";
 
 function getIsMobileLayout() {
@@ -30,27 +30,28 @@ function addMediaListener(mediaQuery: MediaQueryList, listener: () => void) {
 }
 
 export function useIsMobileLayout(): boolean {
-  const [isMobileLayout, setIsMobileLayout] = useState(getIsMobileLayout);
+  return useSyncExternalStore(
+    (onStoreChange) => {
+      if (typeof window === "undefined") return () => {};
 
-  useEffect(() => {
-    const update = () => setIsMobileLayout(getIsMobileLayout());
-    const mediaQueries = [
-      window.matchMedia("(pointer: coarse)"),
-      window.matchMedia("(hover: none)"),
-      window.matchMedia("(orientation: portrait)"),
-    ];
-    const cleanups = mediaQueries.map((mediaQuery) => addMediaListener(mediaQuery, update));
-    const visualViewport = window.visualViewport;
+      const mediaQueries = [
+        window.matchMedia("(pointer: coarse)"),
+        window.matchMedia("(hover: none)"),
+        window.matchMedia("(orientation: portrait)"),
+      ];
+      const cleanups = mediaQueries.map((mediaQuery) => addMediaListener(mediaQuery, onStoreChange));
+      const visualViewport = window.visualViewport;
 
-    window.addEventListener("resize", update);
-    visualViewport?.addEventListener("resize", update);
+      window.addEventListener("resize", onStoreChange);
+      visualViewport?.addEventListener("resize", onStoreChange);
 
-    return () => {
-      window.removeEventListener("resize", update);
-      visualViewport?.removeEventListener("resize", update);
-      for (const cleanup of cleanups) cleanup();
-    };
-  }, []);
-
-  return isMobileLayout;
+      return () => {
+        window.removeEventListener("resize", onStoreChange);
+        visualViewport?.removeEventListener("resize", onStoreChange);
+        for (const cleanup of cleanups) cleanup();
+      };
+    },
+    getIsMobileLayout,
+    () => false,
+  );
 }

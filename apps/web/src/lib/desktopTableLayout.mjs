@@ -88,8 +88,11 @@ function createRunLayout({
   labelGap,
   labelHeight,
 }) {
-  const splitAnchors = getSplitCenterStageAnchors(runCount);
   const rowWidth = cardWidth * 5 + gap * 4;
+  const splitAnchors = getSplitCenterStageAnchors({
+    boardRows: runCount,
+    rowWidth,
+  });
 
   return {
     topPct,
@@ -134,10 +137,59 @@ const CENTER_STAGE_ANCHORS = {
   },
 };
 
-function getSplitCenterStageAnchors(boardRows = 1) {
+const SPLIT_STAGE_CLEARANCE = {
+  chipFootprint: 56,
+  chipGap: 48,
+  potMinWidth: 170,
+  potGap: 32,
+  sidePadding: 72,
+};
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function getPreferredSplitAnchors(boardRows = 1) {
   if (boardRows >= 3) return CENTER_STAGE_ANCHORS.split[3];
   if (boardRows <= 1) return CENTER_STAGE_ANCHORS.split[1];
   return CENTER_STAGE_ANCHORS.split[2];
+}
+
+function getSplitCenterStageAnchors({ boardRows = 1, rowWidth }) {
+  const preferred = getPreferredSplitAnchors(boardRows);
+  if (!Number.isFinite(rowWidth) || rowWidth <= 0) return preferred;
+
+  const boardHalfWidth = rowWidth / 2;
+  const tableMidX = TABLE_WIDTH / 2;
+  const boardLeftX = tableMidX - boardHalfWidth;
+  const boardRightX = tableMidX + boardHalfWidth;
+
+  const chipHalfWidth = SPLIT_STAGE_CLEARANCE.chipFootprint / 2;
+  const minChipCenterX = SPLIT_STAGE_CLEARANCE.sidePadding + chipHalfWidth;
+  const maxChipCenterX = boardLeftX - SPLIT_STAGE_CLEARANCE.chipGap - chipHalfWidth;
+  const preferredChipCenterX = (TABLE_WIDTH * preferred.chipLeftPct) / 100;
+  const chipCenterX = clamp(
+    Math.min(preferredChipCenterX, maxChipCenterX),
+    minChipCenterX,
+    TABLE_WIDTH - minChipCenterX,
+  );
+
+  const potHalfWidth = SPLIT_STAGE_CLEARANCE.potMinWidth / 2;
+  const minPotCenterX = boardRightX + SPLIT_STAGE_CLEARANCE.potGap + potHalfWidth;
+  const maxPotCenterX = TABLE_WIDTH - SPLIT_STAGE_CLEARANCE.sidePadding - potHalfWidth;
+  const preferredPotCenterX = (TABLE_WIDTH * preferred.potLeftPct) / 100;
+  const potCenterX = clamp(
+    Math.max(preferredPotCenterX, minPotCenterX),
+    potHalfWidth,
+    maxPotCenterX,
+  );
+
+  return {
+    chipTopPct: preferred.chipTopPct,
+    chipLeftPct: (chipCenterX / TABLE_WIDTH) * 100,
+    potTopPct: preferred.potTopPct,
+    potLeftPct: (potCenterX / TABLE_WIDTH) * 100,
+  };
 }
 
 const CENTER_STAGE_VARIANTS = {
@@ -152,7 +204,10 @@ const CENTER_STAGE_VARIANTS = {
   bombPot: {
     kind: "bombPot",
     topPct: 49,
-    ...getSplitCenterStageAnchors(2),
+    ...getSplitCenterStageAnchors({
+      boardRows: 2,
+      rowWidth: 114 * 5 + 14 * 4,
+    }),
     cardWidth: 114,
     cardHeight: 160,
     gap: 14,

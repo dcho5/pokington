@@ -2,7 +2,6 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCents } from "lib/formatCents";
-import VotingPanel from "../VotingPanel";
 import { useRaiseAmount } from "hooks/useRaiseAmount";
 
 interface RaiseSheetProps {
@@ -203,13 +202,7 @@ interface ActionBarProps {
   onRaise?: (amount: number) => void;
   onStartHand?: () => void;
   showdownCountdown?: number | null;
-  runItVotes?: Record<string, 1 | 2 | 3>;
-  onVoteRun?: (count: 1 | 2 | 3) => void;
-  runAnnouncement?: 1 | 2 | 3 | null;
-  votingStartedAt?: number | null;
-  viewerCanVote?: boolean;
   showNextHand?: boolean;
-  viewerPlayerId?: string;
   players?: Array<{ id?: string; name: string; isFolded?: boolean; stack?: number } | null>;
   handNumber?: number;
   isBombPotHand?: boolean;
@@ -231,13 +224,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
   phase,
   isFirstBet = false,
   isAdmin = false,
-  runItVotes = {},
-  onVoteRun,
-  runAnnouncement = null,
-  votingStartedAt = null,
-  viewerCanVote = false,
   showNextHand = true,
-  viewerPlayerId,
   players = [],
   handNumber = 0,
   isBombPotHand: _isBombPotHand = false,
@@ -259,23 +246,8 @@ const ActionBar: React.FC<ActionBarProps> = ({
 
   const isWaiting = !phase || phase === "waiting";
   const isShowdown = phase === "showdown";
-  const isVoting = phase === "voting";
   const betOrRaiseLabel = isFirstBet ? "Bet" : "Raise";
   const eligiblePlayerCount = players.filter((p) => p != null && (p.stack ?? 1) > 0).length;
-
-  if (isVoting) {
-    return (
-      <VotingPanel
-        votes={runItVotes}
-        players={players}
-        viewingPlayerId={viewerPlayerId}
-        onVote={onVoteRun}
-        votingStartedAt={votingStartedAt}
-        canVote={viewerCanVote}
-        variant="mobile"
-      />
-    );
-  }
 
   if (isWaiting || isShowdown) {
     return (

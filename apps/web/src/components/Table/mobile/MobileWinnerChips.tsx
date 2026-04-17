@@ -17,6 +17,7 @@ interface MobileWinnerChipsProps {
   runResults?: { winners: WinnerInfo[] }[];
   players: Array<{ id?: string; seatIndex: number; isYou?: boolean } | null>;
   knownCardCount?: number;
+  revealRunsConcurrently?: boolean;
   handNumber: number;
 }
 
@@ -25,6 +26,7 @@ export const MobileWinnerChips: React.FC<MobileWinnerChipsProps> = ({
   runResults,
   players,
   knownCardCount = 0,
+  revealRunsConcurrently = false,
   handNumber,
 }) => {
   const vpW = typeof window !== "undefined" ? window.innerWidth : 390;
@@ -33,7 +35,7 @@ export const MobileWinnerChips: React.FC<MobileWinnerChipsProps> = ({
   const potPxX = vpW * POT_X_FRAC;
   const potPxY = vpH * POT_Y_FRAC;
 
-  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount);
+  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount, { revealRunsConcurrently });
 
   // Seated non-null players
   const seated = players.filter((p): p is NonNullable<typeof p> => p != null);

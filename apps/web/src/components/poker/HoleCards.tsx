@@ -1,9 +1,13 @@
 "use client";
 import React, { useRef, useState, useEffect } from "react";
 import Card from "components/poker/Card";
+import {
+  canStartPublicReveal,
+  getInitialPrivateRevealState,
+  writePersistedPeelState,
+} from "lib/holeCardReveal.mjs";
 import type { Card as CardType } from "@pokington/shared";
 
-const PEEL_STORAGE_PREFIX = "pokington_card_peel_state:";
 const HOLD_TO_REVEAL_MS = 550;
 const HOLD_CANCEL_DISTANCE_PX = 14;
 
@@ -28,43 +32,6 @@ function RevealSignalIcon({
   );
 }
 
-function readPersistedPeelState(persistenceKey?: string | null): [boolean, boolean] | null {
-  if (!persistenceKey || typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(`${PEEL_STORAGE_PREFIX}${persistenceKey}`);
-    if (!raw) return null;
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      Array.isArray(parsed) &&
-      parsed.length === 2 &&
-      typeof parsed[0] === "boolean" &&
-      typeof parsed[1] === "boolean"
-    ) {
-      return [parsed[0], parsed[1]];
-    }
-  } catch {
-    // Ignore malformed persisted state and fall back to fresh peel state.
-  }
-  return null;
-}
-
-function writePersistedPeelState(
-  persistenceKey: string | null | undefined,
-  revealed: [boolean, boolean],
-) {
-  if (!persistenceKey || typeof window === "undefined") return;
-  const storageKey = `${PEEL_STORAGE_PREFIX}${persistenceKey}`;
-  try {
-    if (!revealed[0] && !revealed[1]) {
-      window.localStorage.removeItem(storageKey);
-      return;
-    }
-    window.localStorage.setItem(storageKey, JSON.stringify(revealed));
-  } catch {
-    // Ignore storage failures; peel state still works for the current mount.
-  }
-}
-
 /**
  * PeelCard — zero JS-framework overhead during drag.
  *
@@ -79,8 +46,9 @@ function writePersistedPeelState(
  *
  * Three states:
  *   face-down → peeked (private) → revealed (public, shown to others)
- * Once the card is already face-up, press-and-hold the card itself to reveal it
- * publicly. Desktop and mobile intentionally share the exact same interaction.
+ * Normally public reveal starts from a face-up card. During a 7-2 claim window we
+ * also allow a single hold to both flip and show so the bounty isn't gated on an
+ * extra private-peek gesture.
  */
 function PeelCard({
   card,
@@ -128,7 +96,12 @@ function PeelCard({
   const holdAnimationFrameRef = useRef<number | null>(null);
   const holdActiveRef = useRef(false);
 
-  const canArmReveal = revealed && canRevealToOthers && !isRevealedToOthers;
+  const canArmReveal = canStartPublicReveal({
+    isPrivatelyRevealed: revealed,
+    canRevealToOthers,
+    isRevealedToOthers,
+    sevenTwoEligible,
+  });
 
   function updatePeekedEnough(p: number) {
     if (p <= 0 || hasPeekedEnoughRef.current) return;
@@ -165,6 +138,7 @@ function PeelCard({
     holdActiveRef.current = false;
     clearHoldAnimation();
     setRevealProgress(1, true);
+    snapTo(1);
     onRevealToOthers?.();
   }
 
@@ -411,22 +385,38 @@ const HoleCards: React.FC<HoleCardsProps> = ({
   onPeekCard,
   persistenceKey,
 }) => {
-  const [card0Revealed, setCard0Revealed] = useState(() => readPersistedPeelState(persistenceKey)?.[0] ?? false);
-  const [card1Revealed, setCard1Revealed] = useState(() => readPersistedPeelState(persistenceKey)?.[1] ?? false);
+  const resolveInitialRevealState = (): [boolean, boolean] => {
+    const [card0, card1] = getInitialPrivateRevealState({ persistenceKey, autoReveal });
+    return [card0, card1];
+  };
+  const [revealedCards, setRevealedCards] = useState<[boolean, boolean]>(() =>
+    resolveInitialRevealState()
+  );
+  const [card0Revealed, card1Revealed] = revealedCards;
+  const lastPersistenceKeyRef = useRef<string | null | undefined>(persistenceKey);
 
   useEffect(() => {
-    const persisted = readPersistedPeelState(persistenceKey);
-    setCard0Revealed(persisted?.[0] ?? false);
-    setCard1Revealed(persisted?.[1] ?? false);
-  }, [persistenceKey]);
-
-  // Ratchet — once seen, stays seen
-  const handleCard0Reveal = (r: boolean) => { if (r) setCard0Revealed(true); };
-  const handleCard1Reveal = (r: boolean) => { if (r) setCard1Revealed(true); };
+    if (lastPersistenceKeyRef.current === persistenceKey) return;
+    lastPersistenceKeyRef.current = persistenceKey;
+    setRevealedCards(resolveInitialRevealState());
+  }, [autoReveal, persistenceKey]);
 
   useEffect(() => {
-    writePersistedPeelState(persistenceKey, [card0Revealed, card1Revealed]);
-  }, [card0Revealed, card1Revealed, persistenceKey]);
+    if (!autoReveal) return;
+    setRevealedCards((current) => (current[0] && current[1] ? current : [true, true]));
+  }, [autoReveal]);
+
+  function markCardRevealed(index: 0 | 1, nextValue: boolean) {
+    if (!nextValue) return;
+    setRevealedCards((current) => {
+      if (current[index]) return current;
+      return index === 0 ? [true, current[1]] : [current[0], true];
+    });
+  }
+
+  useEffect(() => {
+    writePersistedPeelState(persistenceKey, revealedCards);
+  }, [revealedCards, persistenceKey]);
 
   useEffect(() => {
     onRevealChange?.(card0Revealed && card1Revealed);
@@ -440,7 +430,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           height={cardHeight}
           revealed={card0Revealed}
           autoReveal={autoReveal}
-          onRevealChange={handleCard0Reveal}
+          onRevealChange={(nextValue) => markCardRevealed(0, nextValue)}
           canRevealToOthers={canRevealToOthers}
           isRevealedToOthers={revealedToOthersIndices?.has(0) ?? false}
           onRevealToOthers={() => onRevealToOthers?.(0)}
@@ -454,7 +444,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           height={cardHeight}
           revealed={card1Revealed}
           autoReveal={autoReveal}
-          onRevealChange={handleCard1Reveal}
+          onRevealChange={(nextValue) => markCardRevealed(1, nextValue)}
           canRevealToOthers={canRevealToOthers}
           isRevealedToOthers={revealedToOthersIndices?.has(1) ?? false}
           onRevealToOthers={() => onRevealToOthers?.(1)}

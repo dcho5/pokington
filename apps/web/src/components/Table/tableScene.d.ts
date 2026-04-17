@@ -113,10 +113,6 @@ export interface TableSceneModel {
   blockingConnectionTitle: string;
   blockingConnectionMessage: string;
   viewingPlayer: Player | null;
-  debug: {
-    showDealSevenTwoControl: boolean;
-    canDealSevenTwo: boolean;
-  };
   layout: TableLayoutScene;
   showRebuySheet?: boolean;
   rebuyInfo?: { name: string; seat: number } | null;
@@ -145,5 +141,4 @@ export interface TableActions {
   onPeekCard?: (cardIndex: 0 | 1) => void;
   onProposeBombPot?: (anteBB: BombPotAnteBB) => void;
   onVoteBombPot?: (approve: boolean) => void;
-  onDebugDealSevenTwo?: () => void;
 }

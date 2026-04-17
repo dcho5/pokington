@@ -1,5 +1,9 @@
 import { evaluateBest } from "@pokington/engine";
-import { getCenterBoardMode, isAnimatedRunItShowdown } from "../../lib/tableVisualState.mjs";
+import {
+  getCenterBoardMode,
+  isAnimatedRunItShowdown,
+  isAnimatedShowdownReveal,
+} from "../../lib/tableVisualState.mjs";
 
 const TOTAL_SEATS = 10;
 const ACTION_PHASES = new Set(["pre-flop", "flop", "turn", "river"]);
@@ -134,6 +138,7 @@ function buildDisplayPlayers({
   runCount,
   communityCards,
   revealedHoleCards,
+  animatedShowdownReveal,
   animatedRunItShowdown,
   currentRun,
   revealedCount,
@@ -146,7 +151,7 @@ function buildDisplayPlayers({
     if (!player) return player;
 
     let pending = 0;
-    if (animatedRunItShowdown) {
+    if (animatedShowdownReveal) {
       for (let runIndex = settledRunCount; runIndex < runResults.length; runIndex += 1) {
         pending += runResults[runIndex].winners
           .filter((winner) => winner.playerId === player.id)
@@ -165,7 +170,7 @@ function buildDisplayPlayers({
     let winType = null;
     let winAnimationKey = null;
     if (settledRunCount > 0) {
-      if (animatedRunItShowdown && runResults.length > 0) {
+      if (animatedShowdownReveal && runResults.length > 0) {
         const justSettled = settledRunCount - 1;
         const wonThisRun = runResults[justSettled]?.winners.some(
           (winner) => winner.playerId === player.id,
@@ -198,13 +203,13 @@ function buildDisplayPot({
   pot,
   winners,
   runResults,
-  animatedRunItShowdown,
+  animatedShowdownReveal,
   settledRunCount,
 }) {
   if (phase !== "showdown") return pot;
 
   let totalPot = 0;
-  if (animatedRunItShowdown && runResults.length > 0) {
+  if (animatedShowdownReveal && runResults.length > 0) {
     totalPot = runResults.reduce(
       (sum, run) => sum + (run.winners ?? []).reduce((winnerSum, winner) => winnerSum + winner.amount, 0),
       0,
@@ -216,7 +221,7 @@ function buildDisplayPot({
   if (totalPot === 0) return 0;
 
   let settledAmount = 0;
-  if (animatedRunItShowdown && runResults.length > 0) {
+  if (animatedShowdownReveal && runResults.length > 0) {
     for (let runIndex = 0; runIndex < settledRunCount && runIndex < runResults.length; runIndex += 1) {
       settledAmount += (runResults[runIndex]?.winners ?? []).reduce(
         (sum, winner) => sum + winner.amount,
@@ -261,6 +266,7 @@ export function deriveTableScene({
     isRunItBoard = false,
     knownCardCountAtRunIt = 0,
     runDealStartedAt = null,
+    showdownStartedAt = null,
     sevenTwoAnnouncement = null,
     bombPotAnnouncement = null,
   } = timingFlags;
@@ -277,6 +283,14 @@ export function deriveTableScene({
     isRunItBoard,
     isBombPotHand,
     runResults,
+  });
+  const animatedShowdownReveal = isAnimatedShowdownReveal({
+    phase,
+    knownCardCount: knownCardCountAtRunIt,
+    runResults,
+    runAnnouncement,
+    runDealStartedAt,
+    showdownStartedAt,
   });
   const players = buildScenePlayers({
     gameState,
@@ -334,6 +348,7 @@ export function deriveTableScene({
     runCount,
     communityCards,
     revealedHoleCards,
+    animatedShowdownReveal,
     animatedRunItShowdown,
     currentRun,
     revealedCount,
@@ -349,7 +364,7 @@ export function deriveTableScene({
     ),
     winners,
     runResults,
-    animatedRunItShowdown,
+    animatedShowdownReveal,
     settledRunCount,
   });
 
@@ -391,10 +406,6 @@ export function deriveTableScene({
     blockingConnectionTitle,
     blockingConnectionMessage,
     viewingPlayer: displayViewingPlayer,
-    debug: {
-      showDealSevenTwoControl: isCreator && !!displayViewingPlayer?.id,
-      canDealSevenTwo: isCreator && !!displayViewingPlayer?.id && phase === "pre-flop",
-    },
     layout: {
       seatSelectionLocked,
       players: displayPlayers,

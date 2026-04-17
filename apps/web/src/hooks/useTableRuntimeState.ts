@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { RunResult } from "@pokington/engine";
 import { getRunTimings, ANNOUNCE_DELAY_S } from "lib/showdownTiming";
-import { isAnimatedRunItShowdown } from "lib/tableVisualState";
 import type { Player } from "types/player";
 import { useGameStore } from "store/useGameStore";
 
@@ -11,10 +9,8 @@ interface UseTableRuntimeStateArgs {
   phase: string;
   handNumber: number;
   runCount: 1 | 2 | 3;
-  runResults: RunResult[];
-  isBombPotHand: boolean;
-  isRunItBoard: boolean;
-  showdownStartedAt: number | null;
+  animatedShowdownReveal: boolean;
+  revealRunsConcurrently: boolean;
   knownCardCount: number;
   settledRunCount: number;
   viewingPlayer: Player | null;
@@ -26,10 +22,8 @@ export function useTableRuntimeState({
   phase,
   handNumber,
   runCount,
-  runResults,
-  isBombPotHand,
-  isRunItBoard,
-  showdownStartedAt,
+  animatedShowdownReveal,
+  revealRunsConcurrently,
   knownCardCount,
   settledRunCount,
   viewingPlayer,
@@ -59,15 +53,9 @@ export function useTableRuntimeState({
       return;
     }
 
-    const shouldDelayForRunIt = isAnimatedRunItShowdown({
-      phase,
-      isRunItBoard,
-      isBombPotHand,
-      runResults,
-    });
-    const { chipStartS, runIntervalS } = getRunTimings(knownCardCount);
+    const { chipStartS, runIntervalS } = getRunTimings(knownCardCount, { revealRunsConcurrently });
     const chipDurationS = 2.4;
-    const animDoneMs = shouldDelayForRunIt
+    const animDoneMs = animatedShowdownReveal
       ? (ANNOUNCE_DELAY_S + (runCount - 1) * runIntervalS + chipStartS + chipDurationS + 1.5) * 1000
       : 0;
 
@@ -97,10 +85,8 @@ export function useTableRuntimeState({
     phase,
     handNumber,
     runCount,
-    runResults,
-    isBombPotHand,
-    isRunItBoard,
-    showdownStartedAt,
+    animatedShowdownReveal,
+    revealRunsConcurrently,
     knownCardCount,
   ]);
 

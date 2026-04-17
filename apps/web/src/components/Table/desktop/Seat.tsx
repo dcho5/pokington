@@ -9,6 +9,7 @@ import { ACTION_COLORS_DESKTOP as ACTION_COLORS } from "lib/actionColors";
 import type { Player } from "types/player";
 import Card from "components/poker/Card";
 import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
+import PlayerPositionMarkers from "../PlayerPositionMarkers";
 
 function PeekEye({ count, size = 14 }: { count: number; size?: number }) {
   const bgClass =
@@ -115,8 +116,11 @@ interface SeatProps {
   totalSeats: number;
   geometry: TableGeometry;
   player: Player | null;
+  playerCount?: number;
   isYou: boolean;
   isDealer: boolean;
+  isSmallBlind?: boolean;
+  isBigBlind?: boolean;
   isCurrentActor: boolean;
   onSitDown: (seatIndex: number) => void;
   seatSelectionLocked?: boolean;
@@ -129,7 +133,11 @@ const Seat: React.FC<SeatProps> = ({
   totalSeats,
   geometry,
   player,
+  playerCount,
   isYou,
+  isDealer,
+  isSmallBlind = false,
+  isBigBlind = false,
   isCurrentActor,
   onSitDown,
   seatSelectionLocked = false,
@@ -205,8 +213,13 @@ const Seat: React.FC<SeatProps> = ({
   const clusterWidth = cardWidth * 2 - overlap;
   const clusterHeight = cardHeight + Math.round(seatSize * 0.18);
   const nameFontSize = seatSize >= 146 ? 14 : seatSize >= 136 ? 13 : 12;
-  const { outerWidth, stackFontSize, badgeFontSize, statusBadgeRightPx, statusBadgeBottomPx } =
-    getDesktopSeatBadgeMetrics(seatSize);
+  const {
+    outerWidth,
+    stackFontSize,
+    badgeFontSize,
+    statusBadgeRightPx,
+    statusBadgeBottomPx,
+  } = getDesktopSeatBadgeMetrics(seatSize);
   const peekEyeSize = seatSize >= 136 ? 36 : 32;
   const seatOpacity = player.isFolded ? 0.42 : player.isAway ? 0.72 : 1;
   const statusBadges: Array<{
@@ -275,6 +288,15 @@ const Seat: React.FC<SeatProps> = ({
             className="relative mx-auto"
             style={{ width: clusterWidth, height: clusterHeight }}
           >
+            <PlayerPositionMarkers
+              isDealer={isDealer}
+              isSmallBlind={isSmallBlind}
+              isBigBlind={isBigBlind}
+              playerCount={playerCount}
+              variant="desktop"
+              fontSize={badgeFontSize}
+            />
+
             <AnimatePresence>
               {player.winAnimationKey && player.winType === "full" && (
                 <motion.div
@@ -370,30 +392,14 @@ const Seat: React.FC<SeatProps> = ({
                 key={card ? `${player.id ?? seatIndex}-${card.rank}${card.suit}-${handNumber}-${i}` : `${player.id ?? seatIndex}-back-${handNumber}-${i}`}
                 className="absolute top-0"
                 initial={{ scale: 0.86, opacity: 0, y: 14, rotateY: 90 }}
-                animate={player.sevenTwoEligible
-                  ? {
-                      scale: 1,
-                      opacity: 1,
-                      y: 0,
-                      rotateY: 0,
-                      filter: [
-                        "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
-                        "drop-shadow(0 0 18px rgba(234,179,8,1))",
-                        "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
-                      ],
-                    }
-                  : { scale: 1, opacity: 1, y: 0, rotateY: 0 }
-                }
-                transition={player.sevenTwoEligible
-                  ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
-                  : {
-                      delay: i * 0.06,
-                      duration: 0.34,
-                      type: "spring",
-                      stiffness: 260,
-                      damping: 22,
-                    }
-                }
+                animate={{ scale: 1, opacity: 1, y: 0, rotateY: 0 }}
+                transition={{
+                  delay: i * 0.06,
+                  duration: 0.34,
+                  type: "spring",
+                  stiffness: 260,
+                  damping: 22,
+                }}
                 style={{
                   left: i === 0 ? 0 : clusterWidth - cardWidth,
                   rotate: i === 0 ? -7 : 7,
@@ -402,20 +408,37 @@ const Seat: React.FC<SeatProps> = ({
                   zIndex: i === 0 ? 1 : 2,
                 }}
               >
-                <Card
-                  card={card ?? undefined}
-                  className={`
-                    rounded-[18px] shadow-2xl transition-opacity duration-300
-                    ${player.isFolded ? "opacity-75" : ""}
-                  `}
-                  style={{
-                    width: cardWidth,
-                    height: cardHeight,
-                    boxShadow: card
-                      ? "0 20px 28px rgba(2,6,23,0.38)"
-                      : "0 18px 24px rgba(2,6,23,0.34)",
-                  }}
-                />
+                <motion.div
+                  animate={player.sevenTwoEligible
+                    ? {
+                        filter: [
+                          "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
+                          "drop-shadow(0 0 18px rgba(234,179,8,1))",
+                          "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
+                        ],
+                      }
+                    : { filter: "none" }
+                  }
+                  transition={player.sevenTwoEligible
+                    ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
+                    : { duration: 0.2, ease: "easeOut" }
+                  }
+                >
+                  <Card
+                    card={card ?? undefined}
+                    className={`
+                      rounded-[18px] shadow-2xl transition-opacity duration-300
+                      ${player.isFolded ? "opacity-75" : ""}
+                    `}
+                    style={{
+                      width: cardWidth,
+                      height: cardHeight,
+                      boxShadow: card
+                        ? "0 20px 28px rgba(2,6,23,0.38)"
+                        : "0 18px 24px rgba(2,6,23,0.34)",
+                    }}
+                  />
+                </motion.div>
               </motion.div>
             ))}
 

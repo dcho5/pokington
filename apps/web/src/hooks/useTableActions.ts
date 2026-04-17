@@ -50,18 +50,6 @@ export function useTableActions(_code: string): TableActions {
     useGameStore.getState().allIn();
   }, []);
 
-  const onDebugDealSevenTwo = useCallback(() => {
-    const store = useGameStore.getState();
-    const viewingPlayer = Object.values(store.gameState.players).find(
-      (player) => player.seatIndex === store.viewingSeat,
-    );
-    if (!store.isCreator || !viewingPlayer?.id || store.gameState.phase !== "pre-flop") return;
-    store.debugSetHoleCards(viewingPlayer.id, [
-      { rank: "7", suit: "clubs" },
-      { rank: "2", suit: "hearts" },
-    ]);
-  }, []);
-
   return {
     onSitDown,
     onStandUp: () => useGameStore.getState().standUp(),
@@ -77,6 +65,5 @@ export function useTableActions(_code: string): TableActions {
     onPeekCard: (cardIndex) => useGameStore.getState().peekCard(cardIndex),
     onProposeBombPot: (anteBB) => useGameStore.getState().proposeBombPot(anteBB),
     onVoteBombPot: (approve) => useGameStore.getState().voteBombPot(approve),
-    onDebugDealSevenTwo,
   };
 }

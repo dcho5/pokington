@@ -8,31 +8,36 @@ import HandPanel from "./HandPanel";
 import ActionBar from "./ActionBar";
 import SitDownForm from "../SitDownForm";
 import BombPotVotingPanel from "../BombPotVotingPanel";
+import VotingPanel from "../VotingPanel";
 import BombPotSheet from "./BombPotSheet";
 import LedgerSheet from "./LedgerSheet";
 import PokerChip from "components/poker/PokerChip";
 import { formatCents } from "lib/formatCents";
-import { isAnimatedRunItShowdown, shouldRenderRunItBoard } from "lib/tableVisualState";
+import {
+  isAnimatedRunItShowdown,
+  isAnimatedShowdownReveal,
+  shouldRenderRunItBoard,
+} from "lib/tableVisualState";
+import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
 import { MobileWinnerChips } from "./MobileWinnerChips";
 import { MobileSevenTwoBountyChips } from "./MobileSevenTwoBountyChips";
 import AnnouncementBanner from "../AnnouncementBanner";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
 import WinnerBanner from "../WinnerBanner";
-import type { Player } from "types/player";
 import type { TableLayoutProps } from "../TableLayout";
+import { computeMobileChipAngle } from "lib/chipOrientation";
+import {
+  getEmptySeats,
+  getMinPlayerStack,
+  getOpponents,
+  getRunAnnouncementContent,
+  getViewerPlayer,
+  getWaitingForName,
+  isCanceledBombPotAnnouncement,
+} from "../tableLayoutUtils";
 
 type MobileTableLayoutProps = TableLayoutProps & { totalSeats?: number };
-
-function computeMobileChipAngle(
-  isYourTurn: boolean,
-  activeOpponentIdx: number,
-  totalOpponents: number
-): number {
-  if (isYourTurn) return 90;
-  const ratio =
-    totalOpponents <= 1 ? 0 : (activeOpponentIdx / (totalOpponents - 1)) * 2 - 1;
-  return Math.atan2(-200, ratio * 130) * (180 / Math.PI);
-}
+const CARD_COUNT = 5;
 
 const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   scene,
@@ -105,7 +110,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     onStandUp,
     onQueueLeave,
   } = actions;
-  const RUN_LABELS = ["once", "twice", "three times"] as const;
   const [selectedEmptySeat, setSelectedEmptySeat] = useState<number | null>(null);
   const [bombPotSheetOpen, setBombPotSheetOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
@@ -127,7 +131,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     });
   }, [handIndicatorIdsKey, handIndicators, handNumber]);
 
-  const youPlayer = players.find((p) => p != null && p.isYou) ?? null;
+  const youPlayer = getViewerPlayer(players);
   const isRunItDealing = shouldRenderRunItBoard({
     phase,
     isRunItBoard,
@@ -141,36 +145,34 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     isBombPotHand,
     runResults,
   });
+  const animatedShowdown = isAnimatedShowdownReveal({
+    phase,
+    knownCardCount,
+    runResults,
+    runAnnouncement,
+    runDealStartedAt,
+  });
+  const revealRunsConcurrently = shouldRevealRunsConcurrently(isBombPotHand, runResults.length);
+  const revealComplete = !animatedShowdown || runResults.every((run) => (run?.board?.length ?? 0) >= CARD_COUNT);
 
-  const opponents = players
-    .map((p, i) => ({ player: p, seatIndex: i }))
-    .filter(
-      (entry): entry is { player: Player; seatIndex: number } =>
-        entry.player != null && !entry.player.isYou
-    );
-
-  const occupiedSeats = new Set(
-    players.map((_, i) => i).filter((i) => players[i] != null)
-  );
-
-  const emptySeats: number[] = [];
-  for (let i = 0; i < totalSeats; i++) {
-    if (!occupiedSeats.has(i)) emptySeats.push(i);
-  }
+  const opponents = getOpponents(players);
+  const emptySeats = getEmptySeats(players, totalSeats);
+  const seatedPlayerCount = players.filter((player) => player != null).length;
 
   const isYourTurn = isYourTurnProp ?? (youPlayer?.isCurrentActor ?? false);
-  const activeOpponentIdx = opponents.findIndex((o) => o.player.isCurrentActor);
-  const waitingFor = currentActorName ?? players.find(
-    (p) => p != null && p.isCurrentActor && !p.isYou
-  )?.name;
-  const bombPotAnnouncementIsCanceled = bombPotAnnouncement?.kind === "canceled";
+  const viewerSeatIndex = players.findIndex((player) => player?.isYou);
+  const activeSeatIndex = players.findIndex((player) => player?.isCurrentActor);
+  const waitingFor = getWaitingForName(players, currentActorName);
+  const bombPotAnnouncementIsCanceled = isCanceledBombPotAnnouncement(bombPotAnnouncement);
   const mobileBannerHaloClass =
     "pointer-events-none absolute inset-2 rounded-[2rem] bg-[radial-gradient(circle_at_top,rgba(15,23,42,0.56),rgba(15,23,42,0.22)_60%,transparent_88%)] blur-2xl";
 
   const chipGlowAngle = computeMobileChipAngle(
-    isYourTurn,
-    activeOpponentIdx,
-    opponents.length
+    {
+      actorSeatIndex: activeSeatIndex >= 0 ? activeSeatIndex : null,
+      viewerSeatIndex: viewerSeatIndex >= 0 ? viewerSeatIndex : null,
+      totalSeats,
+    }
   );
 
   return (
@@ -183,8 +185,9 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         <MobileWinnerChips
           key={`${handNumber}-mobile-chips`}
           winners={winners}
-          runResults={animatedRunIt ? runResults : undefined}
-          knownCardCount={animatedRunIt ? knownCardCount : undefined}
+          runResults={animatedShowdown ? runResults : undefined}
+          knownCardCount={animatedShowdown ? knownCardCount : undefined}
+          revealRunsConcurrently={revealRunsConcurrently}
           players={players.map((p, i) => p ? { id: p.id, seatIndex: i, isYou: p.isYou } : null)}
           handNumber={handNumber}
         />
@@ -216,6 +219,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         <div className="flex-shrink-0 pt-7">
           <OpponentStrip
             players={opponents}
+            playerCount={seatedPlayerCount}
             dealerIndex={dealerIndex}
             smallBlindIndex={smallBlindIndex}
             bigBlindIndex={bigBlindIndex}
@@ -337,42 +341,63 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           />
         </div>
 
-        <div className="flex-shrink-0 bg-white dark:bg-[rgb(3,7,18)] border-t border-gray-200/50 dark:border-white/[0.06]">
-          <ActionBar
-            isYourTurn={isYourTurn}
-            waitingFor={waitingFor}
-            callAmount={callAmount}
-            pot={pot}
-            stack={youPlayer?.stack ?? 0}
-            currentBet={youPlayer?.currentBet ?? 0}
-            minRaise={minRaise}
-            bigBlind={blinds?.big ?? 25}
-            canCheck={canCheck}
-            canRaise={canRaise}
-            canAllIn={canAllIn}
-            onAllIn={onAllIn}
-            phase={phase}
-            isFirstBet={isFirstBet}
-            isAdmin={isAdmin}
-            onFold={onFold}
-            onCall={onCall}
-            onCheck={onCheck}
-            onRaise={onRaise}
-            onStartHand={onStartHand}
-            showdownCountdown={showdownCountdown}
-            runItVotes={runItVotes}
-            onVoteRun={onVoteRun}
-            runAnnouncement={runAnnouncement}
-            votingStartedAt={votingStartedAt}
-            viewerCanVote={viewerCanVote}
-            showNextHand={showNextHand}
-            viewerPlayerId={youPlayer?.id}
-            players={players}
-            handNumber={handNumber}
-            isBombPotHand={isBombPotHand}
-          />
-        </div>
+        {phase !== "voting" && (
+          <div className="flex-shrink-0 bg-white dark:bg-[rgb(3,7,18)] border-t border-gray-200/50 dark:border-white/[0.06]">
+            <ActionBar
+              isYourTurn={isYourTurn}
+              waitingFor={waitingFor}
+              callAmount={callAmount}
+              pot={pot}
+              stack={youPlayer?.stack ?? 0}
+              currentBet={youPlayer?.currentBet ?? 0}
+              minRaise={minRaise}
+              bigBlind={blinds?.big ?? 25}
+              canCheck={canCheck}
+              canRaise={canRaise}
+              canAllIn={canAllIn}
+              onAllIn={onAllIn}
+              phase={phase}
+              isFirstBet={isFirstBet}
+              isAdmin={isAdmin}
+              onFold={onFold}
+              onCall={onCall}
+              onCheck={onCheck}
+              onRaise={onRaise}
+              onStartHand={onStartHand}
+              showdownCountdown={showdownCountdown}
+              showNextHand={showNextHand}
+              players={players}
+              handNumber={handNumber}
+              isBombPotHand={isBombPotHand}
+            />
+          </div>
+        )}
       </div>
+
+      <AnimatePresence>
+        {phase === "voting" && (
+          <motion.div
+            className="absolute inset-x-0 bottom-0 z-[185] pointer-events-none"
+            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
+            initial={{ opacity: 0, y: 36 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 24 }}
+            transition={{ type: "spring", stiffness: 320, damping: 30 }}
+          >
+            <div className="pointer-events-auto mx-auto w-full max-w-lg px-3">
+              <VotingPanel
+                votes={runItVotes}
+                players={players}
+                viewingPlayerId={youPlayer?.id}
+                onVote={onVoteRun}
+                votingStartedAt={votingStartedAt}
+                canVote={viewerCanVote}
+                variant="mobile"
+              />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {sevenTwoAnnouncement && (
@@ -399,15 +424,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
               <div className={mobileBannerHaloClass} />
               <div className="relative z-10">
                 <AnnouncementBanner
-                  eyebrow="All-in Showdown"
-                  title={`Running it ${RUN_LABELS[runAnnouncement - 1]}`}
-                  detail={
-                    runAnnouncement === 1
-                      ? "A single board will settle the pot."
-                      : `${runAnnouncement} boards will decide this hand.`
-                  }
-                  badge={`${runAnnouncement} ${runAnnouncement === 1 ? "board" : "boards"}`}
-                  tone="violet"
+                  {...getRunAnnouncementContent(runAnnouncement)}
                   variant="mobile"
                 />
               </div>
@@ -465,10 +482,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         {bombPotSheetOpen && (
           <BombPotSheet
             bigBlind={blinds?.big ?? 25}
-            minPlayerStack={players.reduce((min, p) => {
-              if (p == null || (p.stack ?? 0) <= 0) return min;
-              return min === undefined ? p.stack : Math.min(min, p.stack);
-            }, undefined as number | undefined)}
+            minPlayerStack={getMinPlayerStack(players)}
             onConfirm={(anteBB) => { onProposeBombPot?.(anteBB); setBombPotSheetOpen(false); }}
             onDismiss={() => setBombPotSheetOpen(false)}
           />
@@ -476,7 +490,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       </AnimatePresence>
 
       <AnimatePresence>
-        {phase === "showdown" && !animatedRunIt && winners && winners.length > 0 && (
+        {phase === "showdown" && !animatedRunIt && revealComplete && winners && winners.length > 0 && (
           <motion.div
             className="absolute z-[160] left-4 right-4 pointer-events-none"
             style={{ bottom: "calc(env(safe-area-inset-bottom) + 180px)" }}
