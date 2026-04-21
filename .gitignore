@@ -43,6 +43,3 @@ out/
 Thumbs.db
 *.swp
 *.swo
-
-# --- Vercel ---
-.vercel
