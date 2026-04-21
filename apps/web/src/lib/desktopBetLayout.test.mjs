@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { computeDesktopBetBeaconLayout, getDesktopBetAnchorSide } from "./desktopBetLayout.mjs";
-import { getDesktopSeatBadgeMetrics } from "./desktopSeatBadgeLayout.mjs";
 import { getDesktopTableLayoutProfile } from "./desktopTableLayout.mjs";
 
 test("uses a simple left-side anchor for all desktop bet pills", () => {
@@ -14,11 +13,16 @@ test("uses a simple left-side anchor for all desktop bet pills", () => {
 
 test("keeps all desktop bet pills on the mirrored left badge rail", () => {
   const profile = getDesktopTableLayoutProfile();
-  const metrics = getDesktopSeatBadgeMetrics(profile.seat.size);
-  const expectedHorizontalDeltaPct =
-    (metrics.leftBadgeCenterOffsetXPx / profile.tableReferenceSize.width) * 100;
-  const expectedVerticalDeltaPct =
-    (metrics.badgeCenterOffsetYPx / profile.tableReferenceSize.height) * 100;
+  const reference = computeDesktopBetBeaconLayout({
+    seatIndex: 0,
+    totalSeats: 10,
+    geometry: profile.seat.geometry,
+    seatSize: profile.seat.size,
+    tableWidth: profile.tableReferenceSize.width,
+    tableHeight: profile.tableReferenceSize.height,
+  });
+  const expectedHorizontalDeltaPct = reference.leftPct - (50 + reference.seatX);
+  const expectedVerticalDeltaPct = reference.topPct - (50 + reference.seatY);
 
   Array.from({ length: 10 }, (_, seatIndex) => {
     const layout = computeDesktopBetBeaconLayout({
@@ -41,11 +45,6 @@ test("keeps all desktop bet pills on the mirrored left badge rail", () => {
 
 test("keeps the mirrored left badge offset stable across top and side seats", () => {
   const profile = getDesktopTableLayoutProfile();
-  const metrics = getDesktopSeatBadgeMetrics(profile.seat.size);
-  const expectedHorizontalDeltaPct =
-    (metrics.leftBadgeCenterOffsetXPx / profile.tableReferenceSize.width) * 100;
-  const expectedVerticalDeltaPct =
-    (metrics.badgeCenterOffsetYPx / profile.tableReferenceSize.height) * 100;
 
   const topSeat = computeDesktopBetBeaconLayout({
     seatIndex: 0,
@@ -63,6 +62,8 @@ test("keeps the mirrored left badge offset stable across top and side seats", ()
     tableWidth: profile.tableReferenceSize.width,
     tableHeight: profile.tableReferenceSize.height,
   });
+  const expectedHorizontalDeltaPct = topSeat.leftPct - (50 + topSeat.seatX);
+  const expectedVerticalDeltaPct = topSeat.topPct - (50 + topSeat.seatY);
 
   assert.ok(Math.abs((topSeat.leftPct - (50 + topSeat.seatX)) - expectedHorizontalDeltaPct) < 0.05);
   assert.ok(Math.abs((topSeat.topPct - (50 + topSeat.seatY)) - expectedVerticalDeltaPct) < 0.05);

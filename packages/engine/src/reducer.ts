@@ -7,7 +7,7 @@ import { shouldAutoRevealWinningHands } from "./types";
 // ── Helpers ──
 
 const MAX_SEATS = 10;
-const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting"]);
+const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting", "showdown"]);
 
 /** Returns true if the two hole cards are a 7 and a 2 of different suits. */
 function hasSevTwoOffsuit(cards: [Card, Card] | null): boolean {
@@ -17,6 +17,13 @@ function hasSevTwoOffsuit(cards: [Card, Card] | null): boolean {
     ((a.rank === "7" && b.rank === "2") || (a.rank === "2" && b.rank === "7")) &&
     a.suit !== b.suit
   );
+}
+
+function formatAggregateWinnerHand(labels: string[]): string | null {
+  const unique = [...new Set(labels.filter(Boolean))];
+  if (unique.length === 0) return null;
+  if (unique.length === 1) return unique[0];
+  return unique.join(" / ");
 }
 
 function isValidSeatIndex(seatIndex: number): boolean {
@@ -200,7 +207,7 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
   state.sidePots = sidePots;
 
   const totalRuns = boards.length;
-  const aggregated = new Map<string, { amount: number; hand: string | null }>();
+  const aggregated = new Map<string, { amount: number; hands: string[] }>();
   const runResults: RunResult[] = boards.map((board) => ({ board, winners: [] }));
 
   for (const pot of sidePots) {
@@ -222,7 +229,7 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
         w.stack += runPot;
         const ex = aggregated.get(w.id);
         if (ex) ex.amount += runPot;
-        else aggregated.set(w.id, { amount: runPot, hand: null });
+        else aggregated.set(w.id, { amount: runPot, hands: [] });
         runResults[ri].winners.push({ playerId: w.id, amount: runPot, hand: null });
         continue;
       }
@@ -250,9 +257,9 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
         const ex = aggregated.get(w.player.id);
         if (ex) {
           ex.amount += amt;
-          if (ex.hand === null) ex.hand = w.hand.label;
+          if (!ex.hands.includes(w.hand.label)) ex.hands.push(w.hand.label);
         } else {
-          aggregated.set(w.player.id, { amount: amt, hand: w.hand.label });
+          aggregated.set(w.player.id, { amount: amt, hands: [w.hand.label] });
         }
         runResults[ri].winners.push({ playerId: w.player.id, amount: amt, hand: w.hand.label });
       });
@@ -265,10 +272,10 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
   state.closedActors = [];
   state.runResults = runResults;
   state.showdownKind = "contested";
-  state.winners = Array.from(aggregated.entries()).map(([playerId, { amount, hand }]) => ({
+  state.winners = Array.from(aggregated.entries()).map(([playerId, { amount, hands }]) => ({
     playerId,
     amount,
-    hand,
+    hand: formatAggregateWinnerHand(hands),
   }));
   state.autoRevealWinningHands = shouldAutoRevealWinningHands(state.winners, state.showdownKind);
   state.autoRevealWinningHandsAt = null;
@@ -540,6 +547,12 @@ export function gameReducer(
       delete state.players[event.playerId];
       state.needsToAct = state.needsToAct.filter((id) => id !== event.playerId);
       state.closedActors = state.closedActors.filter((id) => id !== event.playerId);
+      state.bombPotCooldown = state.bombPotCooldown.filter((id) => id !== event.playerId);
+      if (state.bombPotVote?.proposedBy === event.playerId) {
+        state.bombPotVote = null;
+      } else if (state.bombPotVote && event.playerId in state.bombPotVote.votes) {
+        delete state.bombPotVote.votes[event.playerId];
+      }
       return state;
     }
 

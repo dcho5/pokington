@@ -7,13 +7,13 @@ Date: 2026-04-20
 - `README.md` reviewed before live testing.
 - Automated baseline:
   - `pnpm test`
-  - Engine suite passed: `15/15`
-  - Web suite passed: `78/80`
+  - Engine suite passed: `18/18`
+  - Web suite passed: `81/83`
   - Pre-existing red tests: `apps/web/src/lib/desktopBetLayout.test.mjs`
-- Live driver added at [scripts/live-qa.mjs](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/scripts/live-qa.mjs)
+- Live driver: [scripts/live-qa.mjs](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/scripts/live-qa.mjs)
 - Primary live evidence runs:
   - `node scripts/live-qa.mjs --json-out /tmp/live-qa-report.json`
-  - `node scripts/live-qa.mjs --scenario bombpot,queue --json-out /tmp/live-qa-targeted.json`
+  - `node scripts/live-qa.mjs --scenario standup_guard,seat_ledger,cooldown,aggregate,bombpot --json-out /tmp/live-qa-targeted-3.json`
 
 ## Coverage That Passed
 
@@ -29,7 +29,9 @@ Date: 2026-04-20
 - Bomb pot schedule and split-board hand start
 - Queue leave removal on next `START_HAND` boundary
 - Reconnect with same client identity and private-hole-card restoration
-- Basic ledger sit/stand cycle with multiple buy-ins
+- Bomb-pot cooldown no longer blocks a re-seated proposer
+- Aggregate multi-run winner labels now preserve mixed results live
+- Stand-up during showdown is now rejected and the player remains seated until hand end
 
 ## Findings
 
@@ -37,84 +39,81 @@ Date: 2026-04-20
 
 - ID: `QA-001`
 - Title: Bomb pot cooldown survives `STAND_UP` and blocks re-seated proposer
-- Status: `Confirmed`
+- Status: `Not Reproduced`
 - Severity: `High`
 - Area: `engine / waiting-state bomb-pot flow`
 - Reproduction:
   - Live scenario `bombpot_cooldown_leak`
-  - Table `YPJZ7Y`
-  - Alice proposes a bomb pot, Bob rejects, Alice stands up, Alice sits back down with the same profile/session, Alice tries to propose again
+  - Table `3QSSM6`
+  - Alice proposes a bomb pot, Bob rejects, Alice stands up, Alice sits back down with the same session, Alice proposes again
 - Expected:
-  - Standing up should remove the old player id from the bomb-pot cooldown tracking so the re-seated player can propose normally
+  - Standing up should clear the old player id from bomb-pot cooldown tracking
 - Actual:
-  - The re-seated player remained blocked from opening a new bomb-pot vote
-  - `bombPotCooldown` still contained the old `playerSessionId`
+  - The re-seated proposer could immediately open a fresh bomb-pot vote
 - Evidence:
-  - `/tmp/live-qa-report.json`
-  - Scenario outcome: `Confirmed Issue`
-  - Final state included `bombPotCooldown: ['player_400a2697789f4eb6']` while Alice was already re-seated
+  - `/tmp/live-qa-targeted-3.json`
+  - Scenario outcome: `Not Reproduced`
 - Likely Source:
-  - [packages/engine/src/reducer.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts:533)
-  - `STAND_UP` removes the player from `players`, `needsToAct`, and `closedActors`, but not `bombPotCooldown`
+  - Fixed in [packages/engine/src/reducer.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts:540)
 - Notes:
-  - This matched the user-provided lead and was confirmed against the live product
+  - This was previously confirmed on an older build
+  - Current branch filters `bombPotCooldown` on `STAND_UP` and clears stale vote state
 
 ### QA-002
 
 - ID: `QA-002`
 - Title: Multi-run aggregate winner hand label keeps only the first winning hand
-- Status: `Confirmed`
+- Status: `Not Reproduced`
 - Severity: `Low`
 - Area: `engine result aggregation / showdown display data`
 - Reproduction:
   - Live scenario `multi_run_attempt_1`
-  - Table `U9LU8Z`
+  - Table `QYTP3G`
   - Three-run pre-flop all-in with unanimous `3x`
 - Expected:
-  - If a player wins multiple runs with different hand labels, the aggregate result should either preserve all labels or explicitly mark the aggregate as mixed
+  - Mixed winning hand labels should survive in the aggregate winner record
 - Actual:
-  - One winner took multiple runs with `Two Pair`, `Full House`, and `One Pair`
-  - The top-level aggregate winner entry exposed only `Two Pair`
+  - The aggregate winner label was reported as `Straight / Two Pair / One Pair`
 - Evidence:
-  - `/tmp/live-qa-report.json`
-  - Scenario outcome: `Confirmed Issue`
-  - Aggregate evidence:
-    - `distinctLabels: ['Two Pair', 'Full House', 'One Pair']`
-    - `aggregateHand: 'Two Pair'`
+  - `/tmp/live-qa-targeted-3.json`
+  - Scenario outcome: `Needs More Evidence`
+  - Live note: `Aggregate winner hand label was Straight / Two Pair / One Pair.`
 - Likely Source:
-  - [packages/engine/src/reducer.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts:196)
-  - `handleShowdownMultiRun()` preserves only the first non-null hand label in the aggregate map
+  - Fixed in [packages/engine/src/reducer.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts:207)
 - Notes:
-  - This appears display-only; chip awards still matched the live showdown totals
+  - This was previously confirmed on an older build
+  - Current branch aggregates distinct hand labels instead of keeping only the first one
 
 ### QA-003
 
 - ID: `QA-003`
-- Title: Immediate bomb-pot all-in showdown did not surface public boards during live probe
-- Status: `Needs More Evidence`
-- Severity: `Medium`
+- Title: Immediate bomb-pot all-in showdown never advances the public boards past the flop
+- Status: `Confirmed`
+- Severity: `High`
 - Area: `party public state / showdown reveal timing / bomb-pot all-in`
 - Reproduction:
-  - Live scenarios `bombpot_immediate_allin`
-  - Tables `CCE47W` and `HVR9CJ`
-  - Two players each buy in for exactly the bomb-pot ante, approve a bomb pot, start the hand, and immediately jump to split-board showdown
+  - Live scenario `bombpot_immediate_allin`
+  - Table `35LNAK`
+  - Two players each buy in for exactly the bomb-pot ante, approve a bomb pot, and start a hand that jumps straight to showdown
 - Expected:
-  - After the announcement/reveal window, both public bomb-pot boards should reveal through to five cards
+  - After the showdown timing window starts, both public bomb-pot boards should reveal to five cards
 - Actual:
-  - The scripted clients stayed in `showdown`, but public `communityCards` and `communityCards2` remained empty through the probe window
-  - The targeted rerun timed out waiting for both boards to reveal
+  - After a 12-second probe window, both public boards were still stuck at three cards
+  - The public state already had `knownCardCountAtRunIt = 3` and `runDealStartedAt` populated, so the reveal timeline had started but follow-up broadcasts never surfaced turn and river
 - Evidence:
-  - `/tmp/live-qa-report.json`
-  - `/tmp/live-qa-targeted.json`
-  - Scenario outcomes:
-    - initial run: `Blocked`
-    - targeted rerun: `Blocked`
-  - Final targeted public state still showed `communityCards: []`, `communityCards2: []`, `runCount: 2`
+  - `/tmp/live-qa-targeted-3.json`
+  - Scenario outcome: `Blocked`
+  - Final public state:
+    - `communityCards.length = 3`
+    - `communityCards2.length = 3`
+    - `knownCardCountAtRunIt = 3`
+    - `runDealStartedAt = showdownStartedAt`
 - Likely Source:
-  - Possibly the interaction between [apps/web/src/party/index.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/party/index.ts:781), [apps/web/src/party/publicState.mjs](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/party/publicState.mjs:1), and animated showdown timing when a bomb-pot hand jumps from `waiting` straight into `showdown`
+  - [apps/web/src/party/index.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/party/index.ts:966)
+  - [apps/web/src/party/publicState.mjs](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/party/publicState.mjs:1)
 - Notes:
-  - This is not yet marked confirmed because the driver observed public-state symptoms, not a user-visible manual repro
-  - Worth checking directly in the UI while watching websocket/state updates
+  - This is now strong enough to treat as confirmed because the live websocket state itself stayed stale after the reveal timer started
+  - The current client-side showdown initialization fix preserves the correct starting count, but the server still is not broadcasting later reveal steps for this path
 
 ### QA-004
 
@@ -125,21 +124,17 @@ Date: 2026-04-20
 - Area: `engine betting logic`
 - Reproduction:
   - Live scenarios `blind_incomplete_raise` and `blind_incomplete_allin`
-  - Tables `QFNXAE` and `JSXHUE`
-  - Four-player setup with a short big blind, one caller ahead, and a second actor completing either via `raise` to the full blind or `all-in` to the same total
+  - Focused four-player setup with a short big blind, one caller ahead, and a second actor completing via either `raise` or `all-in`
 - Expected:
-  - If the user lead is correct, the `raise` and `all-in` completion paths should diverge around who is re-opened or re-queued
+  - If the reported divergence is real, the re-open / re-queue result should differ between the two action types
 - Actual:
-  - In the live probe, the prior closed actor was re-queued in both variants
+  - The prior closed actor was re-queued in both variants
 - Evidence:
   - `/tmp/live-qa-report.json`
-  - Divergence summaries:
-    - raise variant: `requeued=true`
-    - all-in variant: `requeued=true`
 - Likely Source:
-  - If a narrower bug still exists, it likely lives around [packages/engine/src/reducer.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts:733) and [packages/engine/src/reducer.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts:818)
+  - If a narrower bug still exists, it likely lives around [packages/engine/src/reducer.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts:818)
 - Notes:
-  - This should stay on the watchlist because the live probe was focused, not exhaustive
+  - Keep this on the watchlist because the live probe was focused, not exhaustive
 
 ### QA-005
 
@@ -150,22 +145,17 @@ Date: 2026-04-20
 - Area: `party ledger persistence / display derivation`
 - Reproduction:
   - Live scenario `ledger_cycle`
-  - Table `XHBL3M`
   - Alice sits for `2000`, stands, sits for `3500`, plays a short hand, then stands again
 - Expected:
-  - `buyIns`, `cashOuts`, and `currentStack` should match the exact sit/stand sequence
+  - `buyIns`, `cashOuts`, and `currentStack` should match the sit/stand sequence exactly
 - Actual:
-  - The ledger matched the sequence exactly in this probe:
-    - `buyIns = [2000, 3500]`
-    - `cashOuts = [2000, 3450]`
-    - `currentStack = 0` after the final stand-up
+  - The ledger matched the sequence in this probe
 - Evidence:
   - `/tmp/live-qa-report.json`
 - Likely Source:
-  - No confirmed defect from this repro
-  - If the NOTES.md suspicion is real, it may require a more specific interaction between active-hand stack sync and ledger display
+  - No confirmed defect from this narrow repro
 - Notes:
-  - This does not clear the NOTES.md concern completely; it only says the simple cycle behaved correctly
+  - This does not clear the broader NOTES.md suspicion completely
 
 ### QA-006
 
@@ -175,29 +165,57 @@ Date: 2026-04-20
 - Severity: `Informational`
 - Area: `frontend connection overlay / browser automation smoke`
 - Reproduction:
-  - Headless Chrome screenshots against persisted live tables:
-    - showdown table `BA3YUM`
-    - run-it table `DJM5EZ`
-    - bomb-pot mobile table `W5UNM2`
-    - bomb-pot-all-in mobile table `HVR9CJ`
+  - Headless Chrome screenshots against persisted live tables
 - Expected:
   - The table shell should hydrate into the live table scene
 - Actual:
-  - All headless screenshots stayed on the reconnect overlay
-  - The mobile overlay also appeared clipped horizontally in the captured viewport
+  - The screenshots stayed on the reconnect overlay
 - Evidence:
   - `/tmp/qa-showdown.png`
   - `/tmp/qa-runit.png`
   - `/tmp/qa-bombpot-mobile.png`
   - `/tmp/qa-bombpot-allin-mobile.png`
 - Likely Source:
-  - Unclear
-  - This may be an artifact of the headless environment rather than a product bug
+  - Unclear; this may be headless-specific
 - Notes:
-  - Do not fix against this finding alone; verify in a normal browser session first
+  - Do not fix against this finding alone
+
+### QA-007
+
+- ID: `QA-007`
+- Title: Seat changes are logged as cash-out and rebuy activity
+- Status: `Confirmed`
+- Severity: `Medium`
+- Area: `client seat-change flow / ledger persistence / stats`
+- Reproduction:
+  - Live scenario `seat_change_ledger`
+  - Table `T4B7ZK`
+  - Alice sits for `2000`, changes seats, and the ledger is inspected immediately
+- Expected:
+  - A pure seat move should preserve one continuous seating session with no realized cash-out or new buy-in
+- Actual:
+  - The seat move recorded `buyIns = [2000, 2000]` and `cashOuts = [2000]`
+- Evidence:
+  - `/tmp/live-qa-targeted-3.json`
+  - Scenario outcome: `Confirmed Issue`
+- Likely Source:
+  - [apps/web/src/store/useGameStore.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/store/useGameStore.ts:688)
+  - [apps/web/src/party/index.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/party/index.ts:761)
+  - [apps/web/src/lib/ledger.ts](/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/ledger.ts:3)
+- Notes:
+  - This likely explains at least part of the “buy in amounts are wrong sometimes” report in `NOTES.md`
+  - The current client implements seat move as literal `STAND_UP` plus `SIT_DOWN`, so the server persists it as real money movement
+
+## Current Branch Changes
+
+- `STAND_UP` now clears bomb-pot cooldown and stale bomb-pot votes on the reducer path
+- Multi-run aggregate winners now preserve distinct hand labels in the top-level display data
+- Stand-up during showdown is now rejected as part of the broader “no stand-up mid-hand” rule
+- The client keeps a showdown-time player snapshot so winner names and seat targets remain stable if player presence changes unexpectedly during showdown
+- The live runner now captures `knownCardCountAtRunIt`, `runDealStartedAt`, and `showdownStartedAt`, plus dedicated scenarios for stand-up guarding and seat-change ledger pollution
 
 ## Leads Not Yet Confirmed
 
-- `NOTES.md` ledger bug note still needs a more targeted repro than the basic sit/stand cycle
-- The immediate bomb-pot all-in reveal issue is the highest-priority open lead from this run
-- The incomplete-blind completion divergence may still exist in a narrower action order than the live probe exercised
+- The remaining open gameplay issue with the highest priority is the bomb-pot immediate all-in public reveal stall
+- The incomplete-blind completion divergence may still exist in a narrower action order than the current probe exercised
+- The headless reconnect overlay behavior still needs a normal browser repro before it should drive product work

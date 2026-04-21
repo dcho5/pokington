@@ -3,6 +3,10 @@ import assert from "node:assert/strict";
 
 import { createDeck, createInitialState, gameReducer, shouldAutoRevealWinningHands } from "../dist/index.js";
 
+function card(rank, suit) {
+  return { rank, suit };
+}
+
 test("pre-flop runouts use standard flop-turn-river burn order", () => {
   let state = createInitialState("table", { small: 25, big: 50 });
   state.phase = "voting";
@@ -114,6 +118,45 @@ test("mid-hand stand up is ignored once a player is committed", () => {
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
   state = gameReducer(state, { type: "START_HAND" });
+
+  const before = JSON.stringify(state);
+  const next = gameReducer(state, { type: "STAND_UP", playerId: "a" });
+
+  assert.equal(JSON.stringify(next), before);
+  assert.deepEqual(Object.keys(next.players).sort(), ["a", "b"]);
+});
+
+test("showdown stand up is ignored because the hand is still in progress", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state.phase = "showdown";
+  state.players = {
+    a: {
+      id: "a",
+      name: "A",
+      seatIndex: 0,
+      stack: 1200,
+      holeCards: [card("A", "spades"), card("K", "spades")],
+      currentBet: 0,
+      totalContribution: 200,
+      isFolded: false,
+      isAllIn: false,
+      lastAction: null,
+      sitOutUntilBB: false,
+    },
+    b: {
+      id: "b",
+      name: "B",
+      seatIndex: 1,
+      stack: 800,
+      holeCards: [card("Q", "clubs"), card("Q", "diamonds")],
+      currentBet: 0,
+      totalContribution: 200,
+      isFolded: false,
+      isAllIn: true,
+      lastAction: null,
+      sitOutUntilBB: false,
+    },
+  };
 
   const before = JSON.stringify(state);
   const next = gameReducer(state, { type: "STAND_UP", playerId: "a" });
@@ -386,4 +429,91 @@ test("sit-down ignores malformed non-numeric buy-ins", () => {
 
   assert.equal(next, state);
   assert.deepEqual(next.players, {});
+});
+
+test("standing up clears bomb-pot cooldown and cancels an active proposal from that player", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
+
+  state = gameReducer(state, { type: "PROPOSE_BOMB_POT", playerId: "a", anteBB: 2 });
+  assert.deepEqual(state.bombPotCooldown, ["a"]);
+  assert.equal(state.bombPotVote?.proposedBy, "a");
+
+  state = gameReducer(state, { type: "STAND_UP", playerId: "a" });
+
+  assert.deepEqual(state.bombPotCooldown, []);
+  assert.equal(state.bombPotVote, null);
+  assert.equal(state.players.a, undefined);
+});
+
+test("multi-run aggregate winners preserve distinct winning hand labels", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state.phase = "voting";
+  state.runItVotes = { a: 3, b: 3 };
+  state.players = {
+    a: {
+      id: "a",
+      name: "A",
+      seatIndex: 0,
+      stack: 0,
+      holeCards: [card("A", "spades"), card("A", "diamonds")],
+      currentBet: 0,
+      totalContribution: 100,
+      isFolded: false,
+      isAllIn: true,
+      lastAction: null,
+      sitOutUntilBB: false,
+    },
+    b: {
+      id: "b",
+      name: "B",
+      seatIndex: 1,
+      stack: 0,
+      holeCards: [card("8", "clubs"), card("9", "diamonds")],
+      currentBet: 0,
+      totalContribution: 100,
+      isFolded: false,
+      isAllIn: true,
+      lastAction: null,
+      sitOutUntilBB: false,
+    },
+  };
+
+  const tail = [
+    card("4", "clubs"),
+    card("3", "clubs"),
+    card("2", "spades"),
+    card("K", "clubs"),
+    card("K", "spades"),
+    card("2", "diamonds"),
+    card("2", "hearts"),
+    card("K", "diamonds"),
+    card("K", "hearts"),
+    card("A", "clubs"),
+    card("Q", "spades"),
+    card("3", "hearts"),
+    card("J", "diamonds"),
+    card("T", "clubs"),
+    card("9", "spades"),
+    card("7", "hearts"),
+    card("2", "clubs"),
+    card("7", "spades"),
+  ];
+  const excluded = new Set([
+    "A-spades", "A-diamonds", "8-clubs", "9-diamonds",
+    "4-clubs", "3-clubs", "2-spades", "K-clubs", "K-spades",
+    "2-diamonds", "2-hearts", "K-diamonds", "K-hearts", "A-clubs",
+    "Q-spades", "3-hearts", "J-diamonds", "T-clubs", "9-spades",
+    "7-hearts", "2-clubs", "7-spades",
+  ]);
+  const filler = createDeck().filter((c) => !excluded.has(`${c.rank}-${c.suit}`));
+  state.deck = [...filler, ...tail];
+
+  state = gameReducer(state, { type: "RESOLVE_VOTE" });
+
+  assert.equal(state.runCount, 3);
+  assert.equal(state.winners?.length, 1);
+  assert.equal(state.winners?.[0].playerId, "a");
+  assert.equal(state.winners?.[0].hand, "One Pair / Full House / Two Pair");
 });

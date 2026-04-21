@@ -91,6 +91,26 @@ test("showdown scene annotates the viewer with deferred win styling", () => {
   assert.equal(scene.layout.canShowCards, true);
 });
 
+test("showdown keeps winner seat data from the snapshot after a stand-up", () => {
+  const scene = deriveTableScene({
+    ...showdownEnd_before,
+    gameState: {
+      ...showdownEnd_before.gameState,
+      players: {
+        p2: showdownEnd_before.gameState.players.p2,
+      },
+    },
+    clientUiState: {
+      ...showdownEnd_before.clientUiState,
+      showdownPlayerSnapshot: showdownEnd_before.gameState.players,
+    },
+  });
+
+  assert.equal(scene.layout.players[0]?.id, "p1");
+  assert.equal(scene.layout.players[0]?.name, "Alex");
+  assert.equal(scene.layout.winners?.[0]?.playerId, "p1");
+});
+
 test("live-hand scene keeps tabling available even when it is not the viewer's turn", () => {
   const scene = deriveTableScene({
     ...reconnectOverlay_after,

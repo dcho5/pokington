@@ -99,13 +99,17 @@ function buildScenePlayers({
     revealedHoleCards = {},
     awayPlayerIds = [],
     peekedCounts = {},
+    showdownPlayerSnapshot = {},
   } = clientUiState;
   const { myPlayerId = null, isCreator = false } = sessionContext;
   const streetPauseChips = timingFlags.streetPauseChips ?? null;
   const actorId = getActionableActor(gameState)?.id ?? null;
+  const sourcePlayers = gameState.phase === "showdown"
+    ? { ...showdownPlayerSnapshot, ...gameState.players }
+    : gameState.players;
 
   const result = Array(TOTAL_SEATS).fill(null);
-  for (const player of Object.values(gameState.players ?? {})) {
+  for (const player of Object.values(sourcePlayers ?? {})) {
     const pauseBet = streetPauseChips?.find((chip) => chip.id === player.id)?.amount;
     result[player.seatIndex] = {
       id: player.id,

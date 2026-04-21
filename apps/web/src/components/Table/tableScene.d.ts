@@ -45,6 +45,7 @@ export interface TableClientUiState {
   myHoleCards: [Card, Card] | null;
   myRevealedCardIndices: Set<0 | 1>;
   peekedCounts: Record<string, number>;
+  showdownPlayerSnapshot?: Record<string, PublicGameState["players"][string]>;
   leaveQueued: boolean;
   awayPlayerIds: string[];
   currentRun?: number;

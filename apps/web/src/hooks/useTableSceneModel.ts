@@ -83,6 +83,7 @@ export function useTableSceneModel(code: string): TableSceneModel {
     myHoleCards: useGameStore((state) => state.myHoleCards),
     myRevealedCardIndices: useGameStore((state) => state.myRevealedCardIndices),
     peekedCounts: useGameStore((state) => state.peekedCounts),
+    showdownPlayerSnapshot: useGameStore((state) => state.showdownPlayerSnapshot),
     leaveQueued: useGameStore((state) => state.leaveQueued),
     awayPlayerIds: useGameStore((state) => state.awayPlayerIds),
     currentRun,

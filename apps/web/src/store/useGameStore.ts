@@ -141,6 +141,9 @@ interface GameStore {
   // Away status
   awayPlayerIds: string[];
 
+  // Preserves winner seat/name info if a player stands up during showdown.
+  showdownPlayerSnapshot: Record<string, PublicEnginePlayer>;
+
   // Peek tracking (how many cards each player has peeled far enough to identify)
   peekedCounts: Record<string, number>;
 
@@ -196,6 +199,12 @@ function createPlaceholderPublicGameState(): PublicGameState {
   return toPublicGameState(createInitialState("", { small: 10, big: 25 }));
 }
 
+function clonePublicPlayers(players: PublicGameState["players"]): Record<string, PublicEnginePlayer> {
+  return Object.fromEntries(
+    Object.entries(players).map(([playerId, player]) => [playerId, { ...player }]),
+  );
+}
+
 function hasNoFurtherActionAgainstAllIn(gameState: PublicGameState): boolean {
   const activePlayers = Object.values(gameState.players).filter(
     (p) => p.hasCards && !p.isFolded && !p.isAllIn
@@ -220,6 +229,10 @@ export const useGameStore = create<GameStore>((set, get) => {
   // Detects phase transitions and fires UI-layer side effects (animations, timers, announcements).
   function handleIncomingState(prev: PublicGameState | null, next: PublicGameState, isFirstReceive = false) {
     const timingPatch = deriveServerRunTiming(next);
+    const snapshotPatch =
+      next.phase === "showdown"
+        ? { showdownPlayerSnapshot: prev?.phase === "showdown" ? get().showdownPlayerSnapshot : clonePublicPlayers(next.players) }
+        : { showdownPlayerSnapshot: {} };
 
     if (isFirstReceive) {
       const { viewingSeat, myPlayerId } = get();
@@ -229,6 +242,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         isFirstStateReceived: true,
         actionError: null,
         ...timingPatch,
+        ...snapshotPatch,
         ...(viewingSeat === -1 && myPlayer ? { viewingSeat: myPlayer.seatIndex } : {}),
       });
       return;
@@ -335,7 +349,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ leaveQueued: false, viewingSeat: -1 });
     }
 
-    set({ gameState: next, actionError: null, ...timingPatch });
+    set({ gameState: next, actionError: null, ...timingPatch, ...snapshotPatch });
   }
 
   return {
@@ -364,6 +378,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     autoPeelEnabled: readPersistedAutoPeelPreference(),
     ledger: [],
     awayPlayerIds: [],
+    showdownPlayerSnapshot: {},
     peekedCounts: {},
     leaveQueued: false,
     isFirstStateReceived: false,
@@ -400,6 +415,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         actionError: null,
         ledger: [],
         awayPlayerIds: [],
+        showdownPlayerSnapshot: {},
         peekedCounts: {},
         leaveQueued: false,
         isFirstStateReceived: false,
@@ -537,6 +553,7 @@ export const useGameStore = create<GameStore>((set, get) => {
                   actionError: null,
                   ledger: [],
                   awayPlayerIds: [],
+                  showdownPlayerSnapshot: {},
                   peekedCounts: {},
                   leaveQueued: false,
                   isFirstStateReceived: false,
@@ -635,6 +652,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         actionError: null,
         ledger: [],
         awayPlayerIds: [],
+        showdownPlayerSnapshot: {},
         peekedCounts: {},
         leaveQueued: false,
         isFirstStateReceived: false,
@@ -651,14 +669,14 @@ export const useGameStore = create<GameStore>((set, get) => {
       const myPlayerId = get().myPlayerId;
       if (!myPlayerId) return;
       get().sendEvent({ type: "SIT_DOWN", playerId: myPlayerId, name, seatIndex, buyIn: buyInCents });
-      set({ viewingSeat: seatIndex });
+      set({ viewingSeat: seatIndex, leaveQueued: false });
     },
 
     standUp: () => {
       const myPlayerId = get().myPlayerId;
       if (!myPlayerId) return;
       get().sendEvent({ type: "STAND_UP", playerId: myPlayerId });
-      set({ viewingSeat: -1 });
+      set({ viewingSeat: -1, leaveQueued: false });
     },
 
     queueLeave: () => {
@@ -674,7 +692,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!player) return;
       get().sendEvent({ type: "STAND_UP", playerId: myPlayerId });
       get().sendEvent({ type: "SIT_DOWN", playerId: myPlayerId, name: player.name, seatIndex: newSeatIndex, buyIn: player.stack });
-      set({ viewingSeat: newSeatIndex });
+      set({ viewingSeat: newSeatIndex, leaveQueued: false });
     },
 
     startHand: () => {

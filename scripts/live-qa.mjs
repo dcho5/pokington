@@ -140,6 +140,9 @@ function summarizeState(state) {
     communityCards: [...state.communityCards],
     communityCards2: [...state.communityCards2],
     runCount: state.runCount,
+    knownCardCountAtRunIt: state.knownCardCountAtRunIt ?? null,
+    runDealStartedAt: state.runDealStartedAt ?? null,
+    showdownStartedAt: state.showdownStartedAt ?? null,
     runResults: deepCopy(state.runResults ?? []),
     winners: summarizeWinners(state.winners),
     showdownKind: state.showdownKind,
@@ -854,6 +857,53 @@ async function runQueueLeaveReconnect(baseUrl, wsHost) {
   return results;
 }
 
+async function runMidHandStandUpGuard(baseUrl, wsHost) {
+  const ctx = new ScenarioContext({
+    id: "midhand_standup_guard",
+    title: "Stand-up should be rejected during showdown",
+    baseUrl,
+    wsHost,
+  });
+
+  try {
+    await ctx.createTable();
+    await ctx.connectPlayers(["Alice", "Bob"]);
+    await ctx.sitDown("Alice", 0, "Alice", 5000);
+    await ctx.sitDown("Bob", 1, "Bob", 5000);
+    await ctx.startHand("Alice");
+
+    const bob = ctx.getPlayer("Bob");
+    bob.queueLeave();
+    ctx.note("queue-leave", "Bob queued leave during the live hand");
+
+    await ctx.runCheckdownToShowdown(["Alice", "Bob"]);
+    await ctx.waitForShowdown();
+    bob.sendEvent({ type: "STAND_UP", playerId: bob.playerSessionId });
+    await delay(200);
+    ctx.takeSnapshots("mid-hand stand-up guard");
+
+    const bobStillSeated = ctx.players.every((player) => {
+      const bobState = player.latestState?.players?.[bob.playerSessionId];
+      return !!bobState && bobState.seatIndex === 1;
+    });
+    const rejectionSeen = ctx.players.some(
+      (player) => player.latestError?.code === "ACTION_REJECTED",
+    );
+
+    if (bobStillSeated && rejectionSeen) {
+      return ctx.result("Pass", [
+        "Stand-up during showdown was rejected and the player remained seated until hand end.",
+      ]);
+    }
+
+    return ctx.result("Confirmed Issue", [
+      "A player was able to stand up during showdown, even though the hand was still in progress.",
+    ]);
+  } finally {
+    await ctx.close();
+  }
+}
+
 async function runCooldownLeakScenario(baseUrl, wsHost) {
   const ctx = new ScenarioContext({
     id: "bombpot_cooldown_leak",
@@ -982,6 +1032,42 @@ async function runLedgerScenario(baseUrl, wsHost) {
     assert(aliceEntry, "Alice ledger entry missing");
     return ctx.result("Pass", [
       `Alice ledger buyIns=${aliceEntry.buyIns.join(",")} cashOuts=${aliceEntry.cashOuts.join(",")}.`,
+    ]);
+  } finally {
+    await ctx.close();
+  }
+}
+
+async function runSeatChangeLedgerScenario(baseUrl, wsHost) {
+  const ctx = new ScenarioContext({
+    id: "seat_change_ledger",
+    title: "Seat changes should not count as cash-out and rebuy activity",
+    baseUrl,
+    wsHost,
+  });
+
+  try {
+    await ctx.createTable();
+    await ctx.connectPlayers(["Alice", "Bob"]);
+    await ctx.sitDown("Alice", 0, "Alice", 2000);
+    await ctx.sitDown("Bob", 1, "Bob", 2000);
+    await ctx.standUp("Alice");
+    await ctx.sitDown("Alice", 2, "Alice", 2000);
+    ctx.takeSnapshots("seat change ledger");
+
+    const aliceEntry = ctx.getPlayer("Bob").latestLedger.find((entry) => entry.name === "Alice");
+    assert(aliceEntry, "Alice ledger entry missing after seat change");
+    const looksLikeCashMovement = aliceEntry.buyIns.length > 1 || aliceEntry.cashOuts.length > 0;
+
+    if (!looksLikeCashMovement) {
+      return ctx.result("Not Reproduced", [
+        "Seat move left the ledger as a single continuous seating session.",
+      ]);
+    }
+
+    return ctx.result("Confirmed Issue", [
+      `Seat move recorded buyIns=${aliceEntry.buyIns.join(",")} cashOuts=${aliceEntry.cashOuts.join(",")}.`,
+      "Changing seats is currently treated as realized cash-out and rebuy activity.",
     ]);
   } finally {
     await ctx.close();
@@ -1142,9 +1228,11 @@ async function main() {
     runit: async () => runRunItVariants(args.baseUrl, args.wsHost),
     bombpot: async () => runBombPotScenarios(args.baseUrl, args.wsHost),
     queue: async () => runQueueLeaveReconnect(args.baseUrl, args.wsHost),
+    standup_guard: async () => [await runMidHandStandUpGuard(args.baseUrl, args.wsHost)],
     cooldown: async () => [await runCooldownLeakScenario(args.baseUrl, args.wsHost)],
     blind: async () => runBlindIncompleteDivergence(args.baseUrl, args.wsHost),
     ledger: async () => [await runLedgerScenario(args.baseUrl, args.wsHost)],
+    seat_ledger: async () => [await runSeatChangeLedgerScenario(args.baseUrl, args.wsHost)],
     aggregate: async () => {
       const outcome = await runMultiRunAggregationProbe(args.baseUrl, args.wsHost);
       return [...(outcome.attempts ?? []), outcome.result];

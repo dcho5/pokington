@@ -28,6 +28,7 @@ import {
   cardIndexToMask,
 } from "./revealTracking.mjs";
 import { shouldRotatePlayerSession } from "./playerSessionIdentity.mjs";
+import { deriveKnownCardCountAtShowdown } from "./showdownRevealInit.mjs";
 import {
   getTimedVisibleRunCounts,
   getNextTimedRevealAt,
@@ -114,7 +115,7 @@ interface PersistedRoomState {
 const CONTROL_ROOM_ID = "__control__";
 const ROOM_STATE_KEY = "roomDocument";
 const VOTING_TIMEOUT_MS = 30_000;
-const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting"]);
+const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting", "showdown"]);
 const JOIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;
 const ROOM_HTTP_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -758,12 +759,14 @@ export default class PokerRoom implements Party.Server {
     }
 
     if (enriched.type === "SIT_DOWN" && !prevState.players[enriched.playerId] && this.gameState.players[enriched.playerId]) {
+      this.pendingLeavePlayerIds.delete(enriched.playerId);
       const seatedPlayer = this.gameState.players[enriched.playerId];
       if (seatedPlayer) {
         this.onSitDown(seatedPlayer.id, seatedPlayer.name, seatedPlayer.stack);
       }
     }
     if (enriched.type === "STAND_UP" && prevState.players[enriched.playerId] && !this.gameState.players[enriched.playerId]) {
+      this.pendingLeavePlayerIds.delete(enriched.playerId);
       const player = prevState.players[enriched.playerId];
       if (player) {
         this.onStandUp(enriched.playerId, player.stack);
@@ -950,7 +953,7 @@ export default class PokerRoom implements Party.Server {
     if (next.phase !== "showdown") return;
 
     const runCount = Math.max(1, next.runResults.length);
-    const knownCardCount = Math.max(prev.communityCards.length, prev.communityCards2.length);
+    const knownCardCount = deriveKnownCardCountAtShowdown(prev, next);
     if (!hasAnimatedRunout(knownCardCount, runCount)) return;
 
     const now = Date.now();

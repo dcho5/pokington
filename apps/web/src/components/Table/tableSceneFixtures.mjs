@@ -105,6 +105,7 @@ function createClientUiState(overrides = {}) {
     ],
     myRevealedCardIndices: new Set(),
     peekedCounts: {},
+    showdownPlayerSnapshot: {},
     leaveQueued: false,
     awayPlayerIds: [],
     currentRun: 0,
