@@ -6,6 +6,7 @@ import {
   computeDesktopChipAngle,
   getDesktopChipPoint,
   getDesktopSeatPoint,
+  DEFAULT_CHIP_ANGLE,
 } from "./chipOrientation.mjs";
 import { getDesktopCenterStageVariant, getDesktopTableLayoutProfile } from "./desktopTableLayout.mjs";
 
@@ -16,11 +17,23 @@ function assertAngleClose(actual, expected, epsilon = 0.0001) {
   );
 }
 
+function assertFacingAngleClose(actual, expected, epsilon = 0.0001) {
+  const delta = ((actual - expected + 540) % 360) - 180;
+  assert.ok(
+    Math.abs(delta) <= epsilon,
+    `expected ${actual} to face within ${epsilon} of ${expected}`,
+  );
+}
+
 test("computes chip angles directly from the chip-to-player vector", () => {
   assertAngleClose(computeAngleBetweenPoints({ x: 0, y: 0 }, { x: 1, y: 0 }), 0);
   assertAngleClose(computeAngleBetweenPoints({ x: 0, y: 0 }, { x: 0, y: 1 }), 90);
   assertAngleClose(computeAngleBetweenPoints({ x: 0, y: 0 }, { x: -1, y: 0 }), 180);
   assertAngleClose(computeAngleBetweenPoints({ x: 0, y: 0 }, { x: 0, y: -1 }), -90);
+});
+
+test("default chip angle keeps the highlight pointed upward when idle", () => {
+  assertAngleClose(DEFAULT_CHIP_ANGLE, -38.65980825409008);
 });
 
 test("desktop chip orientation follows the chip location across center-stage layouts", () => {
@@ -58,7 +71,8 @@ test("desktop chip orientation follows the chip location across center-stage lay
   );
 
   variants.forEach((variant, index) => {
-    const expected = computeAngleBetweenPoints(
+    const expected =
+      computeAngleBetweenPoints(
       getDesktopChipPoint({
         chipLeftPct: variant.chipLeftPct,
         chipTopPct: variant.chipTopPct,
@@ -66,9 +80,9 @@ test("desktop chip orientation follows the chip location across center-stage lay
         tableHeight,
       }),
       targetPoint,
-    );
+      ) - (-90 - DEFAULT_CHIP_ANGLE);
 
-    assertAngleClose(angles[index], expected);
+    assertFacingAngleClose(angles[index], expected);
   });
 
   assert.ok(

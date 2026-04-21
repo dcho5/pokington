@@ -38,6 +38,9 @@ export default function BombPotVotingPanel({
     buttonFontSize: 16,
     waitingFontSize: 14,
   };
+  const desktopEyebrowFontSize = Math.max(11, Math.round(metrics.voteBadgeFontSize * 0.62));
+  const desktopHeaderBadgeFontSize = Math.max(11, Math.round(metrics.voteBadgeFontSize * 0.72));
+  const desktopPlayerVoteFontSize = Math.max(12, Math.round(metrics.voteBadgeFontSize * 0.82));
 
   const proposer = players.find((p) => p?.id === vote.proposedBy);
   const proposerName = proposer?.name ?? "Someone";
@@ -69,11 +72,17 @@ export default function BombPotVotingPanel({
             <span className="relative flex h-3 w-3 shrink-0">
               <span className="relative inline-flex h-3 w-3 rounded-full bg-sky-200 shadow-[0_0_18px_rgba(186,230,253,0.65)]" />
             </span>
-            <span className={`truncate font-semibold uppercase text-sky-100/80 ${isDesktop ? "text-[11px] tracking-[0.26em]" : "text-[10px] tracking-[0.22em]"}`}>
+            <span
+              className={`truncate font-semibold uppercase text-sky-100/80 ${isDesktop ? "tracking-[0.26em]" : "text-[10px] tracking-[0.22em]"}`}
+              style={isDesktop ? { fontSize: desktopEyebrowFontSize } : undefined}
+            >
               Special Hand
             </span>
           </div>
-          <div className={`rounded-full border border-sky-100/15 bg-sky-300/10 font-semibold uppercase text-sky-50/90 ${isDesktop ? "px-3 py-1.5 text-[11px] tracking-[0.18em]" : "px-3 py-1 text-[10px] tracking-[0.16em]"}`}>
+          <div
+            className={`rounded-full border border-sky-100/15 bg-sky-300/10 font-semibold uppercase text-sky-50/90 ${isDesktop ? "px-3 py-1.5 tracking-[0.18em]" : "px-3 py-1 text-[10px] tracking-[0.16em]"}`}
+            style={isDesktop ? { fontSize: desktopHeaderBadgeFontSize } : undefined}
+          >
             Vote
           </div>
         </div>
@@ -96,8 +105,9 @@ export default function BombPotVotingPanel({
             return (
               <span
                 key={p.id}
-                className={`${isDesktop ? "px-3 py-1.5 text-[12px]" : "px-2.5 py-1 text-[10px]"} max-w-full truncate rounded-full border font-bold`}
+                className={`${isDesktop ? "px-3 py-1.5" : "px-2.5 py-1 text-[10px]"} max-w-full truncate rounded-full border font-bold`}
                 style={{
+                  fontSize: isDesktop ? desktopPlayerVoteFontSize : undefined,
                   background:
                     v === true
                       ? "rgba(34,197,94,0.14)"

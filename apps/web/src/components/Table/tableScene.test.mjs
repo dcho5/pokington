@@ -89,6 +89,7 @@ test("showdown scene annotates the viewer with deferred win styling", () => {
   assert.equal(scene.layout.handIndicators[0]?.label, "Straight Flush");
   assert.equal(scene.layout.players[0]?.winType, undefined);
   assert.equal(scene.layout.canShowCards, true);
+  assert.equal(scene.layout.mustQueueLeave, true);
 });
 
 test("showdown keeps winner seat data from the snapshot after a stand-up", () => {
@@ -122,4 +123,49 @@ test("live-hand scene keeps tabling available even when it is not the viewer's t
 
   assert.equal(scene.layout.isYourTurn, false);
   assert.equal(scene.layout.canShowCards, true);
+});
+
+test("new mid-hand entrants who are still sitting out can leave immediately", () => {
+  const scene = deriveTableScene({
+    ...reconnectOverlay_after,
+    gameState: {
+      ...reconnectOverlay_after.gameState,
+      phase: "flop",
+      players: {
+        ...reconnectOverlay_after.gameState.players,
+        p1: {
+          ...reconnectOverlay_after.gameState.players.p1,
+          hasCards: false,
+          currentBet: 0,
+          totalContribution: 0,
+          sitOutUntilBB: true,
+        },
+      },
+    },
+  });
+
+  assert.equal(scene.layout.mustQueueLeave, false);
+});
+
+test("folded viewers with prior contribution still must queue leave", () => {
+  const scene = deriveTableScene({
+    ...reconnectOverlay_after,
+    gameState: {
+      ...reconnectOverlay_after.gameState,
+      phase: "turn",
+      players: {
+        ...reconnectOverlay_after.gameState.players,
+        p1: {
+          ...reconnectOverlay_after.gameState.players.p1,
+          hasCards: false,
+          isFolded: true,
+          currentBet: 0,
+          totalContribution: 300,
+          sitOutUntilBB: false,
+        },
+      },
+    },
+  });
+
+  assert.equal(scene.layout.mustQueueLeave, true);
 });

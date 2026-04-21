@@ -1,6 +1,7 @@
 const DEG_PER_RAD = 180 / Math.PI;
+const CHIP_HIGHLIGHT_BASE_ANGLE = Math.atan2(35 - 50, 62 - 50) * DEG_PER_RAD;
 
-export const DEFAULT_CHIP_ANGLE = -90;
+export const DEFAULT_CHIP_ANGLE = -90 - CHIP_HIGHLIGHT_BASE_ANGLE;
 
 export const MOBILE_CHIP_POINT = Object.freeze({ x: 0.5, y: 0.66 });
 export const MOBILE_SELF_POINT = Object.freeze({ x: 0.5, y: 0.88 });
@@ -44,6 +45,10 @@ function computeSeatPoint(seatIndex, totalSeats, geometry) {
 
 export function computeAngleBetweenPoints(fromPoint, toPoint) {
   return Math.atan2(toPoint.y - fromPoint.y, toPoint.x - fromPoint.x) * DEG_PER_RAD;
+}
+
+function computeChipFacingAngle(fromPoint, toPoint) {
+  return computeAngleBetweenPoints(fromPoint, toPoint) - CHIP_HIGHLIGHT_BASE_ANGLE;
 }
 
 export function getDesktopChipPoint({
@@ -99,7 +104,7 @@ export function computeDesktopChipAngle({
       tableWidth,
       tableHeight,
     }),
-  );
+  ) - CHIP_HIGHLIGHT_BASE_ANGLE;
 }
 
 export function getMobileSeatPoint({
@@ -157,5 +162,5 @@ export function computeMobileChipAngle({
     return DEFAULT_CHIP_ANGLE;
   }
 
-  return computeAngleBetweenPoints(chipPoint, actorPoint);
+  return computeChipFacingAngle(chipPoint, actorPoint);
 }

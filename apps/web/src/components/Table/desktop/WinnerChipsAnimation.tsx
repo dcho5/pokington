@@ -1,10 +1,40 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { computeSeatCoords, type TableGeometry } from "lib/seatLayout";
 import { formatCents } from "lib/formatCents";
-import { ANNOUNCE_DELAY_S, CHIP_DURATION_S, getRunTimings } from "lib/showdownTiming";
+import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
+import { CHIP_DURATION_S } from "lib/showdownTiming";
+import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
+import {
+  buildWinnerChipFeedbackPlan,
+  buildWinnerChipLandingEvents,
+} from "lib/tableFeedback.mjs";
 import type { WinnerInfo } from "@pokington/engine";
+
+interface WinnerChipMotion {
+  winner: WinnerInfo;
+  delaySeconds: number;
+  chipKey: string;
+  runIndex: number;
+  tier: number;
+}
+
+type WinnerChipLandingEvent = TableVisualFeedbackEvent & { delayMs: number };
+const buildWinnerChipFeedbackPlanTyped = buildWinnerChipFeedbackPlan as (options: {
+  winners: WinnerInfo[];
+  runResults?: { winners: WinnerInfo[] }[];
+  handNumber: number;
+  knownCardCount: number;
+  revealRunsConcurrently: boolean;
+}) => WinnerChipMotion[];
+const buildWinnerChipLandingEventsTyped = buildWinnerChipLandingEvents as (options: {
+  winners: WinnerInfo[];
+  runResults?: { winners: WinnerInfo[] }[];
+  handNumber: number;
+  knownCardCount: number;
+  revealRunsConcurrently: boolean;
+}) => WinnerChipLandingEvent[];
 
 interface WinnerChipsAnimationProps {
   winners: WinnerInfo[];
@@ -42,61 +72,33 @@ export const WinnerChipsAnimation: React.FC<WinnerChipsAnimationProps> = ({
   const containerHeight = containerWidth / tableAspectRatio;
   const potPxX = containerWidth * (potLeftPct / 100);
   const potPxY = containerHeight * (potTopPct / 100);
+  const emitVisualFeedback = useTableVisualFeedback();
+  const chips = buildWinnerChipFeedbackPlanTyped({
+    winners,
+    runResults,
+    handNumber,
+    knownCardCount,
+    revealRunsConcurrently,
+  });
+  const landingEvents = buildWinnerChipLandingEventsTyped({
+    winners,
+    runResults,
+    handNumber,
+    knownCardCount,
+    revealRunsConcurrently,
+  });
 
-  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount, { revealRunsConcurrently });
-
-  // Build a flat list of chips with individual delays.
-  // For all-in showdowns, split winners into pot tiers: tier0 = first occurrence per player
-  // (main pot), tier1 = repeated occurrences (side pots). Tier1 chips fly 0.8s after tier0
-  // so the viewer can distinguish main-pot from side-pot payouts visually.
-  function buildRunChips(
-    runWinners: WinnerInfo[],
-    baseDelay: number,
-    runIdx: number,
-  ): { winner: WinnerInfo; delay: number; chipKey: string }[] {
-    const seen = new Set<string>();
-    const tier0: WinnerInfo[] = [];
-    const tier1: WinnerInfo[] = [];
-    for (const w of runWinners) {
-      if (seen.has(w.playerId)) tier1.push(w);
-      else { seen.add(w.playerId); tier0.push(w); }
-    }
-    return [
-      ...tier0.map((w, i) => ({
-        winner: w,
-        delay: baseDelay + i * 0.35,
-        chipKey: `${handNumber}-r${runIdx}-t0-${w.playerId}`,
-      })),
-      ...tier1.map((w, i) => ({
-        winner: w,
-        delay: baseDelay + 0.8 + i * 0.35,
-        chipKey: `${handNumber}-r${runIdx}-t1-${w.playerId}`,
-      })),
-    ];
-  }
-
-  const chips: { winner: WinnerInfo; delay: number; chipKey: string }[] =
-    runResults && runResults.length > 1
-      ? // Multi-run: stagger by run, offset by announcement banner delay
-        runResults.flatMap((run, runIdx) =>
-          buildRunChips(run.winners, ANNOUNCE_DELAY_S + runIdx * runIntervalS + chipStartS, runIdx)
-        )
-      : runResults && runResults.length === 1
-      ? // Single-run all-in: announcement plays first, then chips after cards dealt
-        buildRunChips(runResults[0].winners, ANNOUNCE_DELAY_S + chipStartS, 0)
-      : // Normal showdown (no all-in board run)
-        winners.map((winner, idx) => ({
-          winner,
-          delay: 0.4 + idx * 0.35,
-          chipKey: `${handNumber}-winner-${winner.playerId}`,
-        }));
+  useEffect(() => {
+    const timers = landingEvents.map((event) => setTimeout(() => emitVisualFeedback(event), event.delayMs));
+    return () => timers.forEach(clearTimeout);
+  }, [emitVisualFeedback, landingEvents]);
 
   if (chips.length === 0) return null;
 
   return (
     <div className="absolute inset-0 pointer-events-none z-40" aria-hidden>
       <AnimatePresence>
-        {chips.map(({ winner, delay, chipKey }) => {
+        {chips.map(({ winner, delaySeconds, chipKey }) => {
           const player = players.find((p) => p?.id === winner.playerId);
           if (!player) return null;
 
@@ -125,7 +127,7 @@ export const WinnerChipsAnimation: React.FC<WinnerChipsAnimationProps> = ({
                 opacity: [0, 1, 1, 0],
               }}
               transition={{
-                delay,
+                delay: delaySeconds,
                 duration: CHIP_DURATION_S,
                 ease: [0.34, 1.56, 0.64, 1],
                 opacity: { times: [0, 0.05, 0.58, 1], duration: CHIP_DURATION_S },

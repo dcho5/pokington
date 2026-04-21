@@ -1,4 +1,13 @@
-import type { GameState, EnginePlayer, GameEvent, WinnerInfo, RunResult, SidePot, SevenTwoBountyBB } from "@pokington/engine";
+import type {
+  GameState,
+  EnginePlayer,
+  GameEvent,
+  WinnerInfo,
+  RunResult,
+  SidePot,
+  SevenTwoBountyBB,
+  GameFeedbackCueEnvelope,
+} from "@pokington/engine";
 import type { Card, GamePhase } from "@pokington/shared";
 import { buildPublicGameState } from "./publicState.mjs";
 
@@ -69,7 +78,8 @@ export type ClientMessage =
   | { type: "REVEAL_CARD"; cardIndex: 0 | 1 }
   | { type: "SET_AWAY"; away: boolean }
   | { type: "PEEK_CARD"; cardIndex: 0 | 1; handNumber: number }
-  | { type: "QUEUE_LEAVE" };
+  | { type: "QUEUE_LEAVE" }
+  | { type: "CANCEL_QUEUE_LEAVE" };
 
 // ── Session ledger ──
 
@@ -102,10 +112,16 @@ export interface PayoutInstruction {
 // ── Server → Client messages ──
 export type ServerMessage =
   | { type: "WELCOME"; playerSessionId: string; isCreator: boolean }
-  | { type: "TABLE_STATE"; state: PublicGameState }
+  | { type: "TABLE_STATE"; state: PublicGameState; feedback?: GameFeedbackCueEnvelope[] }
   // Includes any currently public hole-card slots for this hand, including the
   // viewer's own public cards so reconnects can restore reveal state locally.
   | { type: "PRIVATE_STATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]> }
-  | { type: "ROOM_PRESENCE"; connectedPlayerIds: string[]; awayPlayerIds: string[]; peekedCounts: Record<string, number> }
+  | {
+      type: "ROOM_PRESENCE";
+      connectedPlayerIds: string[];
+      awayPlayerIds: string[];
+      peekedCounts: Record<string, number>;
+      queuedLeavePlayerIds: string[];
+    }
   | { type: "LEDGER_STATE"; entries: LedgerEntry[] }
   | { type: "ERROR"; code: string; message: string };

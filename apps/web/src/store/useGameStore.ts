@@ -4,6 +4,7 @@ import PartySocket from "partysocket";
 import {
   createInitialState,
   type GameEvent,
+  type GameFeedbackCueEnvelope,
   type WinnerInfo,
   type RunResult,
   type SevenTwoBountyBB,
@@ -40,6 +41,21 @@ export interface BombPotAnnouncement {
 export interface ActionError {
   message: string;
 }
+
+export interface TableFeedbackBatch {
+  kind: "feedback";
+  feedback: GameFeedbackCueEnvelope[];
+  gameState: PublicGameState;
+}
+
+export interface TableActionErrorFeedback {
+  kind: "action_error";
+  key: string;
+  message: string;
+  handNumber: number | null;
+}
+
+export type TableFeedbackEvent = TableFeedbackBatch | TableActionErrorFeedback;
 
 interface GameStore {
   // Core game state (public — no deck, no opponent hole cards)
@@ -82,6 +98,7 @@ interface GameStore {
   sitDown: (seatIndex: number, name: string, buyInCents: number) => void;
   standUp: () => void;
   queueLeave: () => void;
+  cancelQueuedLeave: () => void;
   leaveQueued: boolean;
   changeSeat: (newSeatIndex: number) => void;
   startHand: () => void;
@@ -168,7 +185,6 @@ function deriveServerRunTiming(next: PublicGameState): Pick<
     runAnnouncement:
       next.phase === "showdown" &&
       !next.isBombPot &&
-      (next.runResults?.length ?? 0) > 1 &&
       next.showdownStartedAt != null &&
       next.runDealStartedAt == null
         ? (next.runCount as 1 | 2 | 3)
@@ -187,6 +203,21 @@ let _idleCleanup: (() => void) | null = null;
 let sevenTwoAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
 let bombPotAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
 let actionErrorTimer: ReturnType<typeof setTimeout> | null = null;
+let feedbackSequence = 0;
+const feedbackListeners = new Set<(event: TableFeedbackEvent) => void>();
+
+export function subscribeToTableFeedback(listener: (event: TableFeedbackEvent) => void) {
+  feedbackListeners.add(listener);
+  return () => {
+    feedbackListeners.delete(listener);
+  };
+}
+
+function emitTableFeedback(event: TableFeedbackEvent) {
+  for (const listener of feedbackListeners) {
+    listener(event);
+  }
+}
 
 function getRevealedCardIndices(cards: [Card | null, Card | null] | null | undefined): Set<0 | 1> {
   const indices = new Set<0 | 1>();
@@ -459,7 +490,15 @@ export const useGameStore = create<GameStore>((set, get) => {
             case "TABLE_STATE": {
               const { gameState: prev, isFirstStateReceived } = get();
               if (get().tableNotFound) set({ tableNotFound: false });
-              handleIncomingState(prev, msg.state, !isFirstStateReceived);
+              const isFirstReceive = !isFirstStateReceived;
+              handleIncomingState(prev, msg.state, isFirstReceive);
+              if (!isFirstReceive && msg.feedback && msg.feedback.length > 0) {
+                emitTableFeedback({
+                  kind: "feedback",
+                  feedback: msg.feedback,
+                  gameState: get().gameState,
+                });
+              }
               break;
             }
             case "PRIVATE_STATE":
@@ -474,9 +513,12 @@ export const useGameStore = create<GameStore>((set, get) => {
             case "ROOM_PRESENCE": {
               const newAwayIds: string[] = msg.awayPlayerIds ?? [];
               const newPeekedCounts: Record<string, number> = msg.peekedCounts ?? {};
+              const queuedLeavePlayerIds: string[] = msg.queuedLeavePlayerIds ?? [];
               const {
                 awayPlayerIds: prevAwayIds,
                 peekedCounts: prevPeekedCounts,
+                myPlayerId,
+                leaveQueued: prevLeaveQueued,
               } = get();
 
               const awayChanged =
@@ -487,12 +529,15 @@ export const useGameStore = create<GameStore>((set, get) => {
               const peekedChanged =
                 prevPeekKeys.length !== newPeekKeys.length ||
                 newPeekKeys.some(k => prevPeekedCounts[k] !== newPeekedCounts[k]);
+              const nextLeaveQueued = myPlayerId != null && queuedLeavePlayerIds.includes(myPlayerId);
+              const leaveQueuedChanged = prevLeaveQueued !== nextLeaveQueued;
 
-              if (!awayChanged && !peekedChanged) break;
+              if (!awayChanged && !peekedChanged && !leaveQueuedChanged) break;
 
               const patch: Record<string, unknown> = {};
               if (awayChanged) patch.awayPlayerIds = newAwayIds;
               if (peekedChanged) patch.peekedCounts = newPeekedCounts;
+              if (leaveQueuedChanged) patch.leaveQueued = nextLeaveQueued;
               set(patch);
               break;
             }
@@ -503,6 +548,12 @@ export const useGameStore = create<GameStore>((set, get) => {
               if (msg.code === "ACTION_REJECTED") {
                 if (actionErrorTimer) clearTimeout(actionErrorTimer);
                 set({ actionError: { message: msg.message } });
+                emitTableFeedback({
+                  kind: "action_error",
+                  key: `action_error:${feedbackSequence += 1}`,
+                  message: msg.message,
+                  handNumber: get().gameState.handNumber ?? null,
+                });
                 actionErrorTimer = setTimeout(() => {
                   set({ actionError: null });
                   actionErrorTimer = null;
@@ -683,6 +734,12 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!_socket) return;
       _socket.send(JSON.stringify({ type: "QUEUE_LEAVE" }));
       set({ leaveQueued: true });
+    },
+
+    cancelQueuedLeave: () => {
+      if (!_socket) return;
+      _socket.send(JSON.stringify({ type: "CANCEL_QUEUE_LEAVE" }));
+      set({ leaveQueued: false });
     },
 
     changeSeat: (newSeatIndex: number) => {

@@ -139,6 +139,9 @@ export default function VotingPanel({
     rowFontSize: 14,
     waitingFontSize: 14,
   };
+  const desktopEyebrowFontSize = Math.max(11, Math.round(metrics.titleFontSize * 0.5));
+  const desktopBadgeFontSize = Math.max(11, Math.round(metrics.titleFontSize * 0.48));
+  const desktopStatusFontSize = Math.max(11, Math.round(metrics.rowFontSize * 0.8));
 
   // Desktop variant — ornate centered card
   return (
@@ -162,11 +165,17 @@ export default function VotingPanel({
             <span className="relative flex h-3 w-3 shrink-0">
               <span className="relative inline-flex h-3 w-3 rounded-full bg-indigo-200 shadow-[0_0_18px_rgba(199,210,254,0.65)]" />
             </span>
-            <span className="truncate text-[11px] font-semibold uppercase tracking-[0.26em] text-indigo-50">
+            <span
+              className="truncate font-semibold uppercase tracking-[0.26em] text-indigo-50"
+              style={{ fontSize: desktopEyebrowFontSize }}
+            >
               All-in Showdown
             </span>
           </div>
-          <div className="rounded-full border border-indigo-100/25 bg-indigo-300/14 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-white">
+          <div
+            className="rounded-full border border-indigo-100/25 bg-indigo-300/14 px-3 py-1.5 font-semibold uppercase tracking-[0.18em] text-white"
+            style={{ fontSize: desktopBadgeFontSize }}
+          >
             Vote
           </div>
         </div>
@@ -223,11 +232,12 @@ export default function VotingPanel({
               >
                 <span className="truncate pr-3 font-semibold text-slate-50">{p.name}</span>
                 <span
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.16em] ${
+                  className={`rounded-full px-3 py-1.5 font-bold uppercase tracking-[0.16em] ${
                     vote
                       ? "border border-indigo-200/24 bg-indigo-300/14 text-white"
                       : "border border-white/14 bg-slate-800/90 text-slate-200"
                   }`}
+                  style={{ fontSize: desktopStatusFontSize }}
                 >
                   {vote ? RUN_LABELS[vote - 1] : "Pending"}
                 </span>

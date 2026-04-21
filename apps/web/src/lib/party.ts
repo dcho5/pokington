@@ -35,10 +35,10 @@ export function getServerPartyKitHost(requestHost?: string | null): string {
   if (isLocalHost(requestHost)) {
     return LOCAL_PARTYKIT_HOST;
   }
-
+  const hostname = requestHost?.split(":")[0]?.split("/")[0];
   return normalizePartyKitHost(process.env.PARTYKIT_HOST)
     || normalizePartyKitHost(process.env.NEXT_PUBLIC_PARTYKIT_HOST)
-    || LOCAL_PARTYKIT_HOST;
+    || (hostname ? `${hostname}:1999` : LOCAL_PARTYKIT_HOST);
 }
 
 export function getPartyKitHost(): string {
@@ -49,7 +49,7 @@ export function getPartyKitHost(): string {
     }
     return normalizePartyKitHost(window.__POKINGTON_RUNTIME_CONFIG__?.partykitHost)
       || normalizePartyKitHost(process.env.NEXT_PUBLIC_PARTYKIT_HOST)
-      || LOCAL_PARTYKIT_HOST;
+      || `${hostname}:1999`;
   }
   if (process.env.NODE_ENV !== "production") {
     return LOCAL_PARTYKIT_HOST;

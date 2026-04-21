@@ -125,7 +125,7 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
   );
 }
 
-const DesktopLedgerMenu: React.FC = () => {
+const DesktopLedgerMenu: React.FC<{ prominent?: boolean }> = ({ prominent = false }) => {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -149,15 +149,19 @@ const DesktopLedgerMenu: React.FC = () => {
       <motion.button
         whileTap={{ scale: 0.88 }}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-11 w-11 items-center justify-center rounded-full text-lg"
+        className={`flex items-center justify-center ${
+          prominent
+            ? "min-h-[56px] min-w-[72px] rounded-[20px] px-4 text-[22px]"
+            : "h-11 w-11 rounded-full text-lg"
+        }`}
         style={{
-          background: open ? "rgba(255,255,255,0.16)" : "rgba(255,255,255,0.08)",
-          border: "1px solid rgba(255,255,255,0.15)",
+          background: open ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.18)",
+          border: "1px solid rgba(255,255,255,0.28)",
           backdropFilter: "blur(8px)",
         }}
         aria-label="Open session ledger"
       >
-        💰
+        <span aria-hidden="true">💰</span>
       </motion.button>
       <AnimatePresence>
         {open && <DesktopLedgerPanel onClose={() => setOpen(false)} />}

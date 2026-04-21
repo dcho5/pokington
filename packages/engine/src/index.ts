@@ -1,6 +1,8 @@
 export { gameReducer } from "./reducer";
 export { evaluate7, evaluateBest, compareHands } from "./evaluator";
 export { createDeck, shuffle } from "./deck";
+export { deriveFeedbackFromTransition } from "./feedback";
+export { shouldQueueLeave } from "./leaveQueue";
 export {
   ANNOUNCE_DELAY_MS,
   ANNOUNCE_DELAY_S,
@@ -38,3 +40,10 @@ export type {
   GamePhase,
   LastAction,
 } from "./types";
+export type {
+  GameFeedbackCue,
+  GameFeedbackCueEnvelope,
+  GameFeedbackSource,
+  GameFeedbackTransitionContext,
+} from "./feedback";
+export type { LeaveQueueState } from "./leaveQueue";

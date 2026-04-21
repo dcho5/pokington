@@ -2,13 +2,16 @@ import type * as Party from "partykit/server";
 import {
   ANNOUNCE_DELAY_MS,
   createInitialState,
+  deriveFeedbackFromTransition,
   gameReducer,
   getAllInShowdownRevealDelayMs,
   hasAnimatedRunout,
+  shouldQueueLeave,
   shouldRevealRunsConcurrently,
   shouldAutoRevealWinningHands,
 } from "@pokington/engine";
 import type { GameState, GameEvent } from "@pokington/engine";
+import type { GameFeedbackCueEnvelope } from "@pokington/engine";
 import type { Card } from "@pokington/shared";
 import {
   CORE_SEVEN_TWO_BOUNTY_BB,
@@ -27,6 +30,7 @@ import {
   canPubliclyRevealCard,
   cardIndexToMask,
 } from "./revealTracking.mjs";
+import { removePlayersBeforeNextHand } from "./handBoundaryExit.mjs";
 import { shouldRotatePlayerSession } from "./playerSessionIdentity.mjs";
 import { deriveKnownCardCountAtShowdown } from "./showdownRevealInit.mjs";
 import {
@@ -115,7 +119,6 @@ interface PersistedRoomState {
 const CONTROL_ROOM_ID = "__control__";
 const ROOM_STATE_KEY = "roomDocument";
 const VOTING_TIMEOUT_MS = 30_000;
-const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting", "showdown"]);
 const JOIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;
 const ROOM_HTTP_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -270,6 +273,11 @@ export default class PokerRoom implements Party.Server {
 
     if (msg.type === "QUEUE_LEAVE") {
       this.handleQueueLeave(sender);
+      return;
+    }
+
+    if (msg.type === "CANCEL_QUEUE_LEAVE") {
+      this.handleCancelQueueLeave(sender);
     }
   }
 
@@ -708,11 +716,13 @@ export default class PokerRoom implements Party.Server {
 
     if (enriched.type === "STAND_UP") {
       const player = this.gameState.players[enriched.playerId];
-      const mustWaitForHandEnd =
-        !!player &&
-        ACTIVE_HAND_PHASES.has(this.gameState.phase) &&
-        (player.holeCards !== null || player.currentBet > 0 || player.totalContribution > 0 || !player.sitOutUntilBB);
-      if (mustWaitForHandEnd) {
+      if (player && shouldQueueLeave({
+        phase: this.gameState.phase,
+        hasCards: player.holeCards !== null,
+        currentBet: player.currentBet,
+        totalContribution: player.totalContribution,
+        sitOutUntilBB: player.sitOutUntilBB,
+      })) {
         this.send(conn, {
           type: "ERROR",
           code: "ACTION_REJECTED",
@@ -732,21 +742,18 @@ export default class PokerRoom implements Party.Server {
     }
 
     if (enriched.type === "START_HAND") {
-      for (const pid of this.pendingLeavePlayerIds) {
-        const player = this.gameState.players[pid];
-        if (player) {
-          this.onStandUp(pid, player.stack);
-          void this.persistCashOut(pid, player.stack);
-          this.gameState = gameReducer(this.gameState, { type: "STAND_UP", playerId: pid });
-        }
-      }
+      const { gameState, removedPlayers } = removePlayersBeforeNextHand(
+        this.gameState,
+        Array.from(this.pendingLeavePlayerIds),
+      );
+      this.gameState = gameState;
       this.pendingLeavePlayerIds.clear();
-      for (const player of Object.values(this.gameState.players)) {
-        if (player.stack === 0) {
-          this.onStandUp(player.id, 0);
-          void this.persistCashOut(player.id, 0);
-          this.gameState = gameReducer(this.gameState, { type: "STAND_UP", playerId: player.id });
-        }
+      for (const { playerId, stack } of removedPlayers) {
+        this.pendingLeavePlayerIds.delete(playerId);
+        this.onStandUp(playerId, stack);
+        void this.persistCashOut(playerId, stack);
+        this.peekedCardMasks.delete(playerId);
+        this.publicShownCardMasks.delete(playerId);
       }
     }
 
@@ -793,7 +800,8 @@ export default class PokerRoom implements Party.Server {
     }
 
     this.manageVotingTimer(prevState, this.gameState);
-    this.broadcastState();
+    const feedback = this.deriveFeedback(prevState, enriched, this.gameState, "action");
+    this.broadcastState(feedback);
     this.broadcastAllPrivate();
     this.broadcastRoomPresence();
     void this.persistRoomState();
@@ -859,6 +867,18 @@ export default class PokerRoom implements Party.Server {
     const playerId = this.clientIdToPlayerSessionId.get(clientId);
     if (!playerId || !this.gameState.players[playerId]) return;
     this.pendingLeavePlayerIds.add(playerId);
+    this.broadcastRoomPresence();
+    void this.persistRoomState();
+  }
+
+  private handleCancelQueueLeave(conn: Party.Connection) {
+    const clientId = this.connIdToClientId.get(conn.id);
+    if (!clientId) return;
+    const playerId = this.clientIdToPlayerSessionId.get(clientId);
+    if (!playerId) return;
+    this.pendingLeavePlayerIds.delete(playerId);
+    this.broadcastRoomPresence();
+    void this.persistRoomState();
   }
 
   private handleRevealCard(conn: Party.Connection, cardIndex: 0 | 1) {
@@ -920,7 +940,8 @@ export default class PokerRoom implements Party.Server {
           this.schedulePublicRevealBroadcasts();
           void this.persistShowdownStats(this.gameState);
         }
-        this.broadcastState();
+        const feedback = this.deriveFeedback(prevState, { type: "RESOLVE_VOTE" }, this.gameState, "timer");
+        this.broadcastState(feedback);
         this.broadcastAllPrivate();
         void this.persistRoomState();
       }, VOTING_TIMEOUT_MS);
@@ -981,8 +1002,10 @@ export default class PokerRoom implements Party.Server {
       const delay = revealStartAt - Date.now();
 
       if (delay <= 0) {
+        const prevState = structuredClone(this.gameState);
         this.gameState.runDealStartedAt = Date.now();
-        this.broadcastState();
+        const feedback = this.deriveFeedback(prevState, null, this.gameState, "timer");
+        this.broadcastState(feedback);
         void this.persistRoomState();
         this.schedulePublicRevealBroadcasts();
         return;
@@ -997,8 +1020,10 @@ export default class PokerRoom implements Party.Server {
         ) {
           return;
         }
+        const prevState = structuredClone(this.gameState);
         this.gameState.runDealStartedAt = Date.now();
-        this.broadcastState();
+        const feedback = this.deriveFeedback(prevState, null, this.gameState, "timer");
+        this.broadcastState(feedback);
         void this.persistRoomState();
         this.schedulePublicRevealBroadcasts();
       }, delay));
@@ -1200,10 +1225,26 @@ export default class PokerRoom implements Party.Server {
     await this.room.storage.put<PlayerStats>(key, existing);
   }
 
-  private broadcastState() {
+  private deriveFeedback(
+    prevState: GameState,
+    event: GameEvent | null,
+    nextState: GameState,
+    source: "action" | "timer" | "server",
+  ): GameFeedbackCueEnvelope[] {
+    return deriveFeedbackFromTransition(prevState, event, nextState, {
+      emittedAt: Date.now(),
+      source,
+    });
+  }
+
+  private broadcastState(feedback?: GameFeedbackCueEnvelope[]) {
     this.syncLedgerStacks();
     const now = Date.now();
-    this.broadcast({ type: "TABLE_STATE", state: toPublicGameState(this.gameState, now) });
+    this.broadcast({
+      type: "TABLE_STATE",
+      state: toPublicGameState(this.gameState, now),
+      ...(feedback && feedback.length > 0 ? { feedback } : {}),
+    });
     this.lastBroadcastRevealSignature = this.getTimedRevealSignature(this.gameState, now);
   }
 
@@ -1290,6 +1331,7 @@ export default class PokerRoom implements Party.Server {
       connectedPlayerIds,
       awayPlayerIds,
       peekedCounts,
+      queuedLeavePlayerIds: Array.from(this.pendingLeavePlayerIds),
     });
   }
 

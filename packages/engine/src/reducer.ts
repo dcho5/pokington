@@ -2,12 +2,12 @@ import type { GameState, GameEvent, EnginePlayer, SidePot, RunResult, WinnerInfo
 import type { Card } from "@pokington/shared";
 import { createDeck, shuffle } from "./deck";
 import { evaluate7, compareHands } from "./evaluator";
+import { shouldQueueLeave } from "./leaveQueue";
 import { shouldAutoRevealWinningHands } from "./types";
 
 // ── Helpers ──
 
 const MAX_SEATS = 10;
-const ACTIVE_HAND_PHASES = new Set<GameState["phase"]>(["pre-flop", "flop", "turn", "river", "voting", "showdown"]);
 
 /** Returns true if the two hole cards are a 7 and a 2 of different suits. */
 function hasSevTwoOffsuit(cards: [Card, Card] | null): boolean {
@@ -540,10 +540,13 @@ export function gameReducer(
     case "STAND_UP": {
       const player = state.players[event.playerId];
       if (!player) return prevState;
-      const isCommittedToCurrentHand =
-        ACTIVE_HAND_PHASES.has(state.phase) &&
-        (player.holeCards !== null || player.currentBet > 0 || player.totalContribution > 0 || !player.sitOutUntilBB);
-      if (isCommittedToCurrentHand) return prevState;
+      if (shouldQueueLeave({
+        phase: state.phase,
+        hasCards: player.holeCards !== null,
+        currentBet: player.currentBet,
+        totalContribution: player.totalContribution,
+        sitOutUntilBB: player.sitOutUntilBB,
+      })) return prevState;
       delete state.players[event.playerId];
       state.needsToAct = state.needsToAct.filter((id) => id !== event.playerId);
       state.closedActors = state.closedActors.filter((id) => id !== event.playerId);

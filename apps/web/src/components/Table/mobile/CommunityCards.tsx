@@ -1,13 +1,22 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Card from "components/poker/Card";
+import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
+import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
 import RunItMobileTabs from "./RunItMobileTabs";
+import { collectBoardRevealEvents } from "lib/tableFeedback.mjs";
 import { getCenterBoardMode, isRunItAnnouncementPhase } from "lib/tableVisualState";
 import type { Card as CardType } from "@pokington/shared";
 import type { RunResult } from "@pokington/engine";
 
 const CARD_COUNT = 5;
+const collectBoardRevealEventsTyped = collectBoardRevealEvents as (options: {
+  previousCounts: number[];
+  nextCounts: number[];
+  handNumber: number;
+  mode: "single" | "bombPot" | "runIt";
+}) => TableVisualFeedbackEvent[];
 
 interface CommunityCardsProps {
   phase?: string;
@@ -126,6 +135,8 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
   onActiveBoardChange,
   onViewingRunChange,
 }) => {
+  const emitVisualFeedback = useTableVisualFeedback();
+  const previousCountsRef = useRef<number[]>([]);
   const boardMode = getCenterBoardMode({
     phase,
     isBombPotHand: isBombPot,
@@ -146,6 +157,43 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
     runAnnouncement,
     runResults,
   });
+
+  useEffect(() => {
+    previousCountsRef.current = [];
+  }, [handNumber]);
+
+  useEffect(() => {
+    const nextCounts = boardMode === "runIt"
+      ? runResults.map((run) => run.board.length)
+      : boardMode === "bombPot"
+        ? [communityCards?.length ?? 0, communityCards2?.length ?? 0]
+        : [communityCards?.length ?? 0];
+    if (
+      previousCountsRef.current.length === 0 ||
+      previousCountsRef.current.length !== nextCounts.length
+    ) {
+      previousCountsRef.current = nextCounts;
+      return;
+    }
+    const events = collectBoardRevealEventsTyped({
+      previousCounts: previousCountsRef.current,
+      nextCounts,
+      handNumber,
+      mode: boardMode === "runIt" ? "runIt" : boardMode === "bombPot" ? "bombPot" : "single",
+    });
+    for (const event of events) {
+      emitVisualFeedback(event);
+    }
+    previousCountsRef.current = nextCounts;
+  }, [
+    boardMode,
+    communityCards,
+    communityCards2,
+    emitVisualFeedback,
+    handNumber,
+    knownCardCount,
+    runResults,
+  ]);
 
   return (
     <div className="relative flex flex-col items-center w-full px-2 min-h-0">

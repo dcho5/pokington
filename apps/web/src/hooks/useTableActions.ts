@@ -54,6 +54,7 @@ export function useTableActions(_code: string): TableActions {
     onSitDown,
     onStandUp: () => useGameStore.getState().standUp(),
     onQueueLeave: () => useGameStore.getState().queueLeave(),
+    onCancelQueuedLeave: () => useGameStore.getState().cancelQueuedLeave(),
     onFold: () => useGameStore.getState().fold(),
     onCheck: () => useGameStore.getState().check(),
     onCall: () => useGameStore.getState().call(),

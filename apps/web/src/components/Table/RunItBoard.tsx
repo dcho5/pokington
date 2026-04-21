@@ -1,12 +1,21 @@
 "use client";
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import Card from "components/poker/Card";
+import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
+import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
 import { deriveVisibleRunState } from "lib/runAnimation";
+import { collectBoardRevealEvents } from "lib/tableFeedback.mjs";
 import type { RunResult } from "@pokington/engine";
 import type { DesktopRunItCenterStage } from "lib/desktopTableLayout";
 
 const CARD_COUNT = 5;
+const collectBoardRevealEventsTyped = collectBoardRevealEvents as (options: {
+  previousCounts: number[];
+  nextCounts: number[];
+  handNumber: number;
+  mode: "single" | "bombPot" | "runIt";
+}) => TableVisualFeedbackEvent[];
 
 interface RunItBoardProps {
   runResults: RunResult[];
@@ -31,6 +40,8 @@ export default function RunItBoard({
 }: RunItBoardProps) {
   const { currentRun, revealedCount } = deriveVisibleRunState(runResults, knownCardCount);
   const totalRuns = runResults.length;
+  const emitVisualFeedback = useTableVisualFeedback();
+  const previousCountsRef = useRef<number[]>([]);
 
   const desktopCardStyle = compact || !desktopLayout
     ? undefined
@@ -38,6 +49,31 @@ export default function RunItBoard({
         width: desktopLayout.cardWidth,
         height: desktopLayout.cardHeight,
       };
+
+  useEffect(() => {
+    previousCountsRef.current = [];
+  }, [handNumber]);
+
+  useEffect(() => {
+    const nextCounts = runResults.map((run) => run.board.length);
+    if (
+      previousCountsRef.current.length === 0 ||
+      previousCountsRef.current.length !== nextCounts.length
+    ) {
+      previousCountsRef.current = nextCounts;
+      return;
+    }
+    const events = collectBoardRevealEventsTyped({
+      previousCounts: previousCountsRef.current,
+      nextCounts,
+      handNumber,
+      mode: "runIt",
+    });
+    for (const event of events) {
+      emitVisualFeedback(event);
+    }
+    previousCountsRef.current = nextCounts;
+  }, [emitVisualFeedback, handNumber, knownCardCount, runResults]);
 
   return (
     <div

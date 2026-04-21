@@ -4,7 +4,7 @@ import { useColorScheme } from "hooks/useColorScheme";
 
 interface PokerChipProps {
   size?: number;
-  /** Degrees: 0=right, 90=down, 180/−180=left, −90=up */
+  /** Screen-space angle the chip highlight should face. */
   glowAngle?: number;
   className?: string;
 }
@@ -125,17 +125,6 @@ const PokerChip: React.FC<PokerChipProps> = ({
           fill="none"
           stroke="rgba(255,255,255,0.18)"
           strokeWidth="3"
-        />
-
-        {/* A small marker on the rim makes chip rotation readable. */}
-        <path
-          d="M50 12 L58 25 L50 21.5 L42 25 Z"
-          fill="#fde68a"
-          opacity="0.95"
-        />
-        <path
-          d="M50 26 L55.5 38.5 L50 35.5 L44.5 38.5 Z"
-          fill="rgba(254,240,138,0.45)"
         />
 
         <circle

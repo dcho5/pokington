@@ -10,12 +10,14 @@ interface DesktopBombPotMenuProps {
   bigBlind: number;
   minPlayerStack?: number;
   onPropose?: (anteBb: BombPotAnteBB) => void;
+  prominent?: boolean;
 }
 
 const DesktopBombPotMenu: React.FC<DesktopBombPotMenuProps> = ({
   bigBlind,
   minPlayerStack,
   onPropose,
+  prominent = false,
 }) => {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -40,15 +42,19 @@ const DesktopBombPotMenu: React.FC<DesktopBombPotMenuProps> = ({
       <motion.button
         whileTap={{ scale: 0.88 }}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-11 w-11 items-center justify-center rounded-full text-xl"
+        className={`flex items-center justify-center ${
+          prominent
+            ? "min-h-[56px] min-w-[72px] rounded-[20px] px-4 text-[24px]"
+            : "h-11 w-11 rounded-full text-xl"
+        }`}
         style={{
-          background: open ? "rgba(99,102,241,0.35)" : "rgba(99,102,241,0.22)",
-          border: "1px solid rgba(99,102,241,0.45)",
+          background: open ? "rgba(99,102,241,0.46)" : "rgba(99,102,241,0.34)",
+          border: "1px solid rgba(99,102,241,0.58)",
           backdropFilter: "blur(8px)",
         }}
         aria-label="Propose bomb pot"
       >
-        💣
+        <span aria-hidden="true">💣</span>
       </motion.button>
 
       <AnimatePresence>

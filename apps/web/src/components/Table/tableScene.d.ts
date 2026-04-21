@@ -109,6 +109,7 @@ export interface TableLayoutScene {
   bombPotCooldown: string[];
   bombPotAnnouncement: TableTimingFlags["bombPotAnnouncement"];
   actionError: TableTimingFlags["actionError"];
+  mustQueueLeave: boolean;
   leaveQueued: boolean;
   cardPeelPersistenceKey: string | null;
 }
@@ -138,6 +139,7 @@ export interface TableActions {
   onSitDown: (seatIndex: number, name?: string, buyInCents?: number) => void;
   onStandUp?: () => void;
   onQueueLeave?: () => void;
+  onCancelQueuedLeave?: () => void;
   onFold: () => void;
   onCheck: () => void;
   onCall: () => void;

@@ -1,10 +1,12 @@
-import { evaluateBest } from "@pokington/engine";
+import enginePkg from "@pokington/engine";
 import {
   getCenterBoardMode,
   isAnimatedRunItShowdown,
   isAnimatedShowdownReveal,
 } from "../../lib/tableVisualState.mjs";
 import { canPlayerTableOwnHand } from "../../lib/tableHandRules.mjs";
+
+const { evaluateBest, shouldQueueLeave } = enginePkg;
 
 const TOTAL_SEATS = 10;
 
@@ -330,6 +332,13 @@ export function deriveTableScene({
     myHoleCards !== null &&
     myRevealedCardIndices.size < 2 &&
     canPlayerTableOwnHand({ gameState, playerId: viewingPlayer.id });
+  const mustQueueLeave = viewingPlayer != null && shouldQueueLeave({
+    phase,
+    hasCards: viewingPlayer.hasCards === true,
+    currentBet: viewingPlayer.currentBet ?? 0,
+    totalContribution: gameState.players?.[viewingPlayer.id]?.totalContribution ?? 0,
+    sitOutUntilBB: gameState.players?.[viewingPlayer.id]?.sitOutUntilBB ?? true,
+  });
   const isSoleUncontestedWinner =
     gameState.showdownKind === "uncontested" &&
     !gameState.autoRevealWinningHands &&
@@ -467,6 +476,7 @@ export function deriveTableScene({
       bombPotCooldown: gameState.bombPotCooldown ?? [],
       bombPotAnnouncement,
       actionError,
+      mustQueueLeave,
       leaveQueued,
       cardPeelPersistenceKey,
     },

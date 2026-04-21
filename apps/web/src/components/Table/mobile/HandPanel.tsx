@@ -1,10 +1,8 @@
 "use client";
 import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import HoleCards from "components/poker/HoleCards";
 import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
-import { isActivePhase } from "lib/phases";
 import type { HandIndicator } from "lib/handIndicators";
 import type { Player } from "types/player";
 import type { Card as CardType } from "@pokington/shared";
@@ -21,10 +19,6 @@ interface HandPanelProps {
   onRevealToOthers?: (index: 0 | 1) => void;
   sevenTwoEligible?: boolean;
   onPeekCard?: (index: 0 | 1) => void;
-  onStandUp?: () => void;
-  onQueueLeave?: () => void;
-  leaveQueued?: boolean;
-  phase?: string;
   currentBet?: number;
   cardPeelPersistenceKey?: string | null;
 }
@@ -40,15 +34,10 @@ const HandPanel: React.FC<HandPanelProps> = ({
   onRevealToOthers,
   sevenTwoEligible = false,
   onPeekCard,
-  onStandUp,
-  onQueueLeave,
-  leaveQueued,
-  phase,
   currentBet = 0,
   cardPeelPersistenceKey,
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
-  const [leaveConfirm, setLeaveConfirm] = useState(false);
   const cardHeight = 100;
   const autoPeelEnabled = useGameStore((state) => state.autoPeelEnabled);
   const setAutoPeelEnabled = useGameStore((state) => state.setAutoPeelEnabled);
@@ -90,7 +79,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
             </div>
           </div>
 
-          {/* Bottom: auto-flip toggle + leave seat */}
+          {/* Bottom: auto-flip toggle */}
           <div className="flex gap-1">
             <button
               onClick={() => setAutoPeelEnabled(!autoPeelEnabled)}
@@ -101,21 +90,8 @@ const HandPanel: React.FC<HandPanelProps> = ({
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${autoPeelEnabled ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`} />
-              peel
+              auto peel
             </button>
-            {onStandUp && (
-              <button
-                onClick={() => !leaveQueued && setLeaveConfirm(true)}
-                className={`px-2 rounded-lg font-black uppercase tracking-wide transition-colors py-1 text-[8px] ${
-                  leaveQueued
-                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                    : "bg-gray-100 dark:bg-white/[0.07] text-gray-500 dark:text-gray-300"
-                }`}
-                title={leaveQueued ? "Leaving after this hand" : "Leave seat"}
-              >
-                {leaveQueued ? "Leaving..." : "Leave"}
-              </button>
-            )}
           </div>
         </div>
 
@@ -173,61 +149,6 @@ const HandPanel: React.FC<HandPanelProps> = ({
         </div>
 
       </div>
-
-      {/* Leave confirmation sheet */}
-      <AnimatePresence>
-        {leaveConfirm && (() => {
-          const blocked = isActivePhase(phase) && !(player.isFolded ?? false);
-          return (
-            <>
-              <motion.div
-                className="overlay-scrim-strong absolute inset-0 z-40"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setLeaveConfirm(false)}
-              />
-              <motion.div
-                className="elevated-surface-light absolute bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t px-4 pt-4"
-                style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-              >
-                <div className="surface-content">
-                  <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-4" />
-                  <p className="text-sm font-black text-gray-900 dark:text-white text-center mb-1">
-                    {blocked ? "Leave next hand?" : "Leave seat?"}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
-                    {blocked
-                      ? "You'll leave after this hand finishes. Your chips will be cashed out."
-                      : "Your chips will be cashed out."}
-                  </p>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setLeaveConfirm(false)}
-                      className="flex-1 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold h-12 text-sm"
-                    >
-                      Stay
-                    </button>
-                    <button
-                      onClick={() => {
-                        setLeaveConfirm(false);
-                        if (blocked) { onQueueLeave?.(); } else { onStandUp!(); }
-                      }}
-                      className="flex-1 rounded-xl font-bold bg-red-500 text-white h-12 text-sm"
-                    >
-                      {blocked ? "Leave Next Hand" : "Leave"}
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            </>
-          );
-        })()}
-      </AnimatePresence>
     </div>
   );
 };

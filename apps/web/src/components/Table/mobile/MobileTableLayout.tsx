@@ -92,6 +92,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     bombPotCooldown = [],
     bombPotAnnouncement = null,
     actionError = null,
+    mustQueueLeave,
     leaveQueued,
     cardPeelPersistenceKey,
   } = scene;
@@ -110,10 +111,12 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     onVoteBombPot,
     onStandUp,
     onQueueLeave,
+    onCancelQueuedLeave,
   } = actions;
   const [selectedEmptySeat, setSelectedEmptySeat] = useState<number | null>(null);
   const [bombPotSheetOpen, setBombPotSheetOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [leaveConfirm, setLeaveConfirm] = useState(false);
   const [activeHandIndicatorId, setActiveHandIndicatorId] = useState<string | null>(null);
   const handIndicatorIdsKey = handIndicators.map((indicator) => indicator.id).join("|");
 
@@ -226,6 +229,17 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         smallBlind={blinds.small}
         bigBlind={blinds.big}
         sevenTwoBountyBB={sevenTwoBountyBB}
+        showLeaveButton={Boolean(onStandUp && youPlayer)}
+        leaveQueued={leaveQueued}
+        mustQueueLeave={mustQueueLeave}
+        onLeavePress={() => {
+          if (!leaveQueued) {
+            setLeaveConfirm(true);
+          }
+        }}
+        onCancelLeavePress={() => {
+          onCancelQueuedLeave?.();
+        }}
       />
 
       <div
@@ -351,10 +365,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             onRevealToOthers={onRevealCard}
             sevenTwoEligible={sevenTwoEligible}
             onPeekCard={onPeekCard}
-            onStandUp={onStandUp}
-            onQueueLeave={onQueueLeave}
-            leaveQueued={leaveQueued}
-            phase={phase}
             currentBet={youPlayer?.currentBet ?? 0}
             cardPeelPersistenceKey={cardPeelPersistenceKey}
           />
@@ -415,6 +425,61 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
               />
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {leaveConfirm && youPlayer && onStandUp && (
+          <>
+            <motion.div
+              className="overlay-scrim-strong absolute inset-0 z-[190]"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setLeaveConfirm(false)}
+            />
+            <motion.div
+              className="elevated-surface-light absolute bottom-0 left-0 right-0 z-[195] rounded-t-2xl border-t px-4 pt-4"
+              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+            >
+              <div className="surface-content">
+                <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-4" />
+                <p className="text-sm font-black text-gray-900 dark:text-white text-center mb-1">
+                  {mustQueueLeave ? "Leave next hand?" : "Leave seat?"}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
+                  {mustQueueLeave
+                    ? "You'll leave after this hand finishes. Your chips will be cashed out."
+                    : "Your chips will be cashed out."}
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setLeaveConfirm(false)}
+                    className="flex-1 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold h-12 text-sm"
+                  >
+                    Stay
+                  </button>
+                  <button
+                    onClick={() => {
+                      setLeaveConfirm(false);
+                      if (mustQueueLeave) {
+                        onQueueLeave?.();
+                      } else {
+                        onStandUp();
+                      }
+                    }}
+                    className="flex-1 rounded-xl font-bold bg-red-500 text-white h-12 text-sm"
+                  >
+                    {mustQueueLeave ? "Leave Next Hand" : "Leave"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 

@@ -15,6 +15,8 @@ import DesktopBombPotMenu from "./DesktopBombPotMenu";
 import DesktopHandIndicatorFan from "./DesktopHandIndicatorFan";
 import DesktopLedgerMenu from "./DesktopLedgerMenu";
 import DesktopRaisePopover from "./DesktopRaisePopover";
+import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
+import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
 import RunItBoard from "../RunItBoard";
 
 import AnnouncementBanner from "../AnnouncementBanner";
@@ -33,7 +35,6 @@ import {
   getViewingPlayerId,
   isCanceledBombPotAnnouncement,
 } from "../tableLayoutUtils";
-import { isActivePhase } from "lib/phases";
 import {
   getCenterBoardMode,
   isRunItAnnouncementPhase,
@@ -49,8 +50,15 @@ import {
 import { computeDesktopChipAngle } from "lib/chipOrientation";
 import { useGameStore } from "store/useGameStore";
 import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
+import { collectBoardRevealEvents } from "lib/tableFeedback.mjs";
 
 const Seat = dynamic(() => import("./Seat"), { ssr: false });
+const collectBoardRevealEventsTyped = collectBoardRevealEvents as (options: {
+  previousCounts: number[];
+  nextCounts: number[];
+  handNumber: number;
+  mode: "single" | "bombPot" | "runIt";
+}) => TableVisualFeedbackEvent[];
 
 const TOTAL_SEATS = 10;
 
@@ -113,6 +121,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     bombPotCooldown = [],
     bombPotAnnouncement = null,
     actionError = null,
+    mustQueueLeave,
     leaveQueued,
     cardPeelPersistenceKey,
   } = scene;
@@ -131,6 +140,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     onVoteBombPot,
     onStandUp,
     onQueueLeave,
+    onCancelQueuedLeave,
   } = actions;
   const isDark = useColorScheme() === "dark";
   const router = useRouter();
@@ -190,17 +200,61 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   const g: TableGeometry = desktopLayout.seat.geometry;
   const stageInset = Math.max(0, (1 - desktopScale) * 22);
   const overlayLift = -Math.round(desktopLayout.overlays.lift + stageInset * 0.75);
-  const seatSize = desktopLayout.seat.size;
-  const infoClusterStyle = {
-    left: Math.round(desktopLayout.infoCluster.left + stageInset),
-    bottom: Math.round(desktopLayout.infoCluster.bottom + stageInset * 0.5),
+  const scaledVotingPanelMetrics = {
+    ...desktopLayout.votingPanel,
+    width: Math.round(desktopLayout.votingPanel.width * 1.12),
+    padding: Math.round(desktopLayout.votingPanel.padding * 1.14),
+    titleFontSize: Math.round(desktopLayout.votingPanel.titleFontSize * 1.22),
+    subtitleFontSize: Math.round(desktopLayout.votingPanel.subtitleFontSize * 1.18),
+    buttonHeight: Math.round(desktopLayout.votingPanel.buttonHeight * 1.12),
+    buttonFontSize: Math.round(desktopLayout.votingPanel.buttonFontSize * 1.14),
+    rowFontSize: Math.round(desktopLayout.votingPanel.rowFontSize * 1.1),
+    waitingFontSize: Math.round(desktopLayout.votingPanel.waitingFontSize * 1.12),
   };
+  const scaledBombPotVotingPanelMetrics = {
+    ...desktopLayout.bombPotVotingPanel,
+    width: Math.round(desktopLayout.bombPotVotingPanel.width * 1.1),
+    padding: Math.round(desktopLayout.bombPotVotingPanel.padding * 1.12),
+    titleFontSize: Math.round(desktopLayout.bombPotVotingPanel.titleFontSize * 1.18),
+    descriptionFontSize: Math.round(desktopLayout.bombPotVotingPanel.descriptionFontSize * 1.16),
+    voteBadgeFontSize: Math.round(desktopLayout.bombPotVotingPanel.voteBadgeFontSize * 1.16),
+    buttonHeight: Math.round(desktopLayout.bombPotVotingPanel.buttonHeight * 1.1),
+    buttonFontSize: Math.round(desktopLayout.bombPotVotingPanel.buttonFontSize * 1.14),
+    waitingFontSize: Math.round(desktopLayout.bombPotVotingPanel.waitingFontSize * 1.16),
+  };
+  const seatSize = desktopLayout.seat.size;
+  const actionBarGap = 50;
+  const actionBarPaddingX = 50;
+  const actionBarPaddingY = 22;
+  const emphasizedHoleCardHeight = 210;
+  const emphasizedHoleCardsLift = -58;
+  const emphasizedButtonHeight = 64;
+  const emphasizedPrimaryButtonFontSize = 19;
+  const emphasizedSecondaryButtonFontSize = 17;
+  const emphasizedMetaStackFontSize = 24;
+  const navButtonPaddingX = 22;
+  const navButtonPaddingY = 13;
+  const navTableFontSize = 17;
+  const navEyebrowFontSize = 12;
+  const navIconFontSize = 24;
+  const leaveButtonPaddingX = 24;
+  const leaveButtonPaddingY = 13;
+  const leaveButtonFontSize = 16;
+  const infoClusterGap = 18;
+  const infoBarPaddingX = 30;
+  const infoBarPaddingY = 18;
+  const infoBarIconSize = 50;
+  const infoBarTitleFontSize = 16;
+  const infoBarBlindsFontSize = 21;
+  const infoBarBadgeFontSize = 12;
 
   const [bothRevealed, setBothRevealed] = useState(false);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [foldConfirm, setFoldConfirm] = useState(false);
+  const previousBoardCountsRef = useRef<number[]>([]);
   const autoPeelEnabled = useGameStore((state) => state.autoPeelEnabled);
   const setAutoPeelEnabled = useGameStore((state) => state.setAutoPeelEnabled);
+  const emitVisualFeedback = useTableVisualFeedback();
   // Container width for winner chip animation pixel math
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -217,6 +271,12 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   const viewingPlayerId = getViewingPlayerId(players);
   const minPlayerStack = getMinPlayerStack(players);
   const seatedPlayerCount = players.filter((player) => player != null).length;
+  const infoClusterStyle = {
+    left: Math.round(desktopLayout.infoCluster.left + stageInset),
+    bottom: youPlayer ? 195 : Math.round(desktopLayout.infoCluster.bottom + stageInset * 0.5 + 18),
+    gap: infoClusterGap,
+  };
+  const holeCardsOffsetX = youPlayer ? 180 : 0;
 
   const activeIdx = players.findIndex((p) => p?.isCurrentActor);
   const chipGlowAngle = computeDesktopChipAngle({
@@ -248,20 +308,98 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     }
   }, [canRaise, isYourTurn]);
 
+  useEffect(() => {
+    previousBoardCountsRef.current = [];
+  }, [handNumber]);
+
+  useEffect(() => {
+    if (isRunItDealing) return;
+
+    const nextCounts = isShowingBombPotCenterStage
+      ? [communityCards?.length ?? 0, communityCards2?.length ?? 0]
+      : [communityCards?.length ?? 0];
+    if (
+      previousBoardCountsRef.current.length === 0 ||
+      previousBoardCountsRef.current.length !== nextCounts.length
+    ) {
+      previousBoardCountsRef.current = nextCounts;
+      return;
+    }
+    const events = collectBoardRevealEventsTyped({
+      previousCounts: previousBoardCountsRef.current,
+      nextCounts,
+      handNumber,
+      mode: isShowingBombPotCenterStage ? "bombPot" : "single",
+    });
+    for (const event of events) {
+      emitVisualFeedback(event);
+    }
+    previousBoardCountsRef.current = nextCounts;
+  }, [
+    communityCards,
+    communityCards2,
+    emitVisualFeedback,
+    handNumber,
+    isRunItDealing,
+    isShowingBombPotCenterStage,
+  ]);
+
   return (
     <div className={`relative flex flex-col h-full w-full overflow-hidden bg-gray-100 dark:bg-gray-950 transition-colors duration-500 ${isYourTurn ? "animate-turn-perimeter" : ""}`}>
 
-      {/* Home / Exit button — top-left */}
-      <button
-        onClick={() => router.push("/")}
-        className="absolute top-6 left-8 z-30 flex items-center gap-2 px-4 py-2 rounded-xl
-          bg-white/10 hover:bg-white/20 border border-white/10
-          text-gray-400 hover:text-white text-sm font-semibold transition-all"
-        aria-label="Leave table"
-      >
-        <span className="text-lg leading-none">&larr;</span>
-        <span className="max-w-[180px] truncate">{tableName ?? "Menu"}</span>
-      </button>
+      {/* Top navigation controls */}
+      <div className="absolute top-6 left-8 z-30 flex items-center gap-3">
+        <button
+          onClick={() => router.push("/")}
+          className="flex items-center gap-3 rounded-2xl
+            bg-white/10 hover:bg-white/20 border border-white/10
+            text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white font-semibold transition-all"
+          style={{ padding: `${navButtonPaddingY}px ${navButtonPaddingX}px` }}
+          aria-label="Return to main menu"
+        >
+          <span className="leading-none" style={{ fontSize: navIconFontSize }}>&larr;</span>
+          <span className="flex min-w-0 flex-col items-start leading-none">
+            <span
+              className="font-black uppercase tracking-[0.22em] text-gray-500 dark:text-gray-400/90"
+              style={{ fontSize: navEyebrowFontSize }}
+            >
+              Main Menu
+            </span>
+            <span className="max-w-[220px] truncate text-gray-700 dark:text-white" style={{ fontSize: navTableFontSize }}>
+              {tableName ?? "Pokington"}
+            </span>
+          </span>
+        </button>
+        {onStandUp && youPlayer && (
+          <button
+            onClick={
+              leaveQueued
+                ? onCancelQueuedLeave
+                : mustQueueLeave
+                  ? onQueueLeave
+                  : onStandUp
+            }
+            className={`rounded-2xl border font-bold transition-colors whitespace-nowrap ${
+              leaveQueued
+                ? "border-amber-500/40 bg-amber-500/15 text-amber-700 hover:bg-amber-500/22 dark:text-amber-300"
+                : "border-gray-300/80 bg-white/88 text-gray-800 hover:bg-white hover:text-gray-900 dark:border-white/10 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20 dark:hover:text-white"
+            }`}
+            style={{
+              padding: `${leaveButtonPaddingY}px ${leaveButtonPaddingX}px`,
+              fontSize: leaveButtonFontSize,
+            }}
+            aria-label={
+              leaveQueued
+                ? "Cancel queued leave"
+                : mustQueueLeave
+                  ? "Leave next hand"
+                  : "Leave seat"
+            }
+          >
+            {leaveQueued ? "Cancel Leave" : mustQueueLeave ? "Leave Next Hand" : "Leave"}
+          </button>
+        )}
+      </div>
 
       {/* Ambient Background Glow */}
       <div className="absolute inset-0 pointer-events-none z-0">
@@ -520,7 +658,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                       onApprove={() => onVoteBombPot?.(true)}
                       onReject={() => onVoteBombPot?.(false)}
                       variant="desktop"
-                      desktopMetrics={desktopLayout.bombPotVotingPanel}
+                      desktopMetrics={scaledBombPotVotingPanelMetrics}
                     />
                   </div>
                 </div>
@@ -569,7 +707,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                     onVote={onVoteRun}
                     votingStartedAt={votingStartedAt}
                     canVote={viewerCanVote}
-                    desktopMetrics={desktopLayout.votingPanel}
+                    desktopMetrics={scaledVotingPanelMetrics}
                   />
                 </div>
               )}
@@ -646,43 +784,63 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
           )}
         </div>
 
-        <div className="absolute flex items-end gap-3 z-[55] animate-slide-up" style={infoClusterStyle}>
-          {/* Table Info Bar */}
-          <div className="flex items-center gap-4 px-5 py-3 rounded-2xl bg-white/85 dark:bg-[rgba(3,7,18,0.85)] border border-gray-200/50 dark:border-white/[0.06] backdrop-blur-md shadow-xl">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white text-lg">
-              ♠
-            </div>
-            <div>
-              <h4 className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none">
-                {tableName ?? "Pokington Main"}
-              </h4>
-              <p className="text-sm font-bold text-gray-900 dark:text-white">
-                Blinds: {formatCents(blinds?.small ?? 100)} / {formatCents(blinds?.big ?? 200)}
-              </p>
-            </div>
-            {sevenTwoBountyBB > 0 && (
-              <div className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-red-500/20 text-red-400 border border-red-500/30">
-                7-2: ON • {sevenTwoBountyBB}x BB
-              </div>
-            )}
-            {isBombPotHand && (
-              <div className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                BOMB POT
-              </div>
-            )}
-          </div>
+      </div>
 
-          <div className="flex items-center gap-2 rounded-2xl bg-white/78 dark:bg-[rgba(3,7,18,0.78)] border border-gray-200/50 dark:border-white/[0.06] backdrop-blur-md shadow-xl px-3 py-2">
-            <DesktopLedgerMenu />
-
-            {!bombPotVote && !_bombPotNextHand && viewingPlayerId && !bombPotCooldown.includes(viewingPlayerId) && (
-              <DesktopBombPotMenu
-                bigBlind={blinds?.big ?? 25}
-                minPlayerStack={minPlayerStack}
-                onPropose={onProposeBombPot}
-              />
-            )}
+      <div className="absolute flex items-end z-[55] animate-slide-up" style={infoClusterStyle}>
+        {/* Table Info Bar */}
+        <div
+          className="flex max-w-[860px] items-center gap-4 rounded-[26px] bg-white/90 dark:bg-[rgba(3,7,18,0.9)] border border-gray-200/70 dark:border-white/[0.1] backdrop-blur-md shadow-xl"
+          style={{ padding: `${infoBarPaddingY}px ${infoBarPaddingX}px` }}
+        >
+          <div
+            className="rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-white"
+            style={{ width: infoBarIconSize, height: infoBarIconSize, fontSize: Math.round(infoBarIconSize * 0.45) }}
+          >
+            ♠
           </div>
+          <div className="min-w-0">
+            <h4
+              className="font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest leading-none truncate"
+              style={{ fontSize: infoBarTitleFontSize }}
+            >
+              {tableName ?? "Pokington Main"}
+            </h4>
+            <p className="font-bold text-gray-900 dark:text-white whitespace-nowrap" style={{ fontSize: infoBarBlindsFontSize }}>
+              Blinds: {formatCents(blinds?.small ?? 100)} / {formatCents(blinds?.big ?? 200)}
+            </p>
+          </div>
+          {sevenTwoBountyBB > 0 && (
+            <div
+              className="px-3 py-1.5 rounded-full font-black uppercase tracking-wide bg-red-500/20 text-red-400 border border-red-500/30 whitespace-nowrap"
+              style={{ fontSize: infoBarBadgeFontSize }}
+            >
+              7-2: ON • {sevenTwoBountyBB}x BB
+            </div>
+          )}
+          {isBombPotHand && (
+            <div
+              className="px-3 py-1.5 rounded-full font-black uppercase tracking-wide bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 whitespace-nowrap"
+              style={{ fontSize: infoBarBadgeFontSize }}
+            >
+              BOMB POT
+            </div>
+          )}
+        </div>
+
+        <div
+          className="flex items-center rounded-[24px] bg-white/90 dark:bg-[rgba(3,7,18,0.9)] border border-gray-200/70 dark:border-white/[0.1] backdrop-blur-md shadow-xl"
+          style={{ gap: 14, padding: "12px 16px" }}
+        >
+          <DesktopLedgerMenu prominent />
+
+          {!bombPotVote && !_bombPotNextHand && viewingPlayerId && !bombPotCooldown.includes(viewingPlayerId) && (
+            <DesktopBombPotMenu
+              bigBlind={blinds?.big ?? 25}
+              minPlayerStack={minPlayerStack}
+              onPropose={onProposeBombPot}
+              prominent
+            />
+          )}
         </div>
       </div>
 
@@ -696,23 +854,27 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
           <div
             className="flex items-center mx-auto"
             style={{
-              gap: desktopLayout.actionBar.gap,
+              gap: actionBarGap,
               maxWidth: desktopLayout.actionBar.maxWidth,
-              padding: `${desktopLayout.actionBar.paddingY}px ${desktopLayout.actionBar.paddingX}px`,
+              padding: `${actionBarPaddingY}px ${actionBarPaddingX}px`,
             }}
           >
 
             {/* Hole cards area */}
             <div
               className="flex-1 flex flex-col items-center relative z-10"
-              style={{ marginTop: hasHoleCards ? desktopLayout.actionBar.holeCardsLift : 0 }}
+              style={{
+                marginTop: hasHoleCards ? emphasizedHoleCardsLift : 0,
+                transform: holeCardsOffsetX !== 0 ? `translateX(${holeCardsOffsetX}px)` : undefined,
+              }}
             >
               {hasHoleCards ? (
                 <>
                   <HoleCards
                     key={handNumber}
                     cards={holeCards}
-                    cardHeight={desktopLayout.actionBar.holeCardHeight}
+                    cardHeight={emphasizedHoleCardHeight}
+                    className="gap-4"
                     persistenceKey={cardPeelPersistenceKey}
                     autoReveal={autoPeelEnabled}
                     onRevealChange={setBothRevealed}
@@ -724,13 +886,16 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                   />
                   <button
                     onClick={() => setAutoPeelEnabled(!autoPeelEnabled)}
-                    className={`mt-2 flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wide transition-colors ${
+                    className={`mt-3 flex items-center gap-2 rounded-full font-black uppercase tracking-wide transition-colors ${
                       autoPeelEnabled
                         ? "bg-red-500 text-white"
                         : "bg-gray-100 dark:bg-white/[0.07] text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-white/[0.12]"
                     }`}
+                    style={{ padding: "5px 14px", fontSize: 12 }}
                   >
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${autoPeelEnabled ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`} />
+                    <span
+                      className={`w-2 h-2 rounded-full flex-shrink-0 ${autoPeelEnabled ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`}
+                    />
                     auto peel
                   </button>
                 </>
@@ -743,7 +908,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
             <div
               className="flex flex-col items-center gap-1.5 flex-shrink-0"
-              style={{ minWidth: handIndicators.length > 1 ? 288 : 120 }}
+              style={{ minWidth: handIndicators.length > 1 ? 320 : 136 }}
             >
               <div className={bothRevealed ? "" : "opacity-60"}>
                 <DesktopHandIndicatorFan
@@ -752,33 +917,11 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               </div>
               <span
                 className="font-mono font-black text-gray-900 dark:text-white"
-                style={{ fontSize: desktopLayout.actionBar.metaStackFontSize }}
+                style={{ fontSize: emphasizedMetaStackFontSize }}
               >
                 {formatCents(youPlayer.stack)}
               </span>
-              <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 px-2 py-0.5 rounded-md font-black uppercase">You</span>
-              {onStandUp && (() => {
-                const midHand = isActivePhase(phase) && !(youPlayer?.isFolded ?? false);
-                if (leaveQueued) {
-                  return (
-                    <span
-                      className="font-bold text-amber-400 px-2 py-0.5 rounded-md border border-amber-500/30 bg-amber-500/10"
-                      style={{ fontSize: desktopLayout.actionBar.leaveFontSize }}
-                    >
-                      Leaving...
-                    </span>
-                  );
-                }
-                return (
-                  <button
-                    onClick={midHand ? onQueueLeave : onStandUp}
-                    className="font-bold text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2 py-0.5 rounded-md border border-gray-200 dark:border-gray-700 transition-colors"
-                    style={{ fontSize: desktopLayout.actionBar.leaveFontSize }}
-                  >
-                    {midHand ? "Leave Next Hand" : "Leave"}
-                  </button>
-                );
-              })()}
+              <span className="text-[11px] bg-red-100 dark:bg-red-900/30 text-red-600 px-2.5 py-1 rounded-md font-black uppercase">You</span>
             </div>
 
             {/* Action buttons */}
@@ -798,8 +941,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                         <div
                           className="px-12 rounded-xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-semibold"
                           style={{
-                            height: desktopLayout.actionBar.buttonHeight,
-                            fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                            height: emphasizedButtonHeight,
+                            fontSize: emphasizedSecondaryButtonFontSize,
                           }}
                         >
                           Waiting for more players…
@@ -809,8 +952,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                           onClick={onStartHand}
                           className="px-12 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
                           style={{
-                            height: desktopLayout.actionBar.buttonHeight,
-                            fontSize: desktopLayout.actionBar.primaryButtonFontSize,
+                            height: emphasizedButtonHeight,
+                            fontSize: emphasizedPrimaryButtonFontSize,
                           }}
                         >
                           {isShowdown ? "Next Hand" : "Start Game"}
@@ -854,8 +997,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                         }}
                         className="px-8 rounded-xl bg-gray-100 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
                         style={{
-                          height: desktopLayout.actionBar.buttonHeight,
-                          fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                          height: emphasizedButtonHeight,
+                          fontSize: emphasizedSecondaryButtonFontSize,
                         }}
                       >
                         Fold
@@ -902,8 +1045,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                         }}
                         className="px-8 rounded-xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold transition-colors hover:bg-gray-300 dark:hover:bg-gray-600"
                         style={{
-                          height: desktopLayout.actionBar.buttonHeight,
-                          fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                          height: emphasizedButtonHeight,
+                          fontSize: emphasizedSecondaryButtonFontSize,
                         }}
                       >
                         Check
@@ -913,8 +1056,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                         onClick={onCall}
                         className="px-8 rounded-xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold transition-colors hover:bg-gray-300 dark:hover:bg-gray-600"
                         style={{
-                          height: desktopLayout.actionBar.buttonHeight,
-                          fontSize: desktopLayout.actionBar.secondaryButtonFontSize,
+                          height: emphasizedButtonHeight,
+                          fontSize: emphasizedSecondaryButtonFontSize,
                         }}
                       >
                         Call {formatCents(callAmount)}
@@ -927,8 +1070,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                           onClick={() => setRaiseOpen((o) => !o)}
                           className="px-8 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
                           style={{
-                            height: desktopLayout.actionBar.buttonHeight,
-                            fontSize: desktopLayout.actionBar.primaryButtonFontSize,
+                            height: emphasizedButtonHeight,
+                            fontSize: emphasizedPrimaryButtonFontSize,
                           }}
                         >
                           {betOrRaiseLabel}
@@ -955,8 +1098,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                         onClick={onAllIn}
                         className="px-8 rounded-xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
                         style={{
-                          height: desktopLayout.actionBar.buttonHeight,
-                          fontSize: desktopLayout.actionBar.primaryButtonFontSize,
+                          height: emphasizedButtonHeight,
+                          fontSize: emphasizedPrimaryButtonFontSize,
                         }}
                       >
                         All-in
