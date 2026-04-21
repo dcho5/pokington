@@ -19,6 +19,14 @@ function hasSevTwoOffsuit(cards: [Card, Card] | null): boolean {
   );
 }
 
+function isValidSeatIndex(seatIndex: number): boolean {
+  return Number.isInteger(seatIndex) && seatIndex >= 0 && seatIndex < MAX_SEATS;
+}
+
+function isValidChipCount(amount: number): boolean {
+  return Number.isSafeInteger(amount) && amount >= 0;
+}
+
 /** Collect bounty from all seated players except the winner and add to winner's stack. */
 function applySevenTwoBounty(state: GameState, winnerId: string): void {
   const winner = state.players[winnerId];
@@ -501,6 +509,7 @@ export function gameReducer(
     // Players may sit at any time. If a hand is in progress, they join with
     // sitOutUntilBB=true and will participate once BB reaches their seat.
     case "SIT_DOWN": {
+      if (!isValidSeatIndex(event.seatIndex) || !isValidChipCount(event.buyIn)) return prevState;
       if (playerAtSeat(event.seatIndex, state.players)) return prevState;
       if (state.players[event.playerId]) return prevState;
 

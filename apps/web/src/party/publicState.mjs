@@ -1,10 +1,8 @@
 import {
-  deriveRunAnimationAt,
   hasAnimatedRunout,
   shouldRevealRunsConcurrently,
 } from "@pokington/engine";
-
-const CARD_COUNT = 5;
+import { getTimedVisibleRunCounts } from "../lib/showdownRevealState.mjs";
 
 function shouldRedactAnimatedShowdown(state) {
   if (!state || state.phase !== "showdown") return false;
@@ -15,30 +13,14 @@ function shouldRedactAnimatedShowdown(state) {
 
 function getRunVisibleCounts(state, now) {
   const runCount = Math.max(1, state.runResults?.length ?? 0);
-  const knownCardCount = Math.max(0, Math.min(CARD_COUNT, state.knownCardCountAtRunIt ?? 0));
-  const counts = Array.from({ length: runCount }, () => knownCardCount);
   const revealRunsConcurrently = shouldRevealRunsConcurrently(state.isBombPot ?? false, runCount);
-
-  if (state.runDealStartedAt == null) return counts;
-
-  const { currentRun, revealedCount } = deriveRunAnimationAt(
-    now,
-    state.runDealStartedAt,
-    knownCardCount,
+  return getTimedVisibleRunCounts({
+    knownCardCount: state.knownCardCountAtRunIt ?? 0,
     runCount,
-    { revealRunsConcurrently },
-  );
-
-  if (revealRunsConcurrently) {
-    return counts.map(() => revealedCount);
-  }
-
-  for (let runIndex = 0; runIndex < runCount; runIndex += 1) {
-    if (runIndex < currentRun) counts[runIndex] = CARD_COUNT;
-    else if (runIndex === currentRun) counts[runIndex] = revealedCount;
-  }
-
-  return counts;
+    runDealStartedAt: state.runDealStartedAt,
+    now,
+    revealRunsConcurrently,
+  });
 }
 
 export function buildPublicGameState(state, now = Date.now()) {
@@ -62,7 +44,9 @@ export function buildPublicGameState(state, now = Date.now()) {
     board: run.board.slice(0, visibleCounts[runIndex] ?? 0),
   }));
   const visibleCommunityCards = visibleRunResults[0]?.board ?? state.communityCards ?? [];
-  const visibleCommunityCards2 = visibleRunResults[1]?.board ?? state.communityCards2 ?? [];
+  const visibleCommunityCards2 = state.isBombPot
+    ? (visibleRunResults[1]?.board ?? state.communityCards2 ?? [])
+    : (state.communityCards2 ?? []);
 
   return {
     ...publicState,

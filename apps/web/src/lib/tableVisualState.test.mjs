@@ -140,6 +140,21 @@ test("run-it showdown stays active during the announcement window before the boa
   assert.equal(getCenterBoardMode(options), "single");
 });
 
+test("normal run-it showdowns do not switch into bomb-pot mode just because a second board array exists", () => {
+  assert.equal(
+    getCenterBoardMode({
+      phase: "showdown",
+      isRunItBoard: true,
+      isBombPotHand: false,
+      runDealStartedAt: null,
+      runAnnouncement: 2,
+      runResults: [{ winners: [] }, { winners: [] }],
+      communityCards2: [{ rank: "A", suit: "spades" }],
+    }),
+    "single",
+  );
+});
+
 test("recognizes a fully cleared table between hands", () => {
   assert.equal(
     isTableClearedForNextHand({

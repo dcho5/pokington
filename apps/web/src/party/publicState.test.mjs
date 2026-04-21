@@ -85,6 +85,7 @@ test("public showdown state exposes only the server-revealed cards for the activ
   );
 
   assert.equal(publicState.communityCards.length, 4);
+  assert.deepEqual(publicState.communityCards2, []);
   assert.deepEqual(publicState.runResults.map((run) => run.board.length), [4, 3]);
 });
 
@@ -94,6 +95,7 @@ test("public showdown state keeps later runs hidden until the server reaches the
     8000,
   );
 
+  assert.deepEqual(publicState.communityCards2, []);
   assert.deepEqual(publicState.runResults.map((run) => run.board.length), [5, 4]);
 });
 

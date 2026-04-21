@@ -15,7 +15,6 @@ import PokerChip from "components/poker/PokerChip";
 import { formatCents } from "lib/formatCents";
 import {
   isAnimatedRunItShowdown,
-  isAnimatedShowdownReveal,
   shouldRenderRunItBoard,
 } from "lib/tableVisualState";
 import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
@@ -37,7 +36,6 @@ import {
 } from "../tableLayoutUtils";
 
 type MobileTableLayoutProps = TableLayoutProps & { totalSeats?: number };
-const CARD_COUNT = 5;
 
 const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   scene,
@@ -75,6 +73,8 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     viewerCanVote = false,
     showNextHand = true,
     isRunItBoard = false,
+    animatedShowdownReveal = false,
+    showWinnerBanner = false,
     runResults = [],
     knownCardCount = 0,
     runDealStartedAt = null,
@@ -91,6 +91,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     communityCards2,
     bombPotCooldown = [],
     bombPotAnnouncement = null,
+    actionError = null,
     leaveQueued,
     cardPeelPersistenceKey,
   } = scene;
@@ -145,15 +146,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     isBombPotHand,
     runResults,
   });
-  const animatedShowdown = isAnimatedShowdownReveal({
-    phase,
-    knownCardCount,
-    runResults,
-    runAnnouncement,
-    runDealStartedAt,
-  });
   const revealRunsConcurrently = shouldRevealRunsConcurrently(isBombPotHand, runResults.length);
-  const revealComplete = !animatedShowdown || runResults.every((run) => (run?.board?.length ?? 0) >= CARD_COUNT);
 
   const opponents = getOpponents(players);
   const emptySeats = getEmptySeats(players, totalSeats);
@@ -179,14 +172,40 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     <div className="absolute inset-0 overflow-hidden overscroll-none bg-gray-100 dark:bg-gray-950 transition-colors duration-500">
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[40%] bg-red-500/5 dark:bg-red-600/10 blur-[80px] rounded-full" style={{ willChange: "auto" }} />
+        {isYourTurnProp && (
+          <>
+            <div
+              className="animate-turn-perimeter-wash-layer absolute inset-0"
+              style={{
+                background: [
+                  "linear-gradient(180deg, rgba(239, 68, 68, 0.32), transparent 16%)",
+                  "linear-gradient(0deg, rgba(239, 68, 68, 0.24), transparent 18%)",
+                  "linear-gradient(90deg, rgba(239, 68, 68, 0.16), transparent 12%)",
+                  "linear-gradient(270deg, rgba(239, 68, 68, 0.16), transparent 12%)",
+                ].join(","),
+              }}
+            />
+            <div
+              className="animate-turn-perimeter-glow-layer absolute inset-[10px] rounded-[28px]"
+              style={{
+                background: [
+                  "radial-gradient(circle at 50% 0%, rgba(248, 113, 113, 0.32), transparent 52%)",
+                  "radial-gradient(circle at 50% 100%, rgba(239, 68, 68, 0.22), transparent 56%)",
+                  "radial-gradient(circle at 0% 50%, rgba(239, 68, 68, 0.18), transparent 40%)",
+                  "radial-gradient(circle at 100% 50%, rgba(239, 68, 68, 0.18), transparent 40%)",
+                ].join(","),
+              }}
+            />
+          </>
+        )}
       </div>
 
       {phase === "showdown" && winners && winners.length > 0 && (
         <MobileWinnerChips
           key={`${handNumber}-mobile-chips`}
           winners={winners}
-          runResults={animatedShowdown ? runResults : undefined}
-          knownCardCount={animatedShowdown ? knownCardCount : undefined}
+          runResults={animatedShowdownReveal ? runResults : undefined}
+          knownCardCount={animatedShowdownReveal ? knownCardCount : undefined}
           revealRunsConcurrently={revealRunsConcurrently}
           players={players.map((p, i) => p ? { id: p.id, seatIndex: i, isYou: p.isYou } : null)}
           handNumber={handNumber}
@@ -455,6 +474,26 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       </AnimatePresence>
 
       <AnimatePresence>
+        {actionError && (
+          <div className="absolute inset-0 flex items-center justify-center pt-[12%] z-[179] pointer-events-none">
+            <div className="relative isolate px-4 w-full max-w-sm">
+              <div className={mobileBannerHaloClass} />
+              <div className="relative z-10">
+                <AnnouncementBanner
+                  eyebrow="Action Blocked"
+                  title="That move didn't go through"
+                  detail={actionError.message}
+                  badge="Retry"
+                  tone="amber"
+                  variant="mobile"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {bombPotAnnouncement && (
           <div className="absolute inset-0 flex items-center justify-center pt-[20%] z-[178] pointer-events-none">
             <div className="relative isolate px-4 w-full max-w-sm">
@@ -490,7 +529,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       </AnimatePresence>
 
       <AnimatePresence>
-        {phase === "showdown" && !animatedRunIt && revealComplete && winners && winners.length > 0 && (
+        {phase === "showdown" && !animatedRunIt && showWinnerBanner && winners && winners.length > 0 && (
           <motion.div
             className="absolute z-[160] left-4 right-4 pointer-events-none"
             style={{ bottom: "calc(env(safe-area-inset-bottom) + 180px)" }}

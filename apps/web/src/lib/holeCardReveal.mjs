@@ -55,6 +55,14 @@ export function getInitialPrivateRevealState({
   return autoReveal ? [true, true] : persisted;
 }
 
+export function createInitialPeelCardState({ revealed = false } = {}) {
+  return {
+    initialProgress: revealed ? 1 : 0,
+    hasRevealed: revealed,
+    hasPeekedEnough: false,
+  };
+}
+
 export function readPersistedAutoPeelPreference() {
   if (typeof window === "undefined") return false;
   try {

@@ -3,6 +3,7 @@ import React, { useRef, useState, useEffect } from "react";
 import Card from "components/poker/Card";
 import {
   canStartPublicReveal,
+  createInitialPeelCardState,
   getInitialPrivateRevealState,
   writePersistedPeelState,
 } from "lib/holeCardReveal.mjs";
@@ -74,7 +75,8 @@ function PeelCard({
   onPeekCard?: () => void;
 }) {
   const width = Math.round((height * 5) / 7);
-  const initialProgress = revealed ? 1 : 0;
+  const initialPeelCardState = createInitialPeelCardState({ revealed });
+  const initialProgress = initialPeelCardState.initialProgress;
 
   const backRef = useRef<HTMLDivElement>(null);
   const frontRef = useRef<HTMLDivElement>(null);
@@ -88,8 +90,8 @@ function PeelCard({
   const startProgressRef = useRef(0);
   const isDraggingRef = useRef(false);
   const dragDistanceRef = useRef(0);
-  const hasRevealedRef = useRef(revealed); // ratchet — never fire onRevealChange twice
-  const hasPeekedEnoughRef = useRef(revealed); // ratchet — never fire onPeekCard twice
+  const hasRevealedRef = useRef(initialPeelCardState.hasRevealed); // ratchet — never fire onRevealChange twice
+  const hasPeekedEnoughRef = useRef(initialPeelCardState.hasPeekedEnough); // ratchet — report the first peek even if the card starts open
   const holdStartRef = useRef(0);
   const holdStartXRef = useRef(0);
   const holdStartYRef = useRef(0);

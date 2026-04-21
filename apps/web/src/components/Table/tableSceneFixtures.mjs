@@ -110,6 +110,7 @@ function createClientUiState(overrides = {}) {
     currentRun: 0,
     revealedCount: 0,
     settledRunCount: 0,
+    publicShowdownRevealComplete: false,
     ...overrides,
   };
 }

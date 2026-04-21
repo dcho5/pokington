@@ -44,7 +44,7 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
 
   if (items.length === 0) {
     return (
-      <div className="px-4 py-3 text-xs text-gray-600 text-center italic">
+      <div className="px-4 py-3 text-center text-xs italic text-gray-600 dark:text-gray-400">
         No opponents seated
       </div>
     );

@@ -60,7 +60,7 @@ test("cardIndexToMask and maskToPublicCards preserve per-card visibility", () =>
   assert.equal(maskToPublicCards(cards, 0), null);
 });
 
-test("canPubliclyRevealCard allows a new reveal only on your turn during a live hand", () => {
+test("canPubliclyRevealCard allows a new reveal at any point during a live hand", () => {
   const publicShownCardMasks = new Map();
 
   assert.equal(
@@ -74,7 +74,7 @@ test("canPubliclyRevealCard allows a new reveal only on your turn during a live 
       cardIndex: 0,
       publicShownCardMasks,
     }),
-    false,
+    true,
   );
   assert.equal(
     canPubliclyRevealCard({

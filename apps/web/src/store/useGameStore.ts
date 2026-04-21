@@ -27,6 +27,7 @@ import {
   writePersistedAutoPeelPreference,
 } from "lib/holeCardReveal.mjs";
 import { isTableClearedForNextHand } from "lib/tableVisualState";
+import { deriveStreetPauseChips } from "lib/streetSweep.mjs";
 
 export interface BombPotAnnouncement {
   kind: "scheduled" | "canceled";
@@ -34,6 +35,10 @@ export interface BombPotAnnouncement {
   anteCents: number;
   title: string;
   detail: string;
+}
+
+export interface ActionError {
+  message: string;
 }
 
 interface GameStore {
@@ -67,6 +72,7 @@ interface GameStore {
   showdownStartedAt: number | null;
   sevenTwoAnnouncement: { winnerName: string; perPlayer: number; total: number } | null;
   bombPotAnnouncement: BombPotAnnouncement | null;
+  actionError: ActionError | null;
   autoPeelEnabled: boolean;
 
   // Actions
@@ -177,6 +183,7 @@ let _visibilityHandler: (() => void) | null = null;
 let _idleCleanup: (() => void) | null = null;
 let sevenTwoAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
 let bombPotAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
+let actionErrorTimer: ReturnType<typeof setTimeout> | null = null;
 
 function getRevealedCardIndices(cards: [Card | null, Card | null] | null | undefined): Set<0 | 1> {
   const indices = new Set<0 | 1>();
@@ -220,6 +227,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({
         gameState: next,
         isFirstStateReceived: true,
+        actionError: null,
         ...timingPatch,
         ...(viewingSeat === -1 && myPlayer ? { viewingSeat: myPlayer.seatIndex } : {}),
       });
@@ -234,15 +242,11 @@ export const useGameStore = create<GameStore>((set, get) => {
     const advancedHand = (next.handNumber ?? 0) > (prev?.handNumber ?? 0);
 
     // ── Street transition: live bets cleared ──
-    const prevBets = prev ? Object.values(prev.players).reduce((s, p) => s + p.currentBet, 0) : 0;
-    const nextBets = Object.values(next.players).reduce((s, p) => s + p.currentBet, 0);
-    const streetTransitioned = prevBets > 0 && nextBets === 0 && next.phase !== "waiting";
+    const streetPauseSnapshot = prev ? deriveStreetPauseChips(prev, next) : null;
+    const streetTransitioned = streetPauseSnapshot !== null;
 
     if (streetTransitioned && prev) {
-      const snapshot = Object.values(prev.players)
-        .filter((p) => p.currentBet > 0)
-        .map((p) => ({ id: p.id, seatIndex: p.seatIndex, amount: p.currentBet }));
-      set({ streetPauseChips: snapshot, streetSweeping: false });
+      set({ streetPauseChips: streetPauseSnapshot, streetSweeping: false });
       setTimeout(() => set({ streetSweeping: true }), STREET_PAUSE_MS - SWEEP_DURATION_MS);
       setTimeout(() => set({ streetPauseChips: null, streetSweeping: false }), STREET_PAUSE_MS);
     }
@@ -331,7 +335,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ leaveQueued: false, viewingSeat: -1 });
     }
 
-    set({ gameState: next, ...timingPatch });
+    set({ gameState: next, actionError: null, ...timingPatch });
   }
 
   return {
@@ -356,6 +360,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     showdownStartedAt: null,
     sevenTwoAnnouncement: null,
     bombPotAnnouncement: null,
+    actionError: null,
     autoPeelEnabled: readPersistedAutoPeelPreference(),
     ledger: [],
     awayPlayerIds: [],
@@ -365,6 +370,10 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     connect: (tableCode) => {
       if (_socket) { _socket.close(); _socket = null; }
+      if (actionErrorTimer) {
+        clearTimeout(actionErrorTimer);
+        actionErrorTimer = null;
+      }
 
       const clientId = getOrCreateClientId();
       set({
@@ -388,6 +397,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         showdownStartedAt: null,
         sevenTwoAnnouncement: null,
         bombPotAnnouncement: null,
+        actionError: null,
         ledger: [],
         awayPlayerIds: [],
         peekedCounts: {},
@@ -474,10 +484,23 @@ export const useGameStore = create<GameStore>((set, get) => {
               set({ ledger: msg.entries });
               break;
             case "ERROR": {
+              if (msg.code === "ACTION_REJECTED") {
+                if (actionErrorTimer) clearTimeout(actionErrorTimer);
+                set({ actionError: { message: msg.message } });
+                actionErrorTimer = setTimeout(() => {
+                  set({ actionError: null });
+                  actionErrorTimer = null;
+                }, 4_500);
+                break;
+              }
               const isTableError = msg.code === "TABLE_NOT_FOUND" || msg.code === "TABLE_NOT_ACTIVE";
               const shouldDisconnect =
                 isTableError || msg.code === "INVALID_JOIN_TOKEN" || msg.code === "PROTOCOL_VERSION_MISMATCH";
               if (shouldDisconnect) {
+                if (actionErrorTimer) {
+                  clearTimeout(actionErrorTimer);
+                  actionErrorTimer = null;
+                }
                 if (typeof document !== "undefined") {
                   if (_visibilityHandler) {
                     document.removeEventListener("visibilitychange", _visibilityHandler);
@@ -511,6 +534,7 @@ export const useGameStore = create<GameStore>((set, get) => {
                   showdownStartedAt: null,
                   sevenTwoAnnouncement: null,
                   bombPotAnnouncement: null,
+                  actionError: null,
                   ledger: [],
                   awayPlayerIds: [],
                   peekedCounts: {},
@@ -572,6 +596,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     disconnect: () => {
+      if (actionErrorTimer) {
+        clearTimeout(actionErrorTimer);
+        actionErrorTimer = null;
+      }
       if (typeof document !== "undefined") {
         if (_visibilityHandler) {
           document.removeEventListener("visibilitychange", _visibilityHandler);
@@ -604,6 +632,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         showdownStartedAt: null,
         sevenTwoAnnouncement: null,
         bombPotAnnouncement: null,
+        actionError: null,
         ledger: [],
         awayPlayerIds: [],
         peekedCounts: {},
@@ -614,6 +643,7 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     sendEvent: (event) => {
       if (!_socket) return;
+      if (get().actionError) set({ actionError: null });
       _socket.send(JSON.stringify({ type: "GAME_EVENT", event }));
     },
 

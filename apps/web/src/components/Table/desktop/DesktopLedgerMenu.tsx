@@ -24,22 +24,22 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
       }}
     >
       <div className="mb-6 flex items-center justify-between px-1">
-        <span className="text-[19px] font-black uppercase tracking-[0.28em] text-gray-400">
+        <span className="text-[19px] font-black uppercase tracking-[0.28em] text-gray-300">
           Session Ledger
         </span>
         <button
           onClick={onClose}
-          className="text-xl font-bold text-gray-600 hover:text-gray-400"
+          className="text-xl font-bold text-gray-400 transition-colors hover:text-white"
         >
           X
         </button>
       </div>
 
       {rows.length === 0 ? (
-        <p className="py-9 text-center text-xl text-gray-600">No players seated yet.</p>
+        <p className="py-9 text-center text-xl text-gray-400">No players seated yet.</p>
       ) : (
         <>
-          <div className="mb-3 flex px-1 text-[16px] font-bold uppercase tracking-[0.22em] text-gray-600">
+          <div className="mb-3 flex px-1 text-[16px] font-bold uppercase tracking-[0.22em] text-gray-400">
             <span className="flex-1">Player</span>
             <span className="w-40 text-right">Buy-in</span>
             <span className="w-40 text-right">Cash-out</span>
@@ -72,10 +72,10 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
                       </span>
                     )}
                   </div>
-                  <span className="w-40 text-right font-mono text-[22px] text-gray-500">
+                  <span className="w-40 text-right font-mono text-[22px] text-gray-300">
                     {formatCents(row.totalBuyIn)}
                   </span>
-                  <span className="w-40 text-right font-mono text-[22px] text-gray-400">
+                  <span className="w-40 text-right font-mono text-[22px] text-gray-200">
                     {formatCents(row.totalCashOut)}
                   </span>
                   <span
@@ -93,7 +93,7 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
           {payouts.length > 0 && (
             <>
               <div className="mb-5 h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-              <div className="mb-3 px-1 text-[16px] font-bold uppercase tracking-[0.22em] text-gray-600">
+              <div className="mb-3 px-1 text-[16px] font-bold uppercase tracking-[0.22em] text-gray-400">
                 Payouts
               </div>
               <div className="flex flex-col gap-3">
@@ -108,7 +108,7 @@ function DesktopLedgerPanel({ onClose }: { onClose: () => void }) {
                   >
                     <span className="text-[22px] text-gray-300">
                       <span className="font-bold text-red-400">{payout.fromName}</span>
-                      <span className="text-gray-600"> -&gt; </span>
+                      <span className="text-gray-500"> -&gt; </span>
                       <span className="font-bold text-green-400">{payout.toName}</span>
                     </span>
                     <span className="ml-4 font-mono text-[27px] font-black text-white">

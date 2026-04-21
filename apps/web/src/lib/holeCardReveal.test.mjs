@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   canStartPublicReveal,
+  createInitialPeelCardState,
   getInitialPrivateRevealState,
   readPersistedAutoPeelPreference,
   readPersistedPeelState,
@@ -101,6 +102,17 @@ test("auto peel starts a new hand fully peeled without waiting for a follow-up e
       autoReveal: true,
     }),
     [true, true],
+  );
+});
+
+test("initially revealed cards still need to report their first peek upstream", () => {
+  assert.deepEqual(
+    createInitialPeelCardState({ revealed: true }),
+    {
+      initialProgress: 1,
+      hasRevealed: true,
+      hasPeekedEnough: false,
+    },
   );
 });
 

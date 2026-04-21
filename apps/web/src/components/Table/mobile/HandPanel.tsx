@@ -97,7 +97,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
               className={`flex-1 flex items-center justify-center gap-1 rounded-lg font-black uppercase tracking-wide transition-colors py-1 text-[8px] ${
                 autoPeelEnabled
                   ? "bg-red-500 text-white"
-                  : "bg-gray-100 dark:bg-white/[0.07] text-gray-400 dark:text-gray-500"
+                  : "bg-gray-100 dark:bg-white/[0.07] text-gray-500 dark:text-gray-300"
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${autoPeelEnabled ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`} />
@@ -109,7 +109,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
                 className={`px-2 rounded-lg font-black uppercase tracking-wide transition-colors py-1 text-[8px] ${
                   leaveQueued
                     ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                    : "bg-gray-100 dark:bg-white/[0.07] text-gray-400 dark:text-gray-500"
+                    : "bg-gray-100 dark:bg-white/[0.07] text-gray-500 dark:text-gray-300"
                 }`}
                 title={leaveQueued ? "Leaving after this hand" : "Leave seat"}
               >
@@ -137,7 +137,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
             />
           ) : (
             <div className="flex items-center justify-center" style={{ width: Math.round((cardHeight * 5) / 7) * 2 + 10, height: cardHeight }}>
-              <span className="text-[10px] text-gray-500 dark:text-gray-600 font-bold uppercase tracking-widest">
+              <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase tracking-widest">
                 No cards
               </span>
             </div>

@@ -54,6 +54,16 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
 }) => {
   const minWidth = 58;
   const avatarSize = 42;
+  const avatarBounce = useAnimation();
+
+  useEffect(() => {
+    if (!player?.winAnimationKey) return;
+    if (player.winType === "full") {
+      avatarBounce.start({ scale: [1, 1.22, 0.9, 1.1, 1], transition: { duration: 0.55 } });
+      return;
+    }
+    avatarBounce.start({ scale: [1, 1.12, 0.95, 1.04, 1], transition: { duration: 0.45 } });
+  }, [avatarBounce, player?.winAnimationKey, player?.winType]);
 
   if (!player) {
     return (
@@ -102,18 +112,6 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   const publicCards = player.holeCards ?? [null, null];
   const showCards = !!player.holeCards;
   const hasBothPublicCards = publicCards[0] != null && publicCards[1] != null;
-
-  // Win animation: bounce the avatar when a win event fires
-  const avatarBounce = useAnimation();
-  useEffect(() => {
-    if (!player.winAnimationKey) return;
-    if (player.winType === "full") {
-      avatarBounce.start({ scale: [1, 1.22, 0.9, 1.1, 1], transition: { duration: 0.55 } });
-    } else {
-      avatarBounce.start({ scale: [1, 1.12, 0.95, 1.04, 1], transition: { duration: 0.45 } });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player.winAnimationKey]);
 
   return (
     <motion.div

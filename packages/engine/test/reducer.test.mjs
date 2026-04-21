@@ -366,9 +366,24 @@ test("scheduled bomb pots are canceled if a next-hand entrant can no longer cove
   assert.equal(state.roundBet, 50);
   assert.equal(
     state.players.a.totalContribution + state.players.b.totalContribution + state.players.c.totalContribution,
-    75
+    75,
   );
   assert.equal(state.pot, 0);
   assert.deepEqual(state.communityCards, []);
   assert.deepEqual(state.communityCards2, []);
+});
+
+test("sit-down ignores malformed non-numeric buy-ins", () => {
+  const state = createInitialState("table", { small: 25, big: 50 });
+
+  const next = gameReducer(state, {
+    type: "SIT_DOWN",
+    playerId: "a",
+    name: "A",
+    seatIndex: 3,
+    buyIn: "32500",
+  });
+
+  assert.equal(next, state);
+  assert.deepEqual(next.players, {});
 });

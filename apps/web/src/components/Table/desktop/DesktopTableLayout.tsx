@@ -36,7 +36,6 @@ import {
 import { isActivePhase } from "lib/phases";
 import {
   getCenterBoardMode,
-  isAnimatedShowdownReveal,
   isRunItAnnouncementPhase,
   isRunItShowdownSequence,
   shouldRenderRunItBoard,
@@ -97,6 +96,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     votingStartedAt = null,
     viewerCanVote = false,
     isRunItBoard = false,
+    animatedShowdownReveal = false,
+    showWinnerBanner = false,
     knownCardCount = 0,
     runDealStartedAt = null,
     sevenTwoBountyBB = 0,
@@ -111,6 +112,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     communityCards2 = [],
     bombPotCooldown = [],
     bombPotAnnouncement = null,
+    actionError = null,
     leaveQueued,
     cardPeelPersistenceKey,
   } = scene;
@@ -149,13 +151,6 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     isBombPotHand,
     isRunItBoard,
     runResults,
-  });
-  const isAnimatedShowdown = isAnimatedShowdownReveal({
-    phase,
-    knownCardCount,
-    runResults,
-    runAnnouncement,
-    runDealStartedAt,
   });
   const revealRunsConcurrently = shouldRevealRunsConcurrently(isBombPotHand, runResults.length);
   const isRunItAnnouncing = isRunItAnnouncementPhase({
@@ -235,7 +230,6 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   });
 
   const CARD_COUNT = 5;
-  const revealComplete = !isAnimatedShowdown || runResults.every((run) => (run?.board?.length ?? 0) >= CARD_COUNT);
   const isVoting = phase === "voting";
   const isPlaying = phase && phase !== "waiting" && phase !== "showdown" && phase !== "voting";
   const hasHoleCards = holeCards != null;
@@ -255,7 +249,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   }, [canRaise, isYourTurn]);
 
   return (
-    <div className="flex flex-col h-full w-full overflow-hidden bg-gray-100 dark:bg-gray-950 transition-colors duration-500">
+    <div className={`relative flex flex-col h-full w-full overflow-hidden bg-gray-100 dark:bg-gray-950 transition-colors duration-500 ${isYourTurn ? "animate-turn-perimeter" : ""}`}>
 
       {/* Home / Exit button — top-left */}
       <button
@@ -479,7 +473,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
             {/* Winner celebration banner — normal showdown only (no run-it board) */}
             <AnimatePresence>
-              {isShowdown && !isRunItShowdown && revealComplete && winners && winners.length > 0 && (
+              {isShowdown && !isRunItShowdown && showWinnerBanner && winners && winners.length > 0 && (
                 <div className="absolute inset-x-0 top-[15%] flex justify-center z-[160] pointer-events-none">
                   <WinnerBanner winners={winners} players={players} variant="desktop" />
                 </div>
@@ -534,6 +528,21 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
             </AnimatePresence>
 
             {/* Bomb pot announcement banner */}
+            <AnimatePresence>
+              {actionError && (
+                <div className="absolute inset-0 flex items-center justify-center z-[179] pointer-events-none" style={{ transform: `translateY(${overlayLift}px)` }}>
+                  <AnnouncementBanner
+                    eyebrow="Action Blocked"
+                    title="That move didn't go through"
+                    detail={actionError.message}
+                    badge="Retry"
+                    tone="amber"
+                    variant="desktop"
+                  />
+                </div>
+              )}
+            </AnimatePresence>
+
             <AnimatePresence>
               {bombPotAnnouncement && (
                 <div className="absolute inset-0 flex items-center justify-center z-[178] pointer-events-none" style={{ transform: `translateY(${overlayLift}px)` }}>
@@ -607,8 +616,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               <WinnerChipsAnimation
                 key={`${handNumber}-winner-chips`}
                 winners={winners}
-                runResults={isAnimatedShowdown ? runResults : undefined}
-                knownCardCount={isAnimatedShowdown ? knownCardCount : undefined}
+                runResults={animatedShowdownReveal ? runResults : undefined}
+                knownCardCount={animatedShowdownReveal ? knownCardCount : undefined}
                 revealRunsConcurrently={revealRunsConcurrently}
                 players={players as any}
                 totalSeats={TOTAL_SEATS}

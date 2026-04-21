@@ -4,9 +4,9 @@ import {
   isAnimatedRunItShowdown,
   isAnimatedShowdownReveal,
 } from "../../lib/tableVisualState.mjs";
+import { canPlayerTableOwnHand } from "../../lib/tableHandRules.mjs";
 
 const TOTAL_SEATS = 10;
-const ACTION_PHASES = new Set(["pre-flop", "flop", "turn", "river"]);
 
 function hasNoFurtherActionAgainstAllIn(gameState) {
   const activePlayers = Object.values(gameState.players ?? {}).filter(
@@ -257,6 +257,7 @@ export function deriveTableScene({
     currentRun = 0,
     revealedCount = 0,
     settledRunCount = 0,
+    publicShowdownRevealComplete = false,
     leaveQueued = false,
   } = clientUiState;
   const {
@@ -269,6 +270,7 @@ export function deriveTableScene({
     showdownStartedAt = null,
     sevenTwoAnnouncement = null,
     bombPotAnnouncement = null,
+    actionError = null,
   } = timingFlags;
 
   const phase = gameState.phase;
@@ -319,12 +321,11 @@ export function deriveTableScene({
   const canAllIn = !!actionableActor && actionableActor.stack > 0 && !actionableActor.isAllIn;
   const isFirstBet = gameState.roundBet === 0 && gameState.phase !== "pre-flop";
 
-  const canRevealDuringAction = ACTION_PHASES.has(phase);
   const canShowCards =
     viewingPlayer !== null &&
     myHoleCards !== null &&
     myRevealedCardIndices.size < 2 &&
-    (phase === "showdown" || (canRevealDuringAction && isYourTurn && !viewerIsFolded));
+    canPlayerTableOwnHand({ gameState, playerId: viewingPlayer.id });
   const isSoleUncontestedWinner =
     gameState.showdownKind === "uncontested" &&
     !gameState.autoRevealWinningHands &&
@@ -367,6 +368,9 @@ export function deriveTableScene({
     animatedShowdownReveal,
     settledRunCount,
   });
+  const showWinnerBanner = phase === "showdown" &&
+    (winners?.length ?? 0) > 0 &&
+    (!animatedShowdownReveal || (settledRunCount >= runCount && publicShowdownRevealComplete));
 
   const handIndicators = phase === "showdown"
     ? buildViewerHandIndicators({
@@ -440,8 +444,12 @@ export function deriveTableScene({
       votingStartedAt,
       viewerCanVote: !viewerIsFolded,
       isRunItBoard,
+      animatedShowdownReveal,
+      publicShowdownRevealComplete,
+      showWinnerBanner,
       knownCardCount: knownCardCountAtRunIt,
       runDealStartedAt,
+      showdownStartedAt,
       sevenTwoBountyBB: gameState.sevenTwoBountyBB,
       sevenTwoAnnouncement,
       sevenTwoBountyTrigger: gameState.sevenTwoBountyTrigger,
@@ -454,6 +462,7 @@ export function deriveTableScene({
       communityCards2,
       bombPotCooldown: gameState.bombPotCooldown ?? [],
       bombPotAnnouncement,
+      actionError,
       leaveQueued,
       cardPeelPersistenceKey,
     },

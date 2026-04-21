@@ -7,12 +7,19 @@
      but content always fits the viewport so no scrollbar should appear. */
   html {
     scrollbar-width: none;          /* Firefox */
+    color-scheme: light;
   }
   html::-webkit-scrollbar {
     display: none;                  /* Chrome / Safari */
   }
   body {
     @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100 transition-colors duration-500;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html {
+      color-scheme: dark;
+    }
   }
 }
 
@@ -97,20 +104,22 @@
       radial-gradient(circle at top, rgba(248,113,113,0.08), transparent 42%);
   }
 
-  .dark .elevated-surface-light {
-    background: linear-gradient(180deg, rgba(17,24,39,0.988), rgba(2,6,23,0.976));
-    border-color: rgba(255,255,255,0.08);
-    box-shadow:
-      0 28px 72px rgba(2,6,23,0.56),
-      0 10px 28px rgba(2,6,23,0.32),
-      inset 0 1px 0 rgba(255,255,255,0.06);
-    @apply ring-white/5;
-  }
+  @media (prefers-color-scheme: dark) {
+    .elevated-surface-light {
+      background: linear-gradient(180deg, rgba(17,24,39,0.988), rgba(2,6,23,0.976));
+      border-color: rgba(255,255,255,0.08);
+      box-shadow:
+        0 28px 72px rgba(2,6,23,0.56),
+        0 10px 28px rgba(2,6,23,0.32),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+      @apply ring-white/5;
+    }
 
-  .dark .elevated-surface-light::before {
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 26%),
-      radial-gradient(circle at top, rgba(248,113,113,0.05), transparent 42%);
+    .elevated-surface-light::before {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0) 26%),
+        radial-gradient(circle at top, rgba(248,113,113,0.05), transparent 42%);
+    }
   }
 
   .elevated-surface-dark {
@@ -181,6 +190,73 @@
 @keyframes action-pulse-opacity {
   0%, 100% { opacity: 0; }
   50%      { opacity: 1; }
+}
+
+/* Desktop: scene perimeter pulse when it's your turn */
+.animate-turn-perimeter {
+  position: relative;
+  isolation: isolate;
+}
+
+.animate-turn-perimeter::before,
+.animate-turn-perimeter::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.animate-turn-perimeter::before {
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(239, 68, 68, 0.36), transparent 18%),
+    linear-gradient(0deg, rgba(239, 68, 68, 0.26), transparent 20%),
+    linear-gradient(90deg, rgba(239, 68, 68, 0.18), transparent 12%),
+    linear-gradient(270deg, rgba(239, 68, 68, 0.18), transparent 12%);
+  animation: turn-perimeter-wash 2s ease-in-out infinite;
+  filter: blur(10px);
+  will-change: opacity;
+}
+
+.animate-turn-perimeter::after {
+  inset: 10px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(248, 113, 113, 0.34), transparent 55%),
+    radial-gradient(circle at 50% 100%, rgba(239, 68, 68, 0.24), transparent 58%),
+    radial-gradient(circle at 0% 50%, rgba(239, 68, 68, 0.2), transparent 42%),
+    radial-gradient(circle at 100% 50%, rgba(239, 68, 68, 0.2), transparent 42%);
+  filter: blur(22px);
+  animation: turn-perimeter-glow 2s ease-in-out infinite;
+  will-change: opacity, filter;
+}
+
+.animate-turn-perimeter-wash-layer {
+  animation: turn-perimeter-wash 2s ease-in-out infinite;
+  filter: blur(10px);
+  will-change: opacity;
+}
+
+.animate-turn-perimeter-glow-layer {
+  animation: turn-perimeter-glow 2s ease-in-out infinite;
+  filter: blur(22px);
+  will-change: opacity, filter;
+}
+
+@keyframes turn-perimeter-wash {
+  0%, 100% { opacity: 0.22; }
+  50%      { opacity: 0.68; }
+}
+
+@keyframes turn-perimeter-glow {
+  0%, 100% {
+    opacity: 0.34;
+    filter: blur(18px);
+  }
+  50% {
+    opacity: 0.88;
+    filter: blur(26px);
+  }
 }
 
 /* Card deal-in animation */

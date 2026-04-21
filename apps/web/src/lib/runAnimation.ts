@@ -1,7 +1,6 @@
 import { computeRunTransitions, deriveRunAnimationAt, getRevealSteps } from "@pokington/engine";
 import type { RunResult } from "@pokington/engine";
-
-const CARD_COUNT = 5;
+import { deriveObservedRunState } from "./showdownRevealState.mjs";
 
 export { computeRunTransitions, getRevealSteps };
 
@@ -16,17 +15,10 @@ export function deriveRunAnimation(
 export function deriveVisibleRunState(
   runResults: RunResult[],
   knownCardCount: number,
+  totalRuns = Math.max(1, runResults.length),
 ): { currentRun: number; revealedCount: number } {
   if (runResults.length === 0) {
     return { currentRun: 0, revealedCount: knownCardCount };
   }
-
-  const visibleCounts = runResults.map((run) => Math.max(0, Math.min(CARD_COUNT, run.board.length)));
-  const currentRun = visibleCounts.findIndex((count) => count < CARD_COUNT);
-  const activeRun = currentRun === -1 ? runResults.length - 1 : currentRun;
-
-  return {
-    currentRun: Math.max(0, activeRun),
-    revealedCount: visibleCounts[activeRun] ?? knownCardCount,
-  };
+  return deriveObservedRunState(runResults, knownCardCount, totalRuns);
 }

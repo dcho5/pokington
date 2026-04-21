@@ -6,6 +6,7 @@ import {
   CHIP_DURATION_S,
   WINNER_STAGGER_BUFFER_S,
   computeRunTransitions,
+  deriveRunAnimationAt,
   getAllInShowdownRevealDelayMs,
   getRunTimings,
   shouldRevealRunsConcurrently,
@@ -19,7 +20,21 @@ test("bomb-pot all-ins reveal runs concurrently", () => {
   const concurrent = computeRunTransitions(3, 2, { revealRunsConcurrently: true });
 
   assert.deepEqual(concurrent, [400, 2900]);
+  assert.deepEqual(sequential, [400, 2900, 6500 + 400, 6500 + 2900]);
   assert.equal(sequential.length > concurrent.length, true);
+});
+
+test("sequential run timing keeps focus on the completed run until the next reveal starts", () => {
+  const runDealStartedAt = 1_000;
+
+  assert.deepEqual(
+    deriveRunAnimationAt(runDealStartedAt + 6_899, runDealStartedAt, 3, 2),
+    { currentRun: 0, revealedCount: 5 },
+  );
+  assert.deepEqual(
+    deriveRunAnimationAt(runDealStartedAt + 6_900, runDealStartedAt, 3, 2),
+    { currentRun: 1, revealedCount: 4 },
+  );
 });
 
 test("concurrent reveal timing settles both bomb-pot boards together", () => {

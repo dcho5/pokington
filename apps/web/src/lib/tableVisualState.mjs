@@ -147,7 +147,7 @@ export function getCenterBoardMode({
     return "runIt";
   }
 
-  if (isBombPotHand || communityCards2.length > 0) {
+  if (isBombPotHand) {
     return "bombPot";
   }
 

@@ -19,8 +19,8 @@ export type PublicGameState = Omit<GameState, "deck" | "players"> & {
   players: Record<string, PublicEnginePlayer>;
 };
 
-export function toPublicGameState(state: GameState): PublicGameState {
-  return buildPublicGameState(state) as PublicGameState;
+export function toPublicGameState(state: GameState, now = Date.now()): PublicGameState {
+  return buildPublicGameState(state, now) as PublicGameState;
 }
 
 export type TableStatus = "creating" | "active" | "archived" | "error";

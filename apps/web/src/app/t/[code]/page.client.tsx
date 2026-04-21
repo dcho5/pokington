@@ -56,9 +56,8 @@ export default function TablePageClient({ code }: { code: string }) {
       const name = scene.viewingPlayer?.name ?? scene.rebuyInfo?.name;
       if (!name || seat < 0) return;
       actions.onSitDown(seat, name, buyInCents);
-      scene.dismissRebuy?.();
     },
-    [actions, scene.dismissRebuy, scene.rebuyInfo, scene.viewingPlayer],
+    [actions, scene.rebuyInfo, scene.viewingPlayer],
   );
 
   const handleLeaveRebuy = useCallback(() => {

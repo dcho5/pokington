@@ -5,26 +5,26 @@
 import { useCallback } from "react";
 import { useGameStore } from "store/useGameStore";
 import type { TableActions } from "components/Table/tableScene";
+import { classifySitDownRequest } from "lib/sitDownEligibility.mjs";
 
 export function useTableActions(_code: string): TableActions {
   const onSitDown = useCallback<TableActions["onSitDown"]>((seatIndex, name, buyInCents) => {
     const store = useGameStore.getState();
-    const currentPhase = store.gameState.phase;
-    const isWaiting = !currentPhase || currentPhase === "waiting";
-    const isSeated = !!(store.myPlayerId && store.gameState.players[store.myPlayerId]);
-
-    if (isSeated && !isWaiting) {
-      return;
-    }
+    const mode = classifySitDownRequest({
+      phase: store.gameState.phase,
+      myPlayerId: store.myPlayerId,
+      players: store.gameState.players,
+      seatIndex,
+    });
 
     if (name != null && buyInCents != null) {
+      if (mode === "blocked" || mode === "change-seat") return;
       store.sitDown(seatIndex, name, buyInCents);
       return;
     }
 
-    if (isSeated && isWaiting) {
+    if (mode === "change-seat") {
       store.changeSeat(seatIndex);
-      return;
     }
 
     // New-seat dialogs are owned by the caller (desktop page or mobile sheet flow).

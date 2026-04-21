@@ -70,7 +70,6 @@ export function computeRunTransitions(
 
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
     const runStart = runIndex * runIntervalMs;
-    if (runIndex > 0) transitions.push(runStart);
     for (const step of steps) transitions.push(runStart + step.delayMs);
   }
 
@@ -112,14 +111,35 @@ export function deriveRunAnimationAt(
   }
 
   const runIntervalMs = runIntervalS * 1000;
+  if (steps.length === 0) {
+    return {
+      currentRun: Math.min(Math.floor(elapsed / runIntervalMs), runCount - 1),
+      revealedCount: knownCardCount,
+    };
+  }
 
-  const rawRun = Math.floor(elapsed / runIntervalMs);
-  const currentRun = Math.min(rawRun, runCount - 1);
-
-  const withinRun = elapsed - currentRun * runIntervalMs;
+  let currentRun = 0;
   let revealedCount = knownCardCount;
-  for (const step of steps) {
-    if (withinRun >= step.delayMs) revealedCount = step.revealTo;
+
+  for (let runIndex = 0; runIndex < runCount; runIndex += 1) {
+    const runStart = runIndex * runIntervalMs;
+    let runRevealedCount = knownCardCount;
+
+    for (const step of steps) {
+      if (elapsed >= runStart + step.delayMs) runRevealedCount = step.revealTo;
+    }
+
+    if (runIndex === 0) {
+      currentRun = 0;
+      revealedCount = runRevealedCount;
+      continue;
+    }
+
+    const firstRevealAt = runStart + steps[0].delayMs;
+    if (elapsed < firstRevealAt) break;
+
+    currentRun = runIndex;
+    revealedCount = runRevealedCount;
   }
 
   return { currentRun, revealedCount };

@@ -26,6 +26,7 @@ export interface TableTimingFlags {
     title: string;
     detail: string;
   } | null;
+  actionError: { message: string } | null;
 }
 
 export interface TableSessionContext {
@@ -49,6 +50,7 @@ export interface TableClientUiState {
   currentRun?: number;
   revealedCount?: number;
   settledRunCount?: number;
+  publicShowdownRevealComplete?: boolean;
 }
 
 export interface TableLayoutScene {
@@ -87,8 +89,12 @@ export interface TableLayoutScene {
   votingStartedAt: number | null;
   viewerCanVote: boolean;
   isRunItBoard: boolean;
+  animatedShowdownReveal: boolean;
+  publicShowdownRevealComplete: boolean;
+  showWinnerBanner: boolean;
   knownCardCount: number;
   runDealStartedAt: number | null;
+  showdownStartedAt?: number | null;
   sevenTwoBountyBB: SevenTwoBountyBB;
   sevenTwoAnnouncement: { winnerName: string; perPlayer: number; total: number } | null;
   sevenTwoBountyTrigger: { winnerId: string; perPlayer: number; totalCollected: number } | null;
@@ -101,6 +107,7 @@ export interface TableLayoutScene {
   communityCards2: Card[];
   bombPotCooldown: string[];
   bombPotAnnouncement: TableTimingFlags["bombPotAnnouncement"];
+  actionError: TableTimingFlags["actionError"];
   leaveQueued: boolean;
   cardPeelPersistenceKey: string | null;
 }

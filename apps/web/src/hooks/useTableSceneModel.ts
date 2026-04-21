@@ -9,6 +9,7 @@ import { useGameStore } from "store/useGameStore";
 import { useCurrentRun, useSettledRunsCount } from "hooks/useSettledRunsCount";
 import { useTableRuntimeState } from "hooks/useTableRuntimeState";
 import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
+import { isObservedShowdownRevealComplete } from "lib/showdownRevealState.mjs";
 
 export function useTableSceneModel(code: string): TableSceneModel {
   const gameState = useGameStore((state) => state.gameState);
@@ -34,6 +35,7 @@ export function useTableSceneModel(code: string): TableSceneModel {
     showdownStartedAt: useGameStore((state) => state.showdownStartedAt),
     sevenTwoAnnouncement: useGameStore((state) => state.sevenTwoAnnouncement),
     bombPotAnnouncement: useGameStore((state) => state.bombPotAnnouncement),
+    actionError: useGameStore((state) => state.actionError),
   };
 
   const animatedRunItShowdown = isAnimatedRunItShowdown({
@@ -69,6 +71,11 @@ export function useTableSceneModel(code: string): TableSceneModel {
     timingFlags.knownCardCountAtRunIt,
     gameState.runResults,
   );
+  const publicShowdownRevealComplete = !animatedShowdownReveal || isObservedShowdownRevealComplete(
+    gameState.runResults,
+    timingFlags.knownCardCountAtRunIt,
+    gameState.runCount as 1 | 2 | 3,
+  );
 
   const clientUiState = {
     viewingSeat: useGameStore((state) => state.viewingSeat),
@@ -81,6 +88,7 @@ export function useTableSceneModel(code: string): TableSceneModel {
     currentRun,
     revealedCount,
     settledRunCount,
+    publicShowdownRevealComplete,
   };
 
   const baseScene = useMemo(
@@ -101,6 +109,8 @@ export function useTableSceneModel(code: string): TableSceneModel {
     revealRunsConcurrently,
     knownCardCount: timingFlags.knownCardCountAtRunIt,
     settledRunCount,
+    publicShowdownRevealComplete,
+    showdownStartedAt: timingFlags.showdownStartedAt,
     viewingPlayer: baseScene.viewingPlayer,
     viewerStack: baseScene.layout.viewerStack,
     viewingSeat: clientUiState.viewingSeat,

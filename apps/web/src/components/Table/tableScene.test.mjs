@@ -55,7 +55,32 @@ test("runItVoteDeal fixtures keep the announcement active before the run-it boar
   assert.equal(after.layout.phase, "showdown");
   assert.equal(after.layout.runAnnouncement, 2);
   assert.equal(after.layout.isRunItBoard, true);
+  assert.equal(after.layout.animatedShowdownReveal, true);
+  assert.equal(after.layout.showWinnerBanner, false);
   assert.equal(after.layout.runDealStartedAt, null);
+});
+
+test("animated showdown winner banner waits for the public board reveal to finish", () => {
+  const hidden = deriveTableScene({
+    ...runItVoteDeal_after,
+    clientUiState: {
+      ...runItVoteDeal_after.clientUiState,
+      settledRunCount: 2,
+      publicShowdownRevealComplete: false,
+    },
+  });
+  const revealed = deriveTableScene({
+    ...runItVoteDeal_after,
+    clientUiState: {
+      ...runItVoteDeal_after.clientUiState,
+      settledRunCount: 2,
+      publicShowdownRevealComplete: true,
+    },
+  });
+
+  assert.equal(hidden.layout.showWinnerBanner, false);
+  assert.equal(revealed.layout.showWinnerBanner, true);
+  assert.equal(revealed.layout.publicShowdownRevealComplete, true);
 });
 
 test("showdown scene annotates the viewer with deferred win styling", () => {
@@ -63,5 +88,18 @@ test("showdown scene annotates the viewer with deferred win styling", () => {
 
   assert.equal(scene.layout.handIndicators[0]?.label, "Straight Flush");
   assert.equal(scene.layout.players[0]?.winType, undefined);
+  assert.equal(scene.layout.canShowCards, true);
+});
+
+test("live-hand scene keeps tabling available even when it is not the viewer's turn", () => {
+  const scene = deriveTableScene({
+    ...reconnectOverlay_after,
+    gameState: {
+      ...reconnectOverlay_after.gameState,
+      needsToAct: ["p2"],
+    },
+  });
+
+  assert.equal(scene.layout.isYourTurn, false);
   assert.equal(scene.layout.canShowCards, true);
 });

@@ -1,4 +1,4 @@
-const ACTIVE_PUBLIC_REVEAL_PHASES = new Set(["pre-flop", "flop", "turn", "river", "voting"]);
+import { canPlayerTableOwnHand } from "../lib/tableHandRules.mjs";
 
 export function cardIndexToMask(cardIndex) {
   return cardIndex === 0 ? 1 : 2;
@@ -18,17 +18,11 @@ export function canPubliclyRevealCard({
   cardIndex,
   publicShownCardMasks,
 }) {
-  const player = gameState.players[playerId];
-  if (!player || !player.holeCards || player.sitOutUntilBB) return false;
-
   const bit = cardIndexToMask(cardIndex);
   const shownMask = publicShownCardMasks.get(playerId) ?? 0;
   if ((shownMask & bit) !== 0) return false;
 
-  if (gameState.phase === "showdown") return true;
-  if (!ACTIVE_PUBLIC_REVEAL_PHASES.has(gameState.phase)) return false;
-
-  return !player.isFolded && gameState.needsToAct[0] === playerId;
+  return canPlayerTableOwnHand({ gameState, playerId });
 }
 
 export function buildPublicRevealedHoleCards({
