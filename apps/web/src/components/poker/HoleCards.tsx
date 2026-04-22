@@ -55,6 +55,7 @@ function PeelCard({
   card,
   height,
   revealed = false,
+  emphasis = "neutral",
   autoReveal,
   onRevealChange,
   canRevealToOthers,
@@ -66,6 +67,7 @@ function PeelCard({
   card?: CardType;
   height: number;
   revealed?: boolean;
+  emphasis?: "neutral" | "highlighted" | "dimmed";
   autoReveal?: boolean;
   onRevealChange?: (revealed: boolean) => void;
   canRevealToOthers?: boolean;
@@ -272,7 +274,7 @@ function PeelCard({
         className="absolute inset-[-2px] rounded-xl pointer-events-none z-20 transition-opacity duration-300"
         style={{
           opacity: isRevealedToOthers ? 1 : 0,
-          boxShadow: "0 0 0 2px rgba(34,197,94,0.85), 0 0 12px rgba(34,197,94,0.35)",
+          boxShadow: "0 0 0 2px rgba(248,113,113,0.88), 0 0 12px rgba(239,68,68,0.38)",
         }}
       />
 
@@ -298,7 +300,7 @@ function PeelCard({
           className="absolute inset-0"
           style={{ transform: `scaleY(${initialProgress})`, transformOrigin: "50% 100%", willChange: "transform" }}
         >
-          <Card card={card} className="w-full h-full rounded-xl" />
+          <Card card={card} emphasis={emphasis} className="w-full h-full rounded-xl" />
         </div>
 
         {canArmReveal && (
@@ -372,6 +374,7 @@ interface HoleCardsProps {
   onPeekCard?: (index: 0 | 1) => void;
   /** Storage key used to restore peel progress after leaving and returning */
   persistenceKey?: string | null;
+  emphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
 }
 
 const HoleCards: React.FC<HoleCardsProps> = ({
@@ -386,6 +389,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
   sevenTwoEligible = false,
   onPeekCard,
   persistenceKey,
+  emphasisByIndex = ["neutral", "neutral"],
 }) => {
   const resolveInitialRevealState = (): [boolean, boolean] => {
     const [card0, card1] = getInitialPrivateRevealState({ persistenceKey, autoReveal });
@@ -431,6 +435,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           card={cards?.[0]}
           height={cardHeight}
           revealed={card0Revealed}
+          emphasis={emphasisByIndex[0] ?? "neutral"}
           autoReveal={autoReveal}
           onRevealChange={(nextValue) => markCardRevealed(0, nextValue)}
           canRevealToOthers={canRevealToOthers}
@@ -445,6 +450,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           card={cards?.[1]}
           height={cardHeight}
           revealed={card1Revealed}
+          emphasis={emphasisByIndex[1] ?? "neutral"}
           autoReveal={autoReveal}
           onRevealChange={(nextValue) => markCardRevealed(1, nextValue)}
           canRevealToOthers={canRevealToOthers}

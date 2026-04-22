@@ -25,6 +25,10 @@ interface RunItBoardProps {
   /** true = mobile (flex-based sizing), false = desktop (fixed px sizing) */
   compact?: boolean;
   desktopLayout?: DesktopRunItCenterStage;
+  onHoverRunChange?: (runIndex: number | null) => void;
+  highlightedRunIndex?: number | null;
+  highlightedCardEmphasis?: Array<"neutral" | "highlighted" | "dimmed"> | null;
+  highlightedCardEmphasisByRun?: Array<Array<"neutral" | "highlighted" | "dimmed"> | null> | null;
 }
 
 const MOBILE_CARD = "flex-1";
@@ -37,6 +41,10 @@ export default function RunItBoard({
   handNumber,
   compact = false,
   desktopLayout,
+  onHoverRunChange,
+  highlightedRunIndex = null,
+  highlightedCardEmphasis = null,
+  highlightedCardEmphasisByRun = null,
 }: RunItBoardProps) {
   const { currentRun, revealedCount } = deriveVisibleRunState(runResults, knownCardCount);
   const totalRuns = runResults.length;
@@ -49,6 +57,9 @@ export default function RunItBoard({
         width: desktopLayout.cardWidth,
         height: desktopLayout.cardHeight,
       };
+  const emphasisForRun = (runIndex: number) =>
+    highlightedCardEmphasisByRun?.[runIndex] ??
+    (runIndex === highlightedRunIndex ? highlightedCardEmphasis : null);
 
   useEffect(() => {
     previousCountsRef.current = [];
@@ -79,6 +90,7 @@ export default function RunItBoard({
     <div
       className="flex flex-col items-center w-full"
       style={compact || !desktopLayout ? { gap: 8 } : { gap: desktopLayout.rowGap }}
+      onPointerLeave={onHoverRunChange ? () => onHoverRunChange(null) : undefined}
     >
       {Array.from({ length: totalRuns }, (_, r) => {
         const isPast = r < currentRun;
@@ -89,8 +101,9 @@ export default function RunItBoard({
         return (
           <div
             key={`run-${handNumber}-${r}`}
-            className="flex flex-col items-center w-full"
+            className={`flex flex-col items-center w-full ${onHoverRunChange ? "cursor-pointer" : ""}`}
             style={compact || !desktopLayout ? { gap: 4 } : { gap: desktopLayout.labelGap }}
+            onPointerEnter={onHoverRunChange ? () => onHoverRunChange(r) : undefined}
           >
             <motion.div
               animate={{ opacity: isFuture ? 0.25 : isCurrent ? 1 : 0.45 }}
@@ -123,6 +136,7 @@ export default function RunItBoard({
                     >
                       <Card
                         card={runResults[r]?.board[i]}
+                        emphasis={emphasisForRun(r)?.[i] ?? "neutral"}
                         className="w-full aspect-[5/7] rounded-xl shadow-xl"
                       />
                     </div>
@@ -157,6 +171,7 @@ export default function RunItBoard({
                       >
                         <Card
                           card={runResults[r]?.board[i]}
+                          emphasis={emphasisForRun(r)?.[i] ?? "neutral"}
                           className="w-full h-full rounded-xl shadow-xl"
                         />
                       </motion.div>

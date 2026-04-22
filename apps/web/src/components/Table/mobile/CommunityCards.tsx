@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import Card from "components/poker/Card";
 import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
@@ -30,26 +30,39 @@ interface CommunityCardsProps {
   runDealStartedAt?: number | null;
   runAnnouncement?: 1 | 2 | 3 | null;
   handNumber?: number;
+  activeBombPotBoardIndex?: number;
   onActiveBoardChange?: (boardIndex: number) => void;
+  viewingRunIndex?: number;
   onViewingRunChange?: (runIndex: number) => void;
+  cardEmphasis?: Array<"neutral" | "highlighted" | "dimmed"> | null;
+  bombPotCardEmphasis?: [
+    Array<"neutral" | "highlighted" | "dimmed"> | null,
+    Array<"neutral" | "highlighted" | "dimmed"> | null,
+  ];
+  highlightedRunIndex?: number | null;
+  runCardEmphasis?: Array<"neutral" | "highlighted" | "dimmed"> | null;
+  runCardEmphasisByRun?: Array<Array<"neutral" | "highlighted" | "dimmed"> | null> | null;
 }
 
-function BombPotBoards({ communityCards, communityCards2, handNumber, onActiveBoardChange }: {
+function BombPotBoards({
+  communityCards,
+  communityCards2,
+  activeBoard = 0,
+  onActiveBoardChange,
+  boardEmphasis = [null, null],
+  handNumber = 0,
+}: {
   communityCards?: CardType[];
   communityCards2?: CardType[];
-  handNumber: number;
+  activeBoard?: number;
   onActiveBoardChange?: (boardIndex: number) => void;
+  boardEmphasis?: [
+    Array<"neutral" | "highlighted" | "dimmed"> | null,
+    Array<"neutral" | "highlighted" | "dimmed"> | null,
+  ];
+  handNumber?: number;
 }) {
-  const [activeBoard, setActiveBoard] = useState(0);
   const boards = [communityCards ?? [], communityCards2 ?? []];
-
-  useEffect(() => {
-    setActiveBoard(0);
-  }, [handNumber]);
-
-  useEffect(() => {
-    onActiveBoardChange?.(activeBoard);
-  }, [activeBoard, onActiveBoardChange]);
 
   return (
     <div className="flex flex-col items-center gap-2.5 w-full">
@@ -67,7 +80,7 @@ function BombPotBoards({ communityCards, communityCards2, handNumber, onActiveBo
             return (
               <motion.button
                 key={b}
-                onClick={() => setActiveBoard(b)}
+                onClick={() => onActiveBoardChange?.(b)}
                 whileTap={{ scale: 0.93 }}
                 transition={{ type: "spring", stiffness: 400, damping: 22 }}
                 className="relative px-3.5 py-1 rounded-full text-[11px] font-black tracking-wide transition-colors duration-200"
@@ -99,7 +112,11 @@ function BombPotBoards({ communityCards, communityCards2, handNumber, onActiveBo
           >
             {Array.from({ length: CARD_COUNT }, (_, i) => (
               <div key={i} className="flex-1 aspect-[5/7]">
-                <Card card={boards[1 - activeBoard]?.[i]} className="w-full h-full rounded-xl" />
+                <Card
+                  card={boards[1 - activeBoard]?.[i]}
+                  emphasis={boardEmphasis[1 - activeBoard]?.[i] ?? "neutral"}
+                  className="w-full h-full rounded-xl"
+                />
               </div>
             ))}
           </div>
@@ -112,7 +129,11 @@ function BombPotBoards({ communityCards, communityCards2, handNumber, onActiveBo
               className="flex-1 aspect-[5/7] animate-card-deal-in"
               style={{ animationDelay: `${i * 0.08}s` }}
             >
-              <Card card={boards[activeBoard]?.[i]} className="w-full h-full rounded-xl shadow-xl" />
+              <Card
+                card={boards[activeBoard]?.[i]}
+                emphasis={boardEmphasis[activeBoard]?.[i] ?? "neutral"}
+                className="w-full h-full rounded-xl shadow-xl"
+              />
             </div>
           ))}
         </div>
@@ -132,8 +153,15 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
   runDealStartedAt = null,
   runAnnouncement = null,
   handNumber = 0,
+  activeBombPotBoardIndex = 0,
   onActiveBoardChange,
+  viewingRunIndex = 0,
   onViewingRunChange,
+  cardEmphasis = null,
+  bombPotCardEmphasis = [null, null],
+  highlightedRunIndex = null,
+  runCardEmphasis = null,
+  runCardEmphasisByRun = null,
 }) => {
   const emitVisualFeedback = useTableVisualFeedback();
   const previousCountsRef = useRef<number[]>([]);
@@ -204,14 +232,20 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
           knownCardCount={knownCardCount}
           runDealStartedAt={runDealStartedAt!}
           handNumber={handNumber}
+          viewingRun={viewingRunIndex}
           onViewingRunChange={onViewingRunChange}
+          highlightedRunIndex={highlightedRunIndex}
+          highlightedCardEmphasis={runCardEmphasis}
+          highlightedCardEmphasisByRun={runCardEmphasisByRun}
         />
       ) : boardMode === "bombPot" ? (
         <BombPotBoards
           communityCards={communityCards}
           communityCards2={communityCards2}
-          handNumber={handNumber}
+          activeBoard={activeBombPotBoardIndex}
           onActiveBoardChange={onActiveBoardChange}
+          boardEmphasis={bombPotCardEmphasis}
+          handNumber={handNumber}
         />
       ) : (
         <div className="flex justify-center gap-[2%] w-full">
@@ -227,6 +261,7 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
               >
                 <Card
                   card={card}
+                  emphasis={cardEmphasis?.[i] ?? "neutral"}
                   className="w-full aspect-[5/7] rounded-xl shadow-2xl"
                 />
               </div>

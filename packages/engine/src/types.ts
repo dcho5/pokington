@@ -7,6 +7,8 @@ export type { Card, Rank, Suit, GamePhase, LastAction };
 export type SevenTwoBountyBB = 0 | 2 | 4 | 8;
 // Bomb pot ante (in big blinds).
 export type BombPotAnteBB = 2 | 4 | 8;
+export const RUN_IT_VOTING_TIMEOUT_MS = 30_000;
+export const BOMB_POT_VOTING_TIMEOUT_MS = 30_000;
 
 // ── Engine-internal player ──
 export interface EnginePlayer {
@@ -52,6 +54,7 @@ export interface GameState {
   showdownKind: ShowdownKind;
   // Run-it-multiple-times
   runItVotes: Record<string, 1 | 2 | 3>; // votes during 'voting' phase
+  runItVotingStartedAt: number | null;
   runCount: 1 | 2 | 3;   // resolved run count (1 = default)
   runResults: RunResult[]; // per-run boards + winners, populated at showdown
   autoRevealWinningHands: boolean; // true only when showdown is contested and winners must table
@@ -59,6 +62,7 @@ export interface GameState {
   knownCardCountAtRunIt: number; // server-owned public board visibility anchor for animated runouts
   runDealStartedAt: number | null; // server-owned start timestamp for public board dealing
   showdownStartedAt: number | null; // server-owned showdown timestamp for synchronized reconnects
+  nextHandStartsAt: number | null; // server-owned hand-boundary timer for synchronized reconnects
   // 7-2 Offsuit side game (table-level, set before first hand)
   sevenTwoBountyBB: SevenTwoBountyBB;  // 0 = off; N = N × bigBlind per player
   sevenTwoBountyTrigger: {           // non-null at showdown when bounty fires
@@ -75,6 +79,7 @@ export interface GameState {
     proposedBy: string;
     votes: Record<string, boolean>;
   } | null;
+  bombPotVotingStartedAt: number | null;
   bombPotNextHand: { anteBB: BombPotAnteBB } | null;
   bombPotCooldown: string[]; // player IDs who proposed this orbit
 }
@@ -133,6 +138,7 @@ export interface HandResult {
 // ── Events (discriminated union) ──
 export type GameEvent =
   | { type: "SIT_DOWN"; playerId: string; name: string; seatIndex: number; buyIn: number }
+  | { type: "CHANGE_SEAT"; playerId: string; seatIndex: number }
   | { type: "STAND_UP"; playerId: string }
   | { type: "START_HAND" }
   | {
@@ -175,6 +181,7 @@ export function createInitialState(
     winners: null,
     showdownKind: "none",
     runItVotes: {},
+    runItVotingStartedAt: null,
     runCount: 1,
     runResults: [],
     autoRevealWinningHands: false,
@@ -182,12 +189,14 @@ export function createInitialState(
     knownCardCountAtRunIt: 0,
     runDealStartedAt: null,
     showdownStartedAt: null,
+    nextHandStartsAt: null,
     sevenTwoBountyBB: options?.sevenTwoBountyBB ?? 0,
     sevenTwoBountyTrigger: null,
     voluntaryShownPlayerIds: [],
     communityCards2: [],
     isBombPot: false,
     bombPotVote: null,
+    bombPotVotingStartedAt: null,
     bombPotNextHand: null,
     bombPotCooldown: [],
   };

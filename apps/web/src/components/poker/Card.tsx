@@ -21,14 +21,26 @@ interface CardProps {
   card?: CardType;
   className?: string;
   style?: React.CSSProperties;
+  emphasis?: "neutral" | "highlighted" | "dimmed";
 }
 
-const Card: React.FC<CardProps> = ({ card, className = "", style }) => {
+function emphasisClassName(emphasis: CardProps["emphasis"]): string {
+  if (emphasis === "highlighted") {
+    return "";
+  }
+  if (emphasis === "dimmed") {
+    return "opacity-45 saturate-[0.72] brightness-[0.92]";
+  }
+  return "";
+}
+
+const Card: React.FC<CardProps> = ({ card, className = "", style, emphasis = "neutral" }) => {
+  const emphasisClasses = emphasisClassName(emphasis);
   if (!card) {
     // Face-down back — white card frame with dark blue gradient inner
     return (
       <div
-        className={`relative bg-white overflow-hidden ${className}`}
+        className={`relative bg-white overflow-hidden transition-[opacity,filter,transform,box-shadow] duration-200 ${emphasisClasses} ${className}`}
         style={style}
       >
         {/* Inner back area */}
@@ -65,7 +77,7 @@ const Card: React.FC<CardProps> = ({ card, className = "", style }) => {
 
   return (
     <div
-      className={`card-face relative flex flex-col justify-between p-1.5 ${red ? "red" : ""} ${className}`}
+      className={`card-face relative flex flex-col justify-between p-1.5 transition-[opacity,filter,transform,box-shadow] duration-200 ${red ? "red" : ""} ${emphasisClasses} ${className}`}
       style={style}
     >
       {/* Top-left: rank + suit */}

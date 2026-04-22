@@ -76,6 +76,7 @@ interface GameStore {
   // UI timing
   viewingSeat: number;
   votingStartedAt: number | null;
+  bombPotVotingStartedAt: number | null;
 
   // Chip sweep animation
   streetPauseChips: { id: string; seatIndex: number; amount: number }[] | null;
@@ -272,6 +273,8 @@ export const useGameStore = create<GameStore>((set, get) => {
         gameState: next,
         isFirstStateReceived: true,
         actionError: null,
+        votingStartedAt: next.runItVotingStartedAt ?? null,
+        bombPotVotingStartedAt: next.bombPotVotingStartedAt ?? null,
         ...timingPatch,
         ...snapshotPatch,
         ...(viewingSeat === -1 && myPlayer ? { viewingSeat: myPlayer.seatIndex } : {}),
@@ -279,8 +282,6 @@ export const useGameStore = create<GameStore>((set, get) => {
       return;
     }
 
-    const beforePhase = prev?.phase ?? "waiting";
-    const beforeCardCount = prev?.communityCards.length ?? 0;
     const hadSevenTwoTrigger = !!prev?.sevenTwoBountyTrigger;
     const hadBombPotNextHand = !!prev?.bombPotNextHand;
     const wasBombPot = prev?.isBombPot ?? false;
@@ -294,15 +295,6 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ streetPauseChips: streetPauseSnapshot, streetSweeping: false });
       setTimeout(() => set({ streetSweeping: true }), STREET_PAUSE_MS - SWEEP_DURATION_MS);
       setTimeout(() => set({ streetPauseChips: null, streetSweeping: false }), STREET_PAUSE_MS);
-    }
-
-    // ── Voting phase entered ──
-    const PLAYING_PHASES = ["pre-flop", "flop", "turn", "river"];
-    if (PLAYING_PHASES.includes(beforePhase) && next.phase === "voting") {
-      set({ votingStartedAt: Date.now() });
-    }
-    if (beforePhase === "voting" && next.phase !== "voting") {
-      set({ votingStartedAt: null });
     }
 
     // ── 7-2 bounty triggered ──
@@ -356,6 +348,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({
         runAnnouncement: null,
         votingStartedAt: null,
+        bombPotVotingStartedAt: null,
         isRunItBoard: false,
         knownCardCountAtRunIt: 0,
         runDealStartedAt: null,
@@ -366,7 +359,7 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     // ── New hand: reset animation state and per-card reveal ──
     if (prev && next.handNumber > prev.handNumber) {
-      set({ runAnnouncement: null, votingStartedAt: null, isRunItBoard: false, knownCardCountAtRunIt: 0, runDealStartedAt: null, showdownStartedAt: null, myRevealedCardIndices: new Set() });
+      set({ runAnnouncement: null, votingStartedAt: null, bombPotVotingStartedAt: null, isRunItBoard: false, knownCardCountAtRunIt: 0, runDealStartedAt: null, showdownStartedAt: null, myRevealedCardIndices: new Set() });
     }
 
     // ── Auto-sync viewingSeat from myPlayerId on reconnect ──
@@ -380,7 +373,14 @@ export const useGameStore = create<GameStore>((set, get) => {
       set({ leaveQueued: false, viewingSeat: -1 });
     }
 
-    set({ gameState: next, actionError: null, ...timingPatch, ...snapshotPatch });
+    set({
+      gameState: next,
+      actionError: null,
+      votingStartedAt: next.runItVotingStartedAt ?? null,
+      bombPotVotingStartedAt: next.bombPotVotingStartedAt ?? null,
+      ...timingPatch,
+      ...snapshotPatch,
+    });
   }
 
   return {
@@ -395,6 +395,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     myRevealedCardIndices: new Set<0 | 1>(),
     viewingSeat: -1,
     votingStartedAt: null,
+    bombPotVotingStartedAt: null,
     streetPauseChips: null,
     streetSweeping: false,
 
@@ -434,6 +435,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         tableNotFound: false,
         viewingSeat: -1,
         votingStartedAt: null,
+        bombPotVotingStartedAt: null,
         streetPauseChips: null,
         streetSweeping: false,
         runAnnouncement: null,
@@ -592,6 +594,7 @@ export const useGameStore = create<GameStore>((set, get) => {
                   tableNotFound: isTableError,
                   viewingSeat: -1,
                   votingStartedAt: null,
+                  bombPotVotingStartedAt: null,
                   streetPauseChips: null,
                   streetSweeping: false,
                   runAnnouncement: null,
@@ -691,6 +694,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         tableNotFound: false,
         viewingSeat: -1,
         votingStartedAt: null,
+        bombPotVotingStartedAt: null,
         streetPauseChips: null,
         streetSweeping: false,
         runAnnouncement: null,
@@ -747,8 +751,7 @@ export const useGameStore = create<GameStore>((set, get) => {
       if (!myPlayerId) return;
       const player = get().gameState.players[myPlayerId];
       if (!player) return;
-      get().sendEvent({ type: "STAND_UP", playerId: myPlayerId });
-      get().sendEvent({ type: "SIT_DOWN", playerId: myPlayerId, name: player.name, seatIndex: newSeatIndex, buyIn: player.stack });
+      get().sendEvent({ type: "CHANGE_SEAT", playerId: myPlayerId, seatIndex: newSeatIndex });
       set({ viewingSeat: newSeatIndex, leaveQueued: false });
     },
 

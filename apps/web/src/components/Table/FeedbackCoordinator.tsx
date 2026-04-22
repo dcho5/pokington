@@ -22,16 +22,25 @@ function isPlayableEvent(event: TableFeedbackPlaybackEvent, myPlayerId: string |
 
 export function TableFeedbackProvider({ children }: { children: React.ReactNode }) {
   const isMobileLayout = useIsMobileLayout();
-  const platformRef = useRef(createWebFeedbackPlatform());
+  const platformRef = useRef<ReturnType<typeof createWebFeedbackPlatform> | null>(null);
   const seenKeysRef = useRef(new Set<string>());
   const armedHandNumbersRef = useRef(new Set<number>());
 
+  if (platformRef.current == null) {
+    platformRef.current = createWebFeedbackPlatform();
+  }
+
   useEffect(() => {
-    return () => platformRef.current.dispose?.();
+    return () => {
+      platformRef.current?.dispose?.();
+      platformRef.current = null;
+    };
   }, []);
 
   const dispatchEvent = useCallback((event: TableFeedbackPlaybackEvent) => {
     if (!markFeedbackKey(seenKeysRef.current, event.key)) return;
+    const platform = platformRef.current;
+    if (!platform) return;
 
     const context = {
       myPlayerId: useGameStore.getState().myPlayerId,
@@ -39,10 +48,10 @@ export function TableFeedbackProvider({ children }: { children: React.ReactNode 
     };
     if (!isPlayableEvent(event, context.myPlayerId)) return;
 
-    platformRef.current.playSound(event.kind, event, context);
+    platform.playSound(event.kind, event, context);
     const hapticPattern = getFeedbackHapticPattern(event, context);
     if (hapticPattern) {
-      platformRef.current.playHaptic(hapticPattern, event, context);
+      platform.playHaptic(hapticPattern, event, context);
     }
   }, [isMobileLayout]);
 

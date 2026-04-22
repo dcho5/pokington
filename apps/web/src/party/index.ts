@@ -1,11 +1,13 @@
 import type * as Party from "partykit/server";
 import {
   ANNOUNCE_DELAY_MS,
+  BOMB_POT_VOTING_TIMEOUT_MS,
   createInitialState,
   deriveFeedbackFromTransition,
   gameReducer,
   getAllInShowdownRevealDelayMs,
   hasAnimatedRunout,
+  RUN_IT_VOTING_TIMEOUT_MS,
   shouldQueueLeave,
   shouldRevealRunsConcurrently,
   shouldAutoRevealWinningHands,
@@ -32,12 +34,20 @@ import {
 } from "./revealTracking.mjs";
 import { removePlayersBeforeNextHand } from "./handBoundaryExit.mjs";
 import { shouldRotatePlayerSession } from "./playerSessionIdentity.mjs";
+import {
+  createSessionLedger,
+  recordSessionBuyIn,
+  recordSessionCashOut,
+  snapshotSessionLedger,
+  syncSessionLedgerStacks,
+} from "./sessionLedger.mjs";
 import { deriveKnownCardCountAtShowdown } from "./showdownRevealInit.mjs";
 import {
   getTimedVisibleRunCounts,
   getNextTimedRevealAt,
   isTimedShowdownRevealComplete,
 } from "../lib/showdownRevealState.mjs";
+import { getNextHandAutoStartAt } from "../lib/showdownUi.mjs";
 import type {
   ClientMessage,
   ServerMessage,
@@ -118,7 +128,6 @@ interface PersistedRoomState {
 
 const CONTROL_ROOM_ID = "__control__";
 const ROOM_STATE_KEY = "roomDocument";
-const VOTING_TIMEOUT_MS = 30_000;
 const JOIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;
 const ROOM_HTTP_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -178,8 +187,10 @@ export default class PokerRoom implements Party.Server {
   private peekedCardMasks = new Map<string, number>();
   private publicShownCardMasks = new Map<string, number>();
   private votingTimer: ReturnType<typeof setTimeout> | null = null;
+  private bombPotVotingTimer: ReturnType<typeof setTimeout> | null = null;
   private winnerRevealTimer: ReturnType<typeof setTimeout> | null = null;
   private publicRevealTimers: ReturnType<typeof setTimeout>[] = [];
+  private nextHandTimer: ReturnType<typeof setTimeout> | null = null;
   private lastBroadcastRevealSignature: string | null = null;
 
   constructor(readonly room: Party.Room) {
@@ -213,9 +224,18 @@ export default class PokerRoom implements Party.Server {
       if (typeof this.gameState.autoRevealWinningHandsAt !== "number") {
         this.gameState.autoRevealWinningHandsAt = null;
       }
+      if (typeof this.gameState.runItVotingStartedAt !== "number") {
+        this.gameState.runItVotingStartedAt = null;
+      }
+      if (typeof this.gameState.bombPotVotingStartedAt !== "number") {
+        this.gameState.bombPotVotingStartedAt = null;
+      }
+      if (typeof this.gameState.nextHandStartsAt !== "number") {
+        this.gameState.nextHandStartsAt = this.computeNextHandStartAt(this.gameState);
+      }
     }
 
-    this.sessionLedger = new Map(saved.sessionLedger.map((entry) => [entry.playerId, entry]));
+    this.sessionLedger = createSessionLedger(saved.sessionLedger);
     this.sessionTrackedPlayerIds = new Set(saved.sessionLedger.map((entry) => entry.playerId));
     this.pendingLeavePlayerIds = new Set(saved.pendingLeavePlayerIds);
     this.playerSessions = new Map(saved.playerSessions.map((session) => [session.clientId, session]));
@@ -224,8 +244,18 @@ export default class PokerRoom implements Party.Server {
     this.publicShownCardMasks = new Map(saved.publicShownCardMasks ?? []);
     this.cleanExpiredJoinTokens();
     this.lastBroadcastRevealSignature = null;
+    if (this.gameState.phase === "voting") {
+      this.armRunItVotingTimer(this.gameState.runItVotingStartedAt);
+    }
+    if (this.gameState.bombPotVote) {
+      this.armBombPotVotingTimer(
+        this.gameState.bombPotVotingStartedAt,
+        this.gameState.bombPotVote.proposedBy,
+      );
+    }
     this.scheduleWinnerReveal();
     this.schedulePublicRevealBroadcasts();
+    this.armNextHandTimer(this.gameState.phase === "showdown" ? this.gameState.nextHandStartsAt : null);
   }
 
   onConnect(conn: Party.Connection) {
@@ -742,19 +772,7 @@ export default class PokerRoom implements Party.Server {
     }
 
     if (enriched.type === "START_HAND") {
-      const { gameState, removedPlayers } = removePlayersBeforeNextHand(
-        this.gameState,
-        Array.from(this.pendingLeavePlayerIds),
-      );
-      this.gameState = gameState;
-      this.pendingLeavePlayerIds.clear();
-      for (const { playerId, stack } of removedPlayers) {
-        this.pendingLeavePlayerIds.delete(playerId);
-        this.onStandUp(playerId, stack);
-        void this.persistCashOut(playerId, stack);
-        this.peekedCardMasks.delete(playerId);
-        this.publicShownCardMasks.delete(playerId);
-      }
+      this.applyStartHandBoundary();
     }
 
     const prevState = this.gameState;
@@ -783,23 +801,20 @@ export default class PokerRoom implements Party.Server {
       }
     }
     if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
-      this.initializeShowdownRevealState(prevState, this.gameState);
-      this.gameState.autoRevealWinningHandsAt = this.computeWinnerRevealAt(prevState, this.gameState);
-      this.promoteFullyShownCardsAtShowdown();
-      this.lastBroadcastRevealSignature = this.getTimedRevealSignature(this.gameState);
-      this.scheduleWinnerReveal();
-      this.schedulePublicRevealBroadcasts();
-      void this.persistShowdownStats(this.gameState);
+      this.configureShowdownState(prevState, this.gameState);
     }
     if (this.gameState.handNumber !== prevState.handNumber) {
       this.peekedCardMasks.clear();
       this.publicShownCardMasks.clear();
       this.clearWinnerRevealTimer();
       this.clearPublicRevealTimers();
+      this.clearNextHandTimer();
       this.lastBroadcastRevealSignature = null;
     }
 
     this.manageVotingTimer(prevState, this.gameState);
+    this.manageBombPotVotingTimer(prevState, this.gameState);
+    this.manageNextHandTimer(prevState, this.gameState);
     const feedback = this.deriveFeedback(prevState, enriched, this.gameState, "action");
     this.broadcastState(feedback);
     this.broadcastAllPrivate();
@@ -924,31 +939,75 @@ export default class PokerRoom implements Party.Server {
     void this.persistRoomState();
   }
 
+  private armRunItVotingTimer(startedAt: number | null) {
+    if (this.votingTimer) clearTimeout(this.votingTimer);
+    const remainingMs = Math.max(
+      0,
+      RUN_IT_VOTING_TIMEOUT_MS - Math.max(0, Date.now() - (startedAt ?? Date.now())),
+    );
+    this.votingTimer = setTimeout(() => {
+      this.votingTimer = null;
+      if (this.gameState.phase !== "voting") return;
+      const prevState = this.gameState;
+      this.gameState = gameReducer(this.gameState, { type: "RESOLVE_VOTE" });
+      if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
+        this.configureShowdownState(prevState, this.gameState);
+      }
+      this.manageNextHandTimer(prevState, this.gameState);
+      const feedback = this.deriveFeedback(prevState, { type: "RESOLVE_VOTE" }, this.gameState, "timer");
+      this.broadcastState(feedback);
+      this.broadcastAllPrivate();
+      void this.persistRoomState();
+    }, remainingMs);
+  }
+
   private manageVotingTimer(prev: GameState, next: GameState) {
     if (prev.phase !== "voting" && next.phase === "voting") {
-      if (this.votingTimer) clearTimeout(this.votingTimer);
-      this.votingTimer = setTimeout(() => {
-        this.votingTimer = null;
-        if (this.gameState.phase !== "voting") return;
-        const prevState = this.gameState;
-        this.gameState = gameReducer(this.gameState, { type: "RESOLVE_VOTE" });
-        if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
-          this.initializeShowdownRevealState(prevState, this.gameState);
-          this.gameState.autoRevealWinningHandsAt = this.computeWinnerRevealAt(prevState, this.gameState);
-          this.promoteFullyShownCardsAtShowdown();
-          this.scheduleWinnerReveal();
-          this.schedulePublicRevealBroadcasts();
-          void this.persistShowdownStats(this.gameState);
-        }
-        const feedback = this.deriveFeedback(prevState, { type: "RESOLVE_VOTE" }, this.gameState, "timer");
-        this.broadcastState(feedback);
-        this.broadcastAllPrivate();
-        void this.persistRoomState();
-      }, VOTING_TIMEOUT_MS);
+      this.armRunItVotingTimer(next.runItVotingStartedAt);
     }
     if (prev.phase === "voting" && next.phase !== "voting" && this.votingTimer) {
       clearTimeout(this.votingTimer);
       this.votingTimer = null;
+    }
+  }
+
+  private armBombPotVotingTimer(startedAt: number | null, proposedBy: string) {
+    if (this.bombPotVotingTimer) clearTimeout(this.bombPotVotingTimer);
+    const remainingMs = Math.max(
+      0,
+      BOMB_POT_VOTING_TIMEOUT_MS - Math.max(0, Date.now() - (startedAt ?? Date.now())),
+    );
+    this.bombPotVotingTimer = setTimeout(() => {
+      this.bombPotVotingTimer = null;
+      if (!this.gameState.bombPotVote || this.gameState.bombPotVote.proposedBy !== proposedBy) return;
+      this.gameState = {
+        ...this.gameState,
+        bombPotVote: null,
+        bombPotVotingStartedAt: null,
+      };
+      this.broadcastState();
+      void this.persistRoomState();
+    }, remainingMs);
+  }
+
+  private manageBombPotVotingTimer(prev: GameState, next: GameState) {
+    const voteStarted =
+      prev.bombPotVote === null &&
+      next.bombPotVote !== null;
+    const voteRestarted =
+      prev.bombPotVote !== null &&
+      next.bombPotVote !== null &&
+      (prev.bombPotVotingStartedAt !== next.bombPotVotingStartedAt ||
+        prev.bombPotVote.proposedBy !== next.bombPotVote.proposedBy);
+
+    if ((voteStarted || voteRestarted) && next.bombPotVote) {
+      this.armBombPotVotingTimer(next.bombPotVotingStartedAt, next.bombPotVote.proposedBy);
+      return;
+    }
+
+    if (prev.bombPotVote !== null && next.bombPotVote === null && this.bombPotVotingTimer) {
+      clearTimeout(this.bombPotVotingTimer);
+      this.bombPotVotingTimer = null;
     }
   }
 
@@ -966,21 +1025,56 @@ export default class PokerRoom implements Party.Server {
     this.publicRevealTimers = [];
   }
 
+  private clearNextHandTimer() {
+    if (this.nextHandTimer) {
+      clearTimeout(this.nextHandTimer);
+      this.nextHandTimer = null;
+    }
+  }
+
+  private applyStartHandBoundary() {
+    const { gameState, removedPlayers } = removePlayersBeforeNextHand(
+      this.gameState,
+      Array.from(this.pendingLeavePlayerIds),
+    );
+    this.gameState = gameState;
+    this.pendingLeavePlayerIds.clear();
+    for (const { playerId, stack } of removedPlayers) {
+      this.pendingLeavePlayerIds.delete(playerId);
+      this.onStandUp(playerId, stack);
+      void this.persistCashOut(playerId, stack);
+      this.peekedCardMasks.delete(playerId);
+      this.publicShownCardMasks.delete(playerId);
+    }
+  }
+
+  private configureShowdownState(prev: GameState, next: GameState) {
+    this.initializeShowdownRevealState(prev, next);
+    next.autoRevealWinningHandsAt = this.computeWinnerRevealAt(prev, next);
+    next.nextHandStartsAt = this.computeNextHandStartAt(next);
+    this.promoteFullyShownCardsAtShowdown();
+    this.lastBroadcastRevealSignature = this.getTimedRevealSignature(next);
+    this.scheduleWinnerReveal();
+    this.schedulePublicRevealBroadcasts();
+    void this.persistShowdownStats(next);
+  }
+
   private initializeShowdownRevealState(prev: GameState, next: GameState) {
     next.knownCardCountAtRunIt = 0;
     next.runDealStartedAt = null;
     next.showdownStartedAt = null;
+    next.nextHandStartsAt = null;
 
     if (next.phase !== "showdown") return;
 
     const runCount = Math.max(1, next.runResults.length);
     const knownCardCount = deriveKnownCardCountAtShowdown(prev, next);
-    if (!hasAnimatedRunout(knownCardCount, runCount)) return;
-
     const now = Date.now();
     next.knownCardCountAtRunIt = knownCardCount;
     next.showdownStartedAt = now;
-    next.runDealStartedAt = prev.phase === "voting" ? null : now;
+    if (hasAnimatedRunout(knownCardCount, runCount)) {
+      next.runDealStartedAt = prev.phase === "voting" ? null : now;
+    }
   }
 
   private schedulePublicRevealBroadcasts() {
@@ -1090,6 +1184,62 @@ export default class PokerRoom implements Party.Server {
     return Date.now() + getAllInShowdownRevealDelayMs(knownCardCount, runCount, { revealRunsConcurrently });
   }
 
+  private computeNextHandStartAt(state: GameState): number | null {
+    if (state.phase !== "showdown") return null;
+
+    const runCount = Math.max(1, state.runResults.length);
+    const animatedShowdownReveal = hasAnimatedRunout(state.knownCardCountAtRunIt, runCount);
+    const revealRunsConcurrently = shouldRevealRunsConcurrently(state.isBombPot, runCount);
+    return getNextHandAutoStartAt({
+      phase: state.phase,
+      animatedShowdownReveal,
+      revealRunsConcurrently,
+      knownCardCount: state.knownCardCountAtRunIt,
+      runCount,
+      showdownStartedAt: state.showdownStartedAt,
+    } as any);
+  }
+
+  private armNextHandTimer(nextHandStartsAt: number | null) {
+    this.clearNextHandTimer();
+    if (nextHandStartsAt == null) return;
+
+    const handNumber = this.gameState.handNumber;
+    this.nextHandTimer = setTimeout(() => {
+      this.nextHandTimer = null;
+      if (
+        this.gameState.phase !== "showdown" ||
+        this.gameState.handNumber !== handNumber ||
+        this.gameState.nextHandStartsAt !== nextHandStartsAt
+      ) {
+        return;
+      }
+
+      this.applyStartHandBoundary();
+      const prevState = this.gameState;
+      this.gameState = gameReducer(this.gameState, { type: "START_HAND" });
+      this.manageNextHandTimer(prevState, this.gameState);
+      this.broadcastState(this.deriveFeedback(prevState, { type: "START_HAND" }, this.gameState, "timer"));
+      this.broadcastAllPrivate();
+      this.broadcastRoomPresence();
+      void this.persistRoomState();
+    }, Math.max(0, nextHandStartsAt - Date.now()));
+  }
+
+  private manageNextHandTimer(prev: GameState, next: GameState) {
+    const startChanged = prev.nextHandStartsAt !== next.nextHandStartsAt;
+    const enteredShowdown = prev.phase !== "showdown" && next.phase === "showdown";
+
+    if (next.phase === "showdown" && next.nextHandStartsAt != null && (enteredShowdown || startChanged)) {
+      this.armNextHandTimer(next.nextHandStartsAt);
+      return;
+    }
+
+    if ((prev.phase === "showdown" && next.phase !== "showdown") || (startChanged && next.nextHandStartsAt == null)) {
+      this.clearNextHandTimer();
+    }
+  }
+
   private scheduleWinnerReveal() {
     this.clearWinnerRevealTimer();
     if (this.gameState.phase !== "showdown" || !this.gameState.autoRevealWinningHands) return;
@@ -1115,20 +1265,12 @@ export default class PokerRoom implements Party.Server {
   }
 
   private broadcastLedger() {
-    const entries = Array.from(this.sessionLedger.values());
+    const entries = snapshotSessionLedger(this.sessionLedger);
     this.broadcast({ type: "LEDGER_STATE", entries });
   }
 
   private syncLedgerStacks() {
-    let changed = false;
-    for (const entry of this.sessionLedger.values()) {
-      if (!entry.isSeated) continue;
-      const player = this.gameState.players[entry.playerId];
-      if (player && player.stack !== entry.currentStack) {
-        entry.currentStack = player.stack;
-        changed = true;
-      }
-    }
+    const changed = syncSessionLedgerStacks(this.sessionLedger, this.gameState.players);
     if (!changed) return;
     const phase = this.gameState.phase;
     if (phase === "waiting" || phase === "showdown") {
@@ -1137,22 +1279,7 @@ export default class PokerRoom implements Party.Server {
   }
 
   private onSitDown(playerId: string, name: string, buyIn: number) {
-    const entry = this.sessionLedger.get(playerId);
-    if (entry) {
-      entry.buyIns.push(buyIn);
-      entry.isSeated = true;
-      entry.currentStack = buyIn;
-      entry.name = name;
-    } else {
-      this.sessionLedger.set(playerId, {
-        playerId,
-        name,
-        buyIns: [buyIn],
-        cashOuts: [],
-        isSeated: true,
-        currentStack: buyIn,
-      });
-    }
+    recordSessionBuyIn(this.sessionLedger, { playerId, name, buyIn });
     if (!this.sessionTrackedPlayerIds.has(playerId)) {
       this.sessionTrackedPlayerIds.add(playerId);
       void this.incrementSession(playerId, name, buyIn);
@@ -1163,11 +1290,7 @@ export default class PokerRoom implements Party.Server {
   }
 
   private onStandUp(playerId: string, stack: number) {
-    const entry = this.sessionLedger.get(playerId);
-    if (!entry) return;
-    entry.cashOuts.push(stack);
-    entry.isSeated = false;
-    entry.currentStack = 0;
+    recordSessionCashOut(this.sessionLedger, { playerId, stack });
     this.broadcastLedger();
   }
 
@@ -1274,7 +1397,7 @@ export default class PokerRoom implements Party.Server {
       status: this.roomStatus,
       creatorClientId: this.creatorClientId,
       gameState: this.roomStatus === "active" ? this.gameState : null,
-      sessionLedger: Array.from(this.sessionLedger.values()),
+      sessionLedger: snapshotSessionLedger(this.sessionLedger),
       pendingLeavePlayerIds: Array.from(this.pendingLeavePlayerIds),
       playerSessions: Array.from(this.playerSessions.values()),
       joinTokens: Array.from(this.joinTokens.values()),

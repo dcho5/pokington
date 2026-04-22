@@ -1,7 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import PokerChip from "components/poker/PokerChip";
 import { formatCents } from "lib/formatCents";
 import type { SevenTwoBountyBB } from "@pokington/engine";
 
@@ -67,12 +66,6 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         <span className="text-xl leading-none text-gray-900 dark:text-white">←</span>
         <span className="font-bold text-sm text-gray-900 dark:text-white truncate max-w-[120px]">{tableName}</span>
       </button>
-
-      {/* Center: chip logo — absolutely centered so left/right elements don't shift it */}
-      <div className="absolute left-1/2 -translate-x-1/2">
-        <PokerChip size={22} glowAngle={-45} />
-      </div>
-
       {/* Right: 7-2 badge (when active) + blinds + overflow menu */}
       <div className="flex items-center justify-end gap-1.5 min-w-0 max-w-[48%]">
         {sevenTwoBountyBB > 0 && (

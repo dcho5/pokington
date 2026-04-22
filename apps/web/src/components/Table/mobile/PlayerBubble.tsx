@@ -5,31 +5,9 @@ import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_MOBILE as ACTION_BADGE } from "lib/actionColors";
 import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
+import Card from "components/poker/Card";
 import PlayerPositionMarkers from "../PlayerPositionMarkers";
 import type { Player } from "types/player";
-import type { Card } from "@pokington/shared";
-
-const SUIT_SYMBOLS: Record<string, string> = { spades: "♠", hearts: "♥", diamonds: "♦", clubs: "♣" };
-
-/** Face-up card sized to peek prominently over the player avatar */
-function ShowdownCard({ card }: { card: Card }) {
-  const symbol = SUIT_SYMBOLS[card.suit] ?? "?";
-  const isRed = card.suit === "hearts" || card.suit === "diamonds";
-  return (
-    <div
-      className="rounded-[5px] flex flex-col items-start justify-start shadow-xl w-[34px] h-[50px]"
-      style={{
-        background: "white",
-        border: "1.5px solid #d1d5db",
-        color: isRed ? "#dc2626" : "#111827",
-        padding: "3px 4px",
-      }}
-    >
-      <span className="text-[11px] font-black leading-none">{card.rank}</span>
-      <span className="text-[12px] leading-none mt-0.5">{symbol}</span>
-    </div>
-  );
-}
 
 interface PlayerBubbleProps {
   player: Player | null;
@@ -40,6 +18,9 @@ interface PlayerBubbleProps {
   emptySeatIndex?: number;
   seatSelectionLocked?: boolean;
   onEmptyTap?: () => void;
+  showdownSpotlightSelected?: boolean;
+  onShowdownPlayerTap?: (playerId: string) => void;
+  showdownCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
 }
 
 const PlayerBubble: React.FC<PlayerBubbleProps> = ({
@@ -51,6 +32,9 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   emptySeatIndex,
   seatSelectionLocked = false,
   onEmptyTap,
+  showdownSpotlightSelected = false,
+  onShowdownPlayerTap,
+  showdownCardEmphasisByIndex = ["neutral", "neutral"],
 }) => {
   const minWidth = 58;
   const avatarSize = 42;
@@ -112,10 +96,11 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   const publicCards = player.holeCards ?? [null, null];
   const showCards = !!player.holeCards;
   const hasBothPublicCards = publicCards[0] != null && publicCards[1] != null;
+  const canFocusShowdownPlayer = hasBothPublicCards && !!player.id && !!onShowdownPlayerTap;
 
   return (
     <motion.div
-      className="flex flex-col items-center gap-0.5 px-0.5 relative"
+      className={`flex flex-col items-center gap-0.5 px-0.5 relative ${showdownSpotlightSelected ? "z-20" : ""}`}
       style={{ minWidth }}
       initial={{ scale: 0 }}
       animate={{ scale: 1, opacity: isFolded ? 0.35 : isAway ? 0.55 : 1 }}
@@ -126,13 +111,14 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
       {/* Showdown: face-up cards peek over the avatar from behind (z-0) */}
       {showCards && (
         <div
-          className="absolute z-0 flex pointer-events-none"
+          className={`absolute z-0 flex ${canFocusShowdownPlayer ? "cursor-pointer pointer-events-auto" : "pointer-events-none"}`}
           style={{
             top: 0,
             left: "50%",
             transform: "translate(-50%, -50%)",
             gap: 4,
           }}
+          onClick={canFocusShowdownPlayer ? () => onShowdownPlayerTap(player.id!) : undefined}
         >
           {/* 7-2 eligible glow overlay */}
           {player.sevenTwoEligible && (
@@ -186,7 +172,13 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
                 transformOrigin: "bottom center",
               }}
             >
-              {card ? <ShowdownCard card={card} /> : (
+              {card ? (
+                <Card
+                  card={card}
+                  emphasis={showdownCardEmphasisByIndex[i] ?? "neutral"}
+                  className="w-[34px] h-[50px] rounded-[5px] shadow-xl"
+                />
+              ) : (
                 <div
                   className="w-[34px] h-[50px] rounded-[5px] shadow-xl"
                   style={{
@@ -203,6 +195,9 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
       {/* Avatar + info rendered in front of cards */}
       <div className="relative z-10 flex flex-col items-center gap-0.5 w-full">
         <div className="relative">
+          {showdownSpotlightSelected && (
+            <span className="absolute inset-[-6px] rounded-full pointer-events-none z-20 ring-2 ring-red-400/80 shadow-[0_0_20px_rgba(248,113,113,0.3)]" />
+          )}
           {player.isCurrentActor && (
             <span className="absolute inset-[-3px] rounded-full pointer-events-none z-0 animate-pulse-ring" />
           )}

@@ -19,8 +19,10 @@ export {
 } from "./showdownTiming";
 export {
   createInitialState,
+  BOMB_POT_VOTING_TIMEOUT_MS,
   isUncontestedShowdown,
   isUncontestedWinnerHandLabel,
+  RUN_IT_VOTING_TIMEOUT_MS,
   shouldAutoRevealWinningHands,
 } from "./types";
 export type {

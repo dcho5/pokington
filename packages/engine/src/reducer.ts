@@ -282,6 +282,7 @@ function handleShowdownMultiRun(state: GameState, boards: Card[][]): GameState {
   state.knownCardCountAtRunIt = 0;
   state.runDealStartedAt = null;
   state.showdownStartedAt = null;
+  state.nextHandStartsAt = null;
   state.sevenTwoBountyTrigger = null;
   state.voluntaryShownPlayerIds = [];
 
@@ -354,6 +355,7 @@ function enterVotingOrRunOut(state: GameState): GameState {
 
   state.phase = "voting";
   state.runItVotes = {};
+  state.runItVotingStartedAt = Date.now();
   state.needsToAct = [];
   return state;
 }
@@ -479,6 +481,7 @@ function resetTableToWaiting(state: GameState): GameState {
   state.communityCards2 = [];
   state.isBombPot = false;
   state.bombPotVote = null;
+  state.bombPotVotingStartedAt = null;
   state.pot = 0;
   state.roundBet = 0;
   state.lastLegalRaiseIncrement = state.blinds.big;
@@ -489,6 +492,7 @@ function resetTableToWaiting(state: GameState): GameState {
   state.winners = null;
   state.showdownKind = "none";
   state.runItVotes = {};
+  state.runItVotingStartedAt = null;
   state.runCount = 1;
   state.runResults = [];
   state.autoRevealWinningHands = false;
@@ -496,6 +500,7 @@ function resetTableToWaiting(state: GameState): GameState {
   state.knownCardCountAtRunIt = 0;
   state.runDealStartedAt = null;
   state.showdownStartedAt = null;
+  state.nextHandStartsAt = null;
   state.sevenTwoBountyTrigger = null;
   state.voluntaryShownPlayerIds = [];
   state.smallBlindSeatIndex = -1;
@@ -536,6 +541,19 @@ export function gameReducer(
       return state;
     }
 
+    case "CHANGE_SEAT": {
+      if (state.phase !== "waiting") return prevState;
+      if (!isValidSeatIndex(event.seatIndex)) return prevState;
+
+      const player = state.players[event.playerId];
+      if (!player) return prevState;
+      if (player.seatIndex === event.seatIndex) return prevState;
+      if (playerAtSeat(event.seatIndex, state.players)) return prevState;
+
+      player.seatIndex = event.seatIndex;
+      return state;
+    }
+
     // ────── STAND UP ──────
     case "STAND_UP": {
       const player = state.players[event.playerId];
@@ -553,6 +571,7 @@ export function gameReducer(
       state.bombPotCooldown = state.bombPotCooldown.filter((id) => id !== event.playerId);
       if (state.bombPotVote?.proposedBy === event.playerId) {
         state.bombPotVote = null;
+        state.bombPotVotingStartedAt = null;
       } else if (state.bombPotVote && event.playerId in state.bombPotVote.votes) {
         delete state.bombPotVote.votes[event.playerId];
       }
@@ -590,6 +609,7 @@ export function gameReducer(
       state.communityCards2 = [];
       state.isBombPot = false;
       state.bombPotVote = null;
+      state.bombPotVotingStartedAt = null;
       state.pot = 0;
       state.roundBet = 0;
       state.closedActors = [];
@@ -597,15 +617,17 @@ export function gameReducer(
       state.winners = null;
       state.showdownKind = "none";
       state.runItVotes = {};
+      state.runItVotingStartedAt = null;
       state.runCount = 1;
       state.runResults = [];
       state.autoRevealWinningHands = false;
-      state.autoRevealWinningHandsAt = null;
-      state.knownCardCountAtRunIt = 0;
-      state.runDealStartedAt = null;
-      state.showdownStartedAt = null;
-      state.sevenTwoBountyTrigger = null;
-      state.voluntaryShownPlayerIds = [];
+  state.autoRevealWinningHandsAt = null;
+  state.knownCardCountAtRunIt = 0;
+  state.runDealStartedAt = null;
+  state.showdownStartedAt = null;
+  state.nextHandStartsAt = null;
+  state.sevenTwoBountyTrigger = null;
+  state.voluntaryShownPlayerIds = [];
       state.isBlindIncomplete = false;
 
       // Moving Button rule (online poker standard). Dead Button (TDA Rule 7)
@@ -912,12 +934,13 @@ export function gameReducer(
         state.winners = [{ playerId: winner.id, amount: totalPot, hand: null }];
         state.showdownKind = "uncontested";
         state.autoRevealWinningHands = false;
-        state.autoRevealWinningHandsAt = null;
-        state.knownCardCountAtRunIt = 0;
-        state.runDealStartedAt = null;
-        state.showdownStartedAt = null;
-        state.sevenTwoBountyTrigger = null;
-        state.voluntaryShownPlayerIds = [];
+      state.autoRevealWinningHandsAt = null;
+      state.knownCardCountAtRunIt = 0;
+      state.runDealStartedAt = null;
+      state.showdownStartedAt = null;
+      state.nextHandStartsAt = null;
+      state.sevenTwoBountyTrigger = null;
+      state.voluntaryShownPlayerIds = [];
         return state;
       }
 
@@ -949,6 +972,7 @@ export function gameReducer(
         const votes = nonFoldedIds.map((id) => state.runItVotes[id]!);
         const unanimous = votes.every((v) => v === votes[0]);
         const runCount: 1 | 2 | 3 = unanimous ? votes[0] : 1;
+        state.runItVotingStartedAt = null;
         return dealMultipleRuns(state, runCount);
       }
 
@@ -969,6 +993,7 @@ export function gameReducer(
         votes.length === nonFoldedIds.length && votes.every((v) => v === votes[0]);
       const runCount: 1 | 2 | 3 = unanimous ? votes[0] : 1;
 
+      state.runItVotingStartedAt = null;
       return dealMultipleRuns(state, runCount);
     }
 
@@ -1016,12 +1041,14 @@ export function gameReducer(
         proposedBy: event.playerId,
         votes: { [event.playerId]: true },
       };
+      state.bombPotVotingStartedAt = Date.now();
 
       // Immediately pass if all seated players have already approved
       const allPlayerIds = Object.keys(state.players);
       if (allPlayerIds.every((id) => state.bombPotVote!.votes[id] === true)) {
         state.bombPotNextHand = { anteBB: event.anteBB };
         state.bombPotVote = null;
+        state.bombPotVotingStartedAt = null;
       }
       return state;
     }
@@ -1035,6 +1062,7 @@ export function gameReducer(
 
       if (!event.approve) {
         state.bombPotVote = null;
+        state.bombPotVotingStartedAt = null;
         return state;
       }
 
@@ -1042,6 +1070,7 @@ export function gameReducer(
       if (allPlayerIds.every((id) => state.bombPotVote!.votes[id] === true)) {
         state.bombPotNextHand = { anteBB: state.bombPotVote.anteBB };
         state.bombPotVote = null;
+        state.bombPotVotingStartedAt = null;
       }
       return state;
     }

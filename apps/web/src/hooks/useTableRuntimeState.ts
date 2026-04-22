@@ -2,22 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import {
-  getShowdownCountdownDelayMs,
+  getShowdownCountdownSeconds,
   hasCompletedShowdownPresentation,
 } from "lib/showdownUi.mjs";
 import type { Player } from "types/player";
-import { useGameStore } from "store/useGameStore";
 
 interface UseTableRuntimeStateArgs {
   phase: string;
   handNumber: number;
   runCount: 1 | 2 | 3;
-  animatedShowdownReveal: boolean;
-  revealRunsConcurrently: boolean;
-  knownCardCount: number;
   settledRunCount: number;
   publicShowdownRevealComplete: boolean;
-  showdownStartedAt: number | null;
+  nextHandStartsAt: number | null;
   viewingPlayer: Player | null;
   viewerStack: number;
   viewingSeat: number;
@@ -27,12 +23,9 @@ export function useTableRuntimeState({
   phase,
   handNumber,
   runCount,
-  animatedShowdownReveal,
-  revealRunsConcurrently,
-  knownCardCount,
   settledRunCount,
   publicShowdownRevealComplete,
-  showdownStartedAt,
+  nextHandStartsAt,
   viewingPlayer,
   viewerStack,
   viewingSeat,
@@ -59,56 +52,30 @@ export function useTableRuntimeState({
   }, [phase, viewerStack, viewingPlayer, viewingSeat, settledRunCount, runCount, publicShowdownRevealComplete, showRebuySheet]);
 
   useEffect(() => {
-    if (phase !== "showdown" || !publicShowdownRevealComplete) {
+    if (phase !== "showdown" || !publicShowdownRevealComplete || nextHandStartsAt == null) {
       setShowdownCountdown(null);
       return;
     }
 
-    const delayUntilCountdown = getShowdownCountdownDelayMs({
-      phase,
-      animatedShowdownReveal,
-      revealRunsConcurrently,
-      knownCardCount,
-      runCount,
-      publicShowdownRevealComplete,
-      showdownStartedAt,
-    });
-    if (delayUntilCountdown == null) {
-      setShowdownCountdown(null);
-      return;
-    }
-
-    const countdownSeconds = 10;
-    let startDelay: ReturnType<typeof setTimeout> | null = null;
-    let interval: ReturnType<typeof setInterval> | null = null;
-
-    startDelay = setTimeout(() => {
-      setShowdownCountdown(countdownSeconds);
-      interval = setInterval(() => {
-        setShowdownCountdown((previous) => {
-          if (previous === null || previous <= 1) {
-            clearInterval(interval!);
-            useGameStore.getState().startHand();
-            return null;
-          }
-          return previous - 1;
-        });
-      }, 1000);
-    }, delayUntilCountdown);
+    const syncCountdown = () => {
+      setShowdownCountdown(
+        getShowdownCountdownSeconds({
+          phase,
+          nextHandStartsAt,
+        }),
+      );
+    };
+    syncCountdown();
+    const interval = setInterval(syncCountdown, 250);
 
     return () => {
-      if (startDelay) clearTimeout(startDelay);
-      if (interval) clearInterval(interval);
+      clearInterval(interval);
     };
   }, [
     phase,
     handNumber,
-    runCount,
-    animatedShowdownReveal,
-    revealRunsConcurrently,
-    knownCardCount,
     publicShowdownRevealComplete,
-    showdownStartedAt,
+    nextHandStartsAt,
   ]);
 
   const dismissRebuy = useCallback(() => {

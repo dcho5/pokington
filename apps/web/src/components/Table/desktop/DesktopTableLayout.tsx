@@ -4,8 +4,14 @@ import React, { useState, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  BOMB_POT_VOTING_TIMEOUT_MS,
+  RUN_IT_VOTING_TIMEOUT_MS,
+} from "@pokington/engine";
 import { type TableGeometry } from "lib/seatLayout";
 import { useColorScheme } from "hooks/useColorScheme";
+import { useTimedPanelVisibility } from "hooks/useTimedPanelVisibility";
+import { useRunItOddsPanelModel } from "hooks/useRunItOddsPanelModel";
 import PokerChip from "components/poker/PokerChip";
 import Card from "components/poker/Card";
 import HoleCards from "components/poker/HoleCards";
@@ -18,6 +24,7 @@ import DesktopRaisePopover from "./DesktopRaisePopover";
 import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
 import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
 import RunItBoard from "../RunItBoard";
+import RunItOddsPanel from "../RunItOddsPanel";
 
 import AnnouncementBanner from "../AnnouncementBanner";
 import WinnerBanner from "../WinnerBanner";
@@ -27,6 +34,7 @@ import BombPotVotingPanel from "../BombPotVotingPanel";
 import { SevenTwoBountyChips } from "./SevenTwoBountyChips";
 import { formatCents } from "lib/formatCents";
 import type { TableLayoutProps } from "../TableLayout";
+import type { Player } from "types/player";
 import {
   getMinPlayerStack,
   getRunAnnouncementContent,
@@ -42,15 +50,23 @@ import {
   shouldRenderRunItBoard,
 } from "lib/tableVisualState";
 import {
+  getDesktopCenterStageBounds,
   getDesktopTableLayoutProfile,
   type DesktopBombPotCenterStage,
   type DesktopRunItCenterStage,
   type DesktopStandardCenterStage,
 } from "lib/desktopTableLayout";
 import { computeDesktopChipAngle } from "lib/chipOrientation";
+import { deriveVisibleRunState } from "lib/runAnimation";
 import { useGameStore } from "store/useGameStore";
 import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
 import { collectBoardRevealEvents } from "lib/tableFeedback.mjs";
+import {
+  buildShowdownSpotlight,
+  mergeEmphasisArrays,
+  resolveSpotlightPlayer,
+} from "lib/showdownSpotlight";
+import type { ResolvedSpotlightPlayer, ShowdownSpotlightModel } from "lib/showdownSpotlight";
 
 const Seat = dynamic(() => import("./Seat"), { ssr: false });
 const collectBoardRevealEventsTyped = collectBoardRevealEvents as (options: {
@@ -61,6 +77,35 @@ const collectBoardRevealEventsTyped = collectBoardRevealEvents as (options: {
 }) => TableVisualFeedbackEvent[];
 
 const TOTAL_SEATS = 10;
+type CardEmphasis = "neutral" | "highlighted" | "dimmed";
+
+function getSelectedTabledPlayer(
+  players: Array<Player | null>,
+  selectedPlayerId: string | null,
+): ResolvedSpotlightPlayer | null {
+  if (!selectedPlayerId) return null;
+  const selectedPlayer = players.find((player) => player?.id === selectedPlayerId);
+  if (!selectedPlayer?.holeCards?.[0] || !selectedPlayer?.holeCards?.[1]) return null;
+  return {
+    source: "selected",
+    playerId: selectedPlayer.id ?? null,
+    playerName: selectedPlayer.name,
+    holeCards: [selectedPlayer.holeCards[0], selectedPlayer.holeCards[1]],
+  };
+}
+
+function holeCardEmphasisFromSpotlight(spotlight: ShowdownSpotlightModel | null): CardEmphasis[] {
+  return spotlight?.holeCards.map((entry) => entry.emphasis) ?? ["neutral", "neutral"];
+}
+
+function boardCardEmphasisFromSpotlight(spotlight: ShowdownSpotlightModel | null): CardEmphasis[] | null {
+  return spotlight?.boardCards.map((entry) => entry.emphasis) ?? null;
+}
+
+function spotlightHasActiveEmphasis(spotlight: ShowdownSpotlightModel | null) {
+  if (!spotlight) return false;
+  return [...spotlight.holeCards, ...spotlight.boardCards].some((entry) => entry.emphasis !== "neutral");
+}
 
 type DesktopTableLayoutProps = TableLayoutProps & { desktopScale?: number };
 
@@ -102,9 +147,11 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     runCount = 1,
     runAnnouncement = null,
     votingStartedAt = null,
+    bombPotVotingStartedAt = null,
     viewerCanVote = false,
     isRunItBoard = false,
     animatedShowdownReveal = false,
+    publicShowdownRevealComplete = false,
     showWinnerBanner = false,
     knownCardCount = 0,
     runDealStartedAt = null,
@@ -144,6 +191,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   } = actions;
   const isDark = useColorScheme() === "dark";
   const router = useRouter();
+  const runItOddsPanel = useRunItOddsPanelModel(scene);
   const isShowdown = phase === "showdown";
   const isWaiting = !phase || phase === "waiting";
   const centerBoardMode = getCenterBoardMode({
@@ -197,6 +245,11 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     centerStage.kind === "runIt"
       ? centerStage as DesktopRunItCenterStage
       : null;
+  const runItCenterStageBounds = getDesktopCenterStageBounds({
+    isBombPotHand: isShowingBombPotCenterStage,
+    isRunItBoard: isRunItCenterStage,
+    runCount: resolvedRunCount,
+  });
   const g: TableGeometry = desktopLayout.seat.geometry;
   const stageInset = Math.max(0, (1 - desktopScale) * 22);
   const overlayLift = -Math.round(desktopLayout.overlays.lift + stageInset * 0.75);
@@ -251,6 +304,9 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   const [bothRevealed, setBothRevealed] = useState(false);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [foldConfirm, setFoldConfirm] = useState(false);
+  const [hoveredShowdownPlayerId, setHoveredShowdownPlayerId] = useState<string | null>(null);
+  const [hoveredBombPotBoardIndex, setHoveredBombPotBoardIndex] = useState<0 | 1 | null>(null);
+  const [hoveredRunIndex, setHoveredRunIndex] = useState<number | null>(null);
   const previousBoardCountsRef = useRef<number[]>([]);
   const autoPeelEnabled = useGameStore((state) => state.autoPeelEnabled);
   const setAutoPeelEnabled = useGameStore((state) => state.setAutoPeelEnabled);
@@ -291,6 +347,16 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
   const CARD_COUNT = 5;
   const isVoting = phase === "voting";
+  const showRunItVotingPanel = useTimedPanelVisibility({
+    visible: isVoting,
+    startedAt: votingStartedAt,
+    durationMs: RUN_IT_VOTING_TIMEOUT_MS,
+  });
+  const showBombPotVotingPanel = useTimedPanelVisibility({
+    visible: bombPotVote != null,
+    startedAt: bombPotVotingStartedAt,
+    durationMs: BOMB_POT_VOTING_TIMEOUT_MS,
+  });
   const isPlaying = phase && phase !== "waiting" && phase !== "showdown" && phase !== "voting";
   const hasHoleCards = holeCards != null;
   const betOrRaiseLabel = isFirstBet ? "Bet" : "Raise";
@@ -310,6 +376,12 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
   useEffect(() => {
     previousBoardCountsRef.current = [];
+  }, [handNumber]);
+
+  useEffect(() => {
+    setHoveredShowdownPlayerId(null);
+    setHoveredBombPotBoardIndex(null);
+    setHoveredRunIndex(null);
   }, [handNumber]);
 
   useEffect(() => {
@@ -343,6 +415,104 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     isRunItDealing,
     isShowingBombPotCenterStage,
   ]);
+
+  const runAnimationState = deriveVisibleRunState(runResults, knownCardCount, resolvedRunCount);
+  const canUseWinnerFallback = isShowdown;
+  const canInteractWithSpotlight = phase != null && phase !== "waiting" && phase !== "voting";
+  const selectedSpotlightPlayer = canInteractWithSpotlight
+    ? getSelectedTabledPlayer(players, hoveredShowdownPlayerId)
+    : null;
+  const defaultSpotlightPlayer = canInteractWithSpotlight
+    ? resolveSpotlightPlayer({
+        players,
+        winners: canUseWinnerFallback ? winners : [],
+        viewerHoleCards: holeCards,
+        viewerCardsRevealed: bothRevealed,
+      })
+    : null;
+  const bombPotBoards = [communityCards ?? [], communityCards2 ?? []];
+  const bombPotSpotlights = bombPotBoards.map((boardCards, index) => {
+    if (centerBoardMode !== "bombPot") return null;
+    if (selectedSpotlightPlayer) {
+      return buildShowdownSpotlight({
+        playerId: selectedSpotlightPlayer.playerId,
+        playerName: selectedSpotlightPlayer.playerName,
+        holeCards: selectedSpotlightPlayer.holeCards,
+        boardCards,
+        contextLabel: `Board ${index + 1}`,
+      });
+    }
+    if (hoveredBombPotBoardIndex !== index || !defaultSpotlightPlayer) return null;
+    return buildShowdownSpotlight({
+      playerId: defaultSpotlightPlayer.playerId,
+      playerName: defaultSpotlightPlayer.playerName,
+      holeCards: defaultSpotlightPlayer.holeCards,
+      boardCards,
+      contextLabel: `Board ${index + 1}`,
+    });
+  });
+  const runSpotlights = runResults.map((run, index) => {
+    if (!isRunItShowdown) return null;
+    if (selectedSpotlightPlayer) {
+      return buildShowdownSpotlight({
+        playerId: selectedSpotlightPlayer.playerId,
+        playerName: selectedSpotlightPlayer.playerName,
+        holeCards: selectedSpotlightPlayer.holeCards,
+        boardCards: run.board ?? [],
+        contextLabel: `Run ${index + 1}`,
+      });
+    }
+    const defaultRunIndex = !publicShowdownRevealComplete ? runAnimationState.currentRun : null;
+    const focusedRunIndex = hoveredRunIndex ?? defaultRunIndex;
+    if (focusedRunIndex !== index || !defaultSpotlightPlayer) return null;
+    return buildShowdownSpotlight({
+      playerId: defaultSpotlightPlayer.playerId,
+      playerName: defaultSpotlightPlayer.playerName,
+      holeCards: defaultSpotlightPlayer.holeCards,
+      boardCards: run.board ?? [],
+      contextLabel: `Run ${index + 1}`,
+    });
+  });
+  const singleBoardPlayer = selectedSpotlightPlayer ?? defaultSpotlightPlayer;
+  const singleBoardSpotlight = centerBoardMode === "single" && singleBoardPlayer
+    ? buildShowdownSpotlight({
+        playerId: singleBoardPlayer.playerId,
+        playerName: singleBoardPlayer.playerName,
+        holeCards: singleBoardPlayer.holeCards,
+        boardCards: communityCards,
+        contextLabel: null,
+      })
+    : null;
+  const activeSpotlightPlayer = (() => {
+    if (selectedSpotlightPlayer) {
+      const hasSelectedEmphasis = centerBoardMode === "bombPot"
+        ? bombPotSpotlights.some(spotlightHasActiveEmphasis)
+        : isRunItShowdown
+          ? runSpotlights.some(spotlightHasActiveEmphasis)
+          : spotlightHasActiveEmphasis(singleBoardSpotlight);
+      return hasSelectedEmphasis ? selectedSpotlightPlayer : null;
+    }
+    if (centerBoardMode === "bombPot") {
+      return bombPotSpotlights.some(spotlightHasActiveEmphasis) ? defaultSpotlightPlayer : null;
+    }
+    if (isRunItShowdown) {
+      return runSpotlights.some(spotlightHasActiveEmphasis) ? defaultSpotlightPlayer : null;
+    }
+    return spotlightHasActiveEmphasis(singleBoardSpotlight) ? defaultSpotlightPlayer : null;
+  })();
+  const spotlightHoleCardEmphasis = centerBoardMode === "bombPot"
+    ? mergeEmphasisArrays(bombPotSpotlights.map(holeCardEmphasisFromSpotlight), 2)
+    : isRunItShowdown
+      ? mergeEmphasisArrays(runSpotlights.map(holeCardEmphasisFromSpotlight), 2)
+      : holeCardEmphasisFromSpotlight(singleBoardSpotlight);
+  const spotlightBoardCardEmphasis = boardCardEmphasisFromSpotlight(singleBoardSpotlight);
+  const spotlightBombPotCardEmphasis = [
+    boardCardEmphasisFromSpotlight(bombPotSpotlights[0]),
+    boardCardEmphasisFromSpotlight(bombPotSpotlights[1]),
+  ] as const;
+  const spotlightRunCardEmphasisByRun = runSpotlights.map(boardCardEmphasisFromSpotlight);
+  const spotlightPlayerId = activeSpotlightPlayer?.playerId ?? null;
+  const isViewerSpotlight = spotlightPlayerId != null && spotlightPlayerId === viewingPlayerId;
 
   return (
     <div className={`relative flex flex-col h-full w-full overflow-hidden bg-gray-100 dark:bg-gray-950 transition-colors duration-500 ${isYourTurn ? "animate-turn-perimeter" : ""}`}>
@@ -484,6 +654,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                     >
                       <Card
                         card={card}
+                        emphasis={spotlightBoardCardEmphasis?.[i] ?? "neutral"}
                         className="rounded-2xl shadow-2xl"
                         style={{
                           width: standardCenterStage?.cardWidth,
@@ -504,60 +675,73 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                   top: `${bombPotCenterStage?.topPct ?? 41.6}%`,
                   gap: bombPotCenterStage?.stackGap ?? 12,
                 }}
+                onPointerLeave={canInteractWithSpotlight ? () => setHoveredBombPotBoardIndex(null) : undefined}
               >
                 <div
-                  className="font-black text-gray-400 uppercase"
-                  style={{
-                    fontSize: bombPotCenterStage?.labelFontSize,
-                    letterSpacing: `${bombPotCenterStage?.labelTrackingEm ?? 0.28}em`,
-                  }}
+                  className={canInteractWithSpotlight ? "cursor-pointer" : ""}
+                  onPointerEnter={canInteractWithSpotlight ? () => setHoveredBombPotBoardIndex(0) : undefined}
                 >
-                  Board 1
-                </div>
-                <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
-                  {Array.from({ length: CARD_COUNT }, (_, i) => {
-                    const isRevealed = communityCards?.[i] != null;
-                    const cardKey = `${handNumber}-b1-card-${i}-${isRevealed ? "shown" : "hidden"}`;
-                    return (
-                      <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
-                        <Card
-                          card={communityCards?.[i]}
-                          className="rounded-xl shadow-xl"
-                          style={{
-                            width: bombPotCenterStage?.cardWidth,
-                            height: bombPotCenterStage?.cardHeight,
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
+                  <div
+                    className="font-black text-gray-400 uppercase"
+                    style={{
+                      fontSize: bombPotCenterStage?.labelFontSize,
+                      letterSpacing: `${bombPotCenterStage?.labelTrackingEm ?? 0.28}em`,
+                    }}
+                  >
+                    Board 1
+                  </div>
+                  <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
+                    {Array.from({ length: CARD_COUNT }, (_, i) => {
+                      const isRevealed = communityCards?.[i] != null;
+                      const cardKey = `${handNumber}-b1-card-${i}-${isRevealed ? "shown" : "hidden"}`;
+                      return (
+                        <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
+                          <Card
+                            card={communityCards?.[i]}
+                            emphasis={spotlightBombPotCardEmphasis[0]?.[i] ?? "neutral"}
+                            className="rounded-xl shadow-xl"
+                            style={{
+                              width: bombPotCenterStage?.cardWidth,
+                              height: bombPotCenterStage?.cardHeight,
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div
-                  className="mt-1 font-black text-gray-400 uppercase"
-                  style={{
-                    fontSize: bombPotCenterStage?.labelFontSize,
-                    letterSpacing: `${bombPotCenterStage?.labelTrackingEm ?? 0.28}em`,
-                  }}
+                  className={`mt-1 ${canInteractWithSpotlight ? "cursor-pointer" : ""}`}
+                  onPointerEnter={canInteractWithSpotlight ? () => setHoveredBombPotBoardIndex(1) : undefined}
                 >
-                  Board 2
-                </div>
-                <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
-                  {Array.from({ length: CARD_COUNT }, (_, i) => {
-                    const isRevealed = communityCards2?.[i] != null;
-                    const cardKey = `${handNumber}-b2-card-${i}-${isRevealed ? "shown" : "hidden"}`;
-                    return (
-                      <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
-                        <Card
-                          card={communityCards2?.[i]}
-                          className="rounded-xl shadow-xl"
-                          style={{
-                            width: bombPotCenterStage?.cardWidth,
-                            height: bombPotCenterStage?.cardHeight,
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
+                  <div
+                    className="font-black text-gray-400 uppercase"
+                    style={{
+                      fontSize: bombPotCenterStage?.labelFontSize,
+                      letterSpacing: `${bombPotCenterStage?.labelTrackingEm ?? 0.28}em`,
+                    }}
+                  >
+                    Board 2
+                  </div>
+                  <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
+                    {Array.from({ length: CARD_COUNT }, (_, i) => {
+                      const isRevealed = communityCards2?.[i] != null;
+                      const cardKey = `${handNumber}-b2-card-${i}-${isRevealed ? "shown" : "hidden"}`;
+                      return (
+                        <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
+                          <Card
+                            card={communityCards2?.[i]}
+                            emphasis={spotlightBombPotCardEmphasis[1]?.[i] ?? "neutral"}
+                            className="rounded-xl shadow-xl"
+                            style={{
+                              width: bombPotCenterStage?.cardWidth,
+                              height: bombPotCenterStage?.cardHeight,
+                            }}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
@@ -577,9 +761,29 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                   runDealStartedAt={runDealStartedAt!}
                   knownCardCount={knownCardCount}
                   desktopLayout={runItCenterStage ?? undefined}
+                  onHoverRunChange={isShowdown ? setHoveredRunIndex : undefined}
+                  highlightedCardEmphasisByRun={spotlightRunCardEmphasisByRun}
                 />
               </div>
             )}
+
+            <AnimatePresence>
+              {isRunItDealing && runItOddsPanel.visible && (
+                <motion.div
+                  className="absolute left-1/2 -translate-x-1/2 z-[18]"
+                  initial={{ opacity: 0, y: 18 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 12 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 26 }}
+                  style={{
+                    top: runItCenterStageBounds.boardBottom + 36,
+                    width: Math.min(Math.max(runItCenterStageBounds.rowWidth + 28, 460), 640),
+                  }}
+                >
+                  <RunItOddsPanel model={runItOddsPanel} />
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Pot Display — visible whenever pot > 0 (voting, active play, and throughout showdown) */}
             {(pot ?? 0) > 0 && (
@@ -647,11 +851,12 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
             {/* Bomb pot voting panel */}
             <AnimatePresence>
-              {bombPotVote && (
-                <div className="overlay-scrim-strong absolute inset-0 flex items-center justify-center z-[180] rounded-[94px] pointer-events-none" style={{ transform: `translateY(${overlayLift}px)` }}>
+              {showBombPotVotingPanel && bombPotVote && (
+                <div className="absolute inset-0 flex items-center justify-center z-[180] pointer-events-none" style={{ transform: `translateY(${overlayLift}px)` }}>
                   <div className="pointer-events-auto">
                     <BombPotVotingPanel
                       vote={bombPotVote}
+                      votingStartedAt={bombPotVotingStartedAt}
                       players={players}
                       viewingPlayerId={viewingPlayerId}
                       bigBlind={blinds?.big ?? 25}
@@ -698,8 +903,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
             {/* Voting overlay */}
             <AnimatePresence>
-              {isVoting && (
-                <div className="overlay-scrim-strong absolute inset-0 flex items-center justify-center z-[165] rounded-[94px]">
+              {showRunItVotingPanel && (
+                <div className="absolute inset-0 flex items-center justify-center z-[165]">
                   <VotingPanel
                     votes={runItVotes}
                     players={players}
@@ -732,6 +937,9 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               seatSelectionLocked={seatSelectionLocked}
               seatSize={seatSize}
               handNumber={handNumber}
+              onShowdownHoverChange={canInteractWithSpotlight ? setHoveredShowdownPlayerId : undefined}
+              showdownSpotlightSelected={players[i]?.id === spotlightPlayerId}
+              showdownCardEmphasisByIndex={players[i]?.id === spotlightPlayerId ? spotlightHoleCardEmphasis : undefined}
             />
           ))}
 
@@ -883,6 +1091,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                     onRevealToOthers={onRevealCard}
                     sevenTwoEligible={sevenTwoEligible}
                     onPeekCard={onPeekCard}
+                    emphasisByIndex={isViewerSpotlight ? spotlightHoleCardEmphasis : undefined}
                   />
                   <button
                     onClick={() => setAutoPeelEnabled(!autoPeelEnabled)}

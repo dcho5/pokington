@@ -854,6 +854,54 @@ async function runQueueLeaveReconnect(baseUrl, wsHost) {
     }
   }
 
+  {
+    const ctx = new ScenarioContext({
+      id: "reconnect_next_hand_timeout",
+      title: "Reconnect preserves the next-hand countdown",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob"]);
+      await ctx.sitDown("Alice", 0, "Alice", 5000);
+      await ctx.sitDown("Bob", 1, "Bob", 5000);
+      await ctx.startHand("Alice");
+      await ctx.runCheckdownToShowdown(["Alice", "Bob"]);
+      await ctx.waitForShowdown();
+
+      const alice = ctx.getPlayer("Alice");
+      const bob = ctx.getPlayer("Bob");
+      await ctx.waitForAll(
+        (player) => player.latestState?.phase === "showdown" && typeof player.latestState?.nextHandStartsAt === "number",
+        "server next-hand timer",
+      );
+      const nextHandStartsAt = alice.latestState?.nextHandStartsAt;
+      assert(typeof nextHandStartsAt === "number", "Expected showdown state to include nextHandStartsAt");
+
+      await delay(3_000);
+      await bob.reconnect();
+      await bob.waitFor(
+        () => bob.latestState?.nextHandStartsAt === nextHandStartsAt,
+        { label: "same next-hand timer after reconnect" },
+      );
+      await ctx.waitForAll(
+        (player) => player.latestState?.phase !== "showdown" && player.latestState?.handNumber === 2,
+        "server auto-start next hand",
+        20_000,
+      );
+
+      ctx.takeSnapshots("reconnect next-hand timeout");
+      results.push(ctx.result("Pass", [
+        "Reconnect kept the server-authored nextHandStartsAt timestamp and the room advanced without a client-owned timer.",
+      ]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
   return results;
 }
 

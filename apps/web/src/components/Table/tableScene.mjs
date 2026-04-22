@@ -268,6 +268,7 @@ export function deriveTableScene({
   } = clientUiState;
   const {
     votingStartedAt = null,
+    bombPotVotingStartedAt = null,
     streetSweeping = false,
     runAnnouncement = null,
     isRunItBoard = false,
@@ -455,6 +456,7 @@ export function deriveTableScene({
       runCount,
       runAnnouncement,
       votingStartedAt,
+      bombPotVotingStartedAt,
       viewerCanVote: !viewerIsFolded,
       isRunItBoard,
       animatedShowdownReveal,

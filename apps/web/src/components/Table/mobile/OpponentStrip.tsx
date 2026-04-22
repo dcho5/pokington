@@ -13,6 +13,9 @@ interface OpponentStripProps {
   emptySeats?: number[];
   seatSelectionLocked?: boolean;
   onEmptySeatTap?: (seatIndex: number) => void;
+  selectedSpotlightPlayerId?: string | null;
+  onShowdownPlayerTap?: (playerId: string) => void;
+  spotlightHoleCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
 }
 
 /** Merge occupied + empty into a single clockwise-ordered list */
@@ -29,6 +32,9 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
   emptySeats = [],
   seatSelectionLocked = false,
   onEmptySeatTap,
+  selectedSpotlightPlayerId = null,
+  onShowdownPlayerTap,
+  spotlightHoleCardEmphasisByIndex = ["neutral", "neutral"],
 }) => {
   const items: SeatItem[] = [
     ...players.map(({ player, seatIndex }) => ({
@@ -58,22 +64,26 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
   const renderItem = (item: SeatItem) => {
     if (item.type === "player") {
       return (
+        <PlayerBubble
+          player={item.player}
+          playerCount={playerCount}
+          isDealer={item.seatIndex === dealerIndex}
+          isSmallBlind={item.seatIndex === smallBlindIndex}
+          isBigBlind={item.seatIndex === bigBlindIndex}
+          showdownSpotlightSelected={item.player.id === selectedSpotlightPlayerId}
+          onShowdownPlayerTap={onShowdownPlayerTap}
+          showdownCardEmphasisByIndex={item.player.id === selectedSpotlightPlayerId ? spotlightHoleCardEmphasisByIndex : undefined}
+        />
+      );
+    }
+
+    return (
       <PlayerBubble
-        player={item.player}
-        playerCount={playerCount}
-        isDealer={item.seatIndex === dealerIndex}
-        isSmallBlind={item.seatIndex === smallBlindIndex}
-        isBigBlind={item.seatIndex === bigBlindIndex}
+        player={null}
+        emptySeatIndex={item.seatIndex}
+        seatSelectionLocked={seatSelectionLocked}
+        onEmptyTap={seatSelectionLocked ? undefined : () => onEmptySeatTap?.(item.seatIndex)}
       />
-    );
-  }
-  return (
-    <PlayerBubble
-      player={null}
-      emptySeatIndex={item.seatIndex}
-      seatSelectionLocked={seatSelectionLocked}
-      onEmptyTap={seatSelectionLocked ? undefined : () => onEmptySeatTap?.(item.seatIndex)}
-    />
     );
   };
 

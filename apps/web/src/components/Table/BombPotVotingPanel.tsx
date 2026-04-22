@@ -1,11 +1,14 @@
 "use client";
 import React from "react";
 import { motion } from "framer-motion";
+import { BOMB_POT_VOTING_TIMEOUT_MS } from "@pokington/engine";
 import { formatCents } from "lib/formatCents";
+import TimerBar from "./TimerBar";
 import type { DesktopBombPotVotingPanelMetrics } from "lib/desktopTableLayout";
 
 interface BombPotVotingPanelProps {
   vote: { anteBB: number; proposedBy: string; votes: Record<string, boolean> };
+  votingStartedAt?: number | null;
   players: Array<{ id?: string; name: string } | null>;
   viewingPlayerId?: string;
   bigBlind: number;
@@ -17,6 +20,7 @@ interface BombPotVotingPanelProps {
 
 export default function BombPotVotingPanel({
   vote,
+  votingStartedAt,
   players,
   viewingPlayerId,
   bigBlind,
@@ -97,6 +101,13 @@ export default function BombPotVotingPanel({
             for <span className="font-semibold text-sky-100">{formatCents(anteCents)}</span>.
           </div>
         </div>
+
+        <TimerBar
+          startedAt={votingStartedAt}
+          durationMs={BOMB_POT_VOTING_TIMEOUT_MS}
+          variant="voting"
+          className="mb-4"
+        />
 
         <div className="mb-4 flex flex-wrap justify-center gap-2">
           {players.filter(Boolean).map((p) => {

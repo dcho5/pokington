@@ -47,3 +47,67 @@ export function getShowdownCountdownDelayMs({
   const elapsed = showdownStartedAt == null ? 0 : Math.max(0, now - showdownStartedAt);
   return Math.max(0, animDoneMs - elapsed);
 }
+
+export function getShowdownCountdownStartAt({
+  phase,
+  animatedShowdownReveal = false,
+  revealRunsConcurrently = false,
+  knownCardCount = 0,
+  runCount = 1,
+  showdownStartedAt = null,
+} = {}) {
+  if (phase !== "showdown" || showdownStartedAt == null) return null;
+
+  const delayMs = getShowdownCountdownDelayMs({
+    phase,
+    animatedShowdownReveal,
+    revealRunsConcurrently,
+    knownCardCount,
+    runCount,
+    publicShowdownRevealComplete: true,
+    showdownStartedAt,
+    now: showdownStartedAt,
+  });
+  if (delayMs == null) return null;
+  return showdownStartedAt + delayMs;
+}
+
+export function getNextHandAutoStartAt({
+  phase,
+  animatedShowdownReveal = false,
+  revealRunsConcurrently = false,
+  knownCardCount = 0,
+  runCount = 1,
+  showdownStartedAt = null,
+  countdownSeconds = 10,
+} = {}) {
+  const countdownStartAt = getShowdownCountdownStartAt({
+    phase,
+    animatedShowdownReveal,
+    revealRunsConcurrently,
+    knownCardCount,
+    runCount,
+    showdownStartedAt,
+  });
+  if (countdownStartAt == null) return null;
+  return countdownStartAt + Math.max(0, countdownSeconds) * 1000;
+}
+
+/**
+ * @param {{
+ *   phase?: string;
+ *   nextHandStartsAt?: number | null;
+ *   now?: number;
+ * }} [options]
+ */
+export function getShowdownCountdownSeconds({
+  phase,
+  nextHandStartsAt = null,
+  now = Date.now(),
+} = {}) {
+  if (phase !== "showdown" || nextHandStartsAt == null) return null;
+
+  const remainingMs = nextHandStartsAt - now;
+  if (remainingMs <= 0) return null;
+  return Math.max(1, Math.ceil(remainingMs / 1000));
+}

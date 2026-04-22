@@ -126,6 +126,9 @@ interface SeatProps {
   seatSelectionLocked?: boolean;
   seatSize?: number;
   handNumber?: number;
+  onShowdownHoverChange?: (playerId: string | null) => void;
+  showdownSpotlightSelected?: boolean;
+  showdownCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
 }
 
 const Seat: React.FC<SeatProps> = ({
@@ -143,6 +146,9 @@ const Seat: React.FC<SeatProps> = ({
   seatSelectionLocked = false,
   seatSize = 100,
   handNumber = 0,
+  onShowdownHoverChange,
+  showdownSpotlightSelected = false,
+  showdownCardEmphasisByIndex = ["neutral", "neutral"],
 }) => {
   const pos = computeSeatPosition(seatIndex, totalSeats, geometry);
   const action = player?.lastAction ?? null;
@@ -387,61 +393,68 @@ const Seat: React.FC<SeatProps> = ({
               </div>
             )}
 
-            {publicCards.map((card, i) => (
-              <motion.div
-                key={card ? `${player.id ?? seatIndex}-${card.rank}${card.suit}-${handNumber}-${i}` : `${player.id ?? seatIndex}-back-${handNumber}-${i}`}
-                className="absolute top-0"
-                initial={{ scale: 0.86, opacity: 0, y: 14, rotateY: 90 }}
-                animate={{ scale: 1, opacity: 1, y: 0, rotateY: 0 }}
-                transition={{
-                  delay: i * 0.06,
-                  duration: 0.34,
-                  type: "spring",
-                  stiffness: 260,
-                  damping: 22,
-                }}
-                style={{
-                  left: i === 0 ? 0 : clusterWidth - cardWidth,
-                  rotate: i === 0 ? -7 : 7,
-                  transformOrigin: "50% 88%",
-                  perspective: 700,
-                  zIndex: i === 0 ? 1 : 2,
-                }}
-              >
+            <div
+              className={`absolute inset-0 ${hasBothPublicCards ? "cursor-pointer" : ""}`}
+              onPointerEnter={hasBothPublicCards && player.id ? () => onShowdownHoverChange?.(player.id ?? null) : undefined}
+              onPointerLeave={hasBothPublicCards ? () => onShowdownHoverChange?.(null) : undefined}
+            >
+              {publicCards.map((card, i) => (
                 <motion.div
-                  animate={player.sevenTwoEligible
-                    ? {
-                        filter: [
-                          "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
-                          "drop-shadow(0 0 18px rgba(234,179,8,1))",
-                          "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
-                        ],
-                      }
-                    : { filter: "none" }
-                  }
-                  transition={player.sevenTwoEligible
-                    ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
-                    : { duration: 0.2, ease: "easeOut" }
-                  }
+                  key={card ? `${player.id ?? seatIndex}-${card.rank}${card.suit}-${handNumber}-${i}` : `${player.id ?? seatIndex}-back-${handNumber}-${i}`}
+                  className="absolute top-0"
+                  initial={{ scale: 0.86, opacity: 0, y: 14, rotateY: 90 }}
+                  animate={{ scale: 1, opacity: 1, y: 0, rotateY: 0 }}
+                  transition={{
+                    delay: i * 0.06,
+                    duration: 0.34,
+                    type: "spring",
+                    stiffness: 260,
+                    damping: 22,
+                  }}
+                  style={{
+                    left: i === 0 ? 0 : clusterWidth - cardWidth,
+                    rotate: i === 0 ? -7 : 7,
+                    transformOrigin: "50% 88%",
+                    perspective: 700,
+                    zIndex: i === 0 ? 1 : 2,
+                  }}
                 >
-                  <Card
-                    card={card ?? undefined}
-                    className={`
-                      rounded-[18px] shadow-2xl transition-opacity duration-300
-                      ${player.isFolded ? "opacity-75" : ""}
-                    `}
-                    style={{
-                      width: cardWidth,
-                      height: cardHeight,
-                      boxShadow: card
-                        ? "0 20px 28px rgba(2,6,23,0.38)"
-                        : "0 18px 24px rgba(2,6,23,0.34)",
-                    }}
-                  />
+                  <motion.div
+                    animate={player.sevenTwoEligible
+                      ? {
+                          filter: [
+                            "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
+                            "drop-shadow(0 0 18px rgba(234,179,8,1))",
+                            "drop-shadow(0 0 10px rgba(234,179,8,0.7))",
+                          ],
+                        }
+                      : { filter: "none" }
+                    }
+                    transition={player.sevenTwoEligible
+                      ? { duration: 1.2, repeat: Infinity, ease: "easeInOut" }
+                      : { duration: 0.2, ease: "easeOut" }
+                    }
+                  >
+                    <Card
+                      card={card ?? undefined}
+                      emphasis={showdownCardEmphasisByIndex[i] ?? "neutral"}
+                      className={`
+                        rounded-[18px] shadow-2xl transition-opacity duration-300
+                        ${player.isFolded ? "opacity-75" : ""}
+                        ${showdownSpotlightSelected ? "ring-2 ring-red-400/85 ring-offset-2 ring-offset-transparent" : ""}
+                      `}
+                      style={{
+                        width: cardWidth,
+                        height: cardHeight,
+                        boxShadow: card
+                          ? "0 20px 28px rgba(2,6,23,0.38)"
+                          : "0 18px 24px rgba(2,6,23,0.34)",
+                      }}
+                    />
+                  </motion.div>
                 </motion.div>
-              </motion.div>
-            ))}
-
+              ))}
+            </div>
           </div>
 
           {player.sevenTwoEligible && (

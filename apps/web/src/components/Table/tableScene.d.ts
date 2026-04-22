@@ -11,6 +11,7 @@ export interface HandIndicator {
 
 export interface TableTimingFlags {
   votingStartedAt: number | null;
+  bombPotVotingStartedAt: number | null;
   streetPauseChips: { id: string; seatIndex: number; amount: number }[] | null;
   streetSweeping: boolean;
   runAnnouncement: 1 | 2 | 3 | null;
@@ -88,6 +89,7 @@ export interface TableLayoutScene {
   runCount: 1 | 2 | 3;
   runAnnouncement: 1 | 2 | 3 | null;
   votingStartedAt: number | null;
+  bombPotVotingStartedAt: number | null;
   viewerCanVote: boolean;
   isRunItBoard: boolean;
   animatedShowdownReveal: boolean;

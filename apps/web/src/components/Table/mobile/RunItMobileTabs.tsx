@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import Card from "components/poker/Card";
 import { deriveVisibleRunState } from "lib/runAnimation";
@@ -12,7 +12,11 @@ interface RunItMobileTabsProps {
   knownCardCount: number;
   runDealStartedAt: number;
   handNumber: number;
+  viewingRun: number;
   onViewingRunChange?: (runIndex: number) => void;
+  highlightedRunIndex?: number | null;
+  highlightedCardEmphasis?: Array<"neutral" | "highlighted" | "dimmed"> | null;
+  highlightedCardEmphasisByRun?: Array<Array<"neutral" | "highlighted" | "dimmed"> | null> | null;
 }
 
 export default function RunItMobileTabs({
@@ -20,40 +24,36 @@ export default function RunItMobileTabs({
   knownCardCount,
   runDealStartedAt,
   handNumber,
+  viewingRun,
   onViewingRunChange,
+  highlightedRunIndex = null,
+  highlightedCardEmphasis = null,
+  highlightedCardEmphasisByRun = null,
 }: RunItMobileTabsProps) {
   const { currentRun, revealedCount } = deriveVisibleRunState(runResults, knownCardCount);
   const totalRuns = runResults.length;
-
-  const [viewingRun, setViewingRun] = useState(0);
   const prevViewingRun = useRef(0);
-
-  // Auto-advance to the newest active run
-  useEffect(() => {
-    if (currentRun > viewingRun) {
-      prevViewingRun.current = viewingRun;
-      setViewingRun(currentRun);
-    }
-  }, [currentRun]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     prevViewingRun.current = 0;
-    setViewingRun(0);
   }, [handNumber]);
 
   useEffect(() => {
-    onViewingRunChange?.(viewingRun);
-  }, [onViewingRunChange, viewingRun]);
+    prevViewingRun.current = viewingRun;
+  }, [viewingRun]);
 
   function switchTo(r: number) {
     prevViewingRun.current = viewingRun;
-    setViewingRun(r);
+    onViewingRunChange?.(r);
   }
 
   const direction = viewingRun >= prevViewingRun.current ? 1 : -1;
 
   // Ghost run: the most recently settled run that isn't the active view
   const ghostRun = viewingRun > 0 ? viewingRun - 1 : null;
+  const emphasisForRun = (runIndex: number) =>
+    highlightedCardEmphasisByRun?.[runIndex] ??
+    (runIndex === highlightedRunIndex ? highlightedCardEmphasis : null);
 
   function cardVariants(i: number) {
     const delay = i * 0.05;
@@ -145,6 +145,7 @@ export default function RunItMobileTabs({
               <div key={i} className="flex-1 aspect-[5/7]">
                 <Card
                   card={runResults[ghostRun]?.board[i]}
+                  emphasis={emphasisForRun(ghostRun)?.[i] ?? "neutral"}
                   className="w-full h-full rounded-xl"
                 />
               </div>
@@ -173,7 +174,7 @@ export default function RunItMobileTabs({
                 if (!isRevealed) {
                   return (
                     <div key={i} className="flex-1 aspect-[5/7]">
-                      <Card card={undefined} className="w-full h-full rounded-xl shadow-xl" />
+                    <Card card={undefined} className="w-full h-full rounded-xl shadow-xl" />
                     </div>
                   );
                 }
@@ -189,6 +190,7 @@ export default function RunItMobileTabs({
                   >
                     <Card
                       card={runResults[viewingRun]?.board[i]}
+                      emphasis={emphasisForRun(viewingRun)?.[i] ?? "neutral"}
                       className="w-full h-full rounded-xl shadow-xl"
                     />
                   </motion.div>

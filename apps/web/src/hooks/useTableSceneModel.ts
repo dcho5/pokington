@@ -26,6 +26,7 @@ export function useTableSceneModel(code: string): TableSceneModel {
 
   const timingFlags = {
     votingStartedAt: useGameStore((state) => state.votingStartedAt),
+    bombPotVotingStartedAt: useGameStore((state) => state.bombPotVotingStartedAt),
     streetPauseChips: useGameStore((state) => state.streetPauseChips),
     streetSweeping: useGameStore((state) => state.streetSweeping),
     runAnnouncement: useGameStore((state) => state.runAnnouncement),
@@ -106,12 +107,9 @@ export function useTableSceneModel(code: string): TableSceneModel {
     phase: gameState.phase,
     handNumber: gameState.handNumber,
     runCount: gameState.runCount as 1 | 2 | 3,
-    animatedShowdownReveal,
-    revealRunsConcurrently,
-    knownCardCount: timingFlags.knownCardCountAtRunIt,
     settledRunCount,
     publicShowdownRevealComplete,
-    showdownStartedAt: timingFlags.showdownStartedAt,
+    nextHandStartsAt: gameState.nextHandStartsAt ?? null,
     viewingPlayer: baseScene.viewingPlayer,
     viewerStack: baseScene.layout.viewerStack,
     viewingSeat: clientUiState.viewingSeat,

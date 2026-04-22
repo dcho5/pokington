@@ -8,6 +8,8 @@ import type { Player } from "types/player";
 import type { Card as CardType } from "@pokington/shared";
 import { useGameStore } from "store/useGameStore";
 
+type CardEmphasis = "neutral" | "highlighted" | "dimmed";
+
 interface HandPanelProps {
   player: Player | null;
   holeCards?: [CardType, CardType] | null;
@@ -21,6 +23,8 @@ interface HandPanelProps {
   onPeekCard?: (index: 0 | 1) => void;
   currentBet?: number;
   cardPeelPersistenceKey?: string | null;
+  onViewerCardsRevealedChange?: (revealed: boolean) => void;
+  holeCardEmphasisByIndex?: CardEmphasis[];
 }
 
 const HandPanel: React.FC<HandPanelProps> = ({
@@ -36,6 +40,8 @@ const HandPanel: React.FC<HandPanelProps> = ({
   onPeekCard,
   currentBet = 0,
   cardPeelPersistenceKey,
+  onViewerCardsRevealedChange,
+  holeCardEmphasisByIndex = ["neutral", "neutral"],
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
   const cardHeight = 100;
@@ -103,13 +109,17 @@ const HandPanel: React.FC<HandPanelProps> = ({
               cards={holeCards}
               cardHeight={cardHeight}
               autoReveal={autoPeelEnabled}
-              onRevealChange={setBothRevealed}
+              onRevealChange={(revealed) => {
+                setBothRevealed(revealed);
+                onViewerCardsRevealedChange?.(revealed);
+              }}
               canRevealToOthers={canRevealToOthers}
               revealedToOthersIndices={revealedToOthersIndices}
               onRevealToOthers={onRevealToOthers}
               sevenTwoEligible={sevenTwoEligible}
               onPeekCard={onPeekCard}
               persistenceKey={cardPeelPersistenceKey}
+              emphasisByIndex={holeCardEmphasisByIndex}
             />
           ) : (
             <div className="flex items-center justify-center" style={{ width: Math.round((cardHeight * 5) / 7) * 2 + 10, height: cardHeight }}>

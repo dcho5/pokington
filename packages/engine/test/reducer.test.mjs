@@ -82,13 +82,20 @@ test("heads-up short small blind all-ins skip the covered big blind action", () 
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 10 });
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
 
-  state = gameReducer(state, { type: "START_HAND" });
+  const originalNow = Date.now;
+  Date.now = () => 1_234;
+  try {
+    state = gameReducer(state, { type: "START_HAND" });
+  } finally {
+    Date.now = originalNow;
+  }
 
   assert.ok(state.players.a.holeCards);
   assert.ok(state.players.b.holeCards);
   assert.equal(state.players.a.isAllIn, true);
   assert.equal(state.players.a.currentBet, 10);
   assert.equal(state.phase, "voting");
+  assert.equal(state.runItVotingStartedAt, 1_234);
   assert.deepEqual(state.needsToAct, []);
   assert.equal(state.winners, null);
   assert.deepEqual(state.communityCards, []);
@@ -124,6 +131,30 @@ test("mid-hand stand up is ignored once a player is committed", () => {
 
   assert.equal(JSON.stringify(next), before);
   assert.deepEqual(Object.keys(next.players).sort(), ["a", "b"]);
+});
+
+test("waiting-room seat changes move the player without changing stack or identity", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1300 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 900 });
+
+  state = gameReducer(state, { type: "CHANGE_SEAT", playerId: "a", seatIndex: 4 });
+
+  assert.equal(state.players.a.seatIndex, 4);
+  assert.equal(state.players.a.stack, 1300);
+  assert.equal(state.players.a.id, "a");
+  assert.equal(state.players.b.seatIndex, 1);
+});
+
+test("seat changes are rejected once a hand has started", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
+  state = gameReducer(state, { type: "START_HAND" });
+
+  const next = gameReducer(state, { type: "CHANGE_SEAT", playerId: "a", seatIndex: 4 });
+
+  assert.equal(next.players.a.seatIndex, state.players.a.seatIndex);
 });
 
 test("showdown stand up is ignored because the hand is still in progress", () => {
@@ -445,6 +476,28 @@ test("standing up clears bomb-pot cooldown and cancels an active proposal from t
   assert.deepEqual(state.bombPotCooldown, []);
   assert.equal(state.bombPotVote, null);
   assert.equal(state.players.a, undefined);
+});
+
+test("bomb-pot proposals stamp a start time and clear it when the vote ends", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
+
+  const originalNow = Date.now;
+  Date.now = () => 4_567;
+  try {
+    state = gameReducer(state, { type: "PROPOSE_BOMB_POT", playerId: "a", anteBB: 2 });
+  } finally {
+    Date.now = originalNow;
+  }
+
+  assert.equal(state.bombPotVote?.proposedBy, "a");
+  assert.equal(state.bombPotVotingStartedAt, 4_567);
+
+  state = gameReducer(state, { type: "VOTE_BOMB_POT", playerId: "b", approve: false });
+
+  assert.equal(state.bombPotVote, null);
+  assert.equal(state.bombPotVotingStartedAt, null);
 });
 
 test("multi-run aggregate winners preserve distinct winning hand labels", () => {

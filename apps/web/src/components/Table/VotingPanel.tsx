@@ -1,6 +1,7 @@
 "use client";
 import React from "react";
 import { motion } from "framer-motion";
+import { RUN_IT_VOTING_TIMEOUT_MS } from "@pokington/engine";
 import TimerBar from "./TimerBar";
 import type { DesktopVotingPanelMetrics } from "lib/desktopTableLayout";
 
@@ -74,7 +75,12 @@ export default function VotingPanel({
           <p className="text-[13px] leading-5 text-slate-100">{subtitle}</p>
         </div>
 
-        <TimerBar startedAt={votingStartedAt} variant="voting" className="mb-4" />
+        <TimerBar
+          startedAt={votingStartedAt}
+          durationMs={RUN_IT_VOTING_TIMEOUT_MS}
+          variant="voting"
+          className="mb-4"
+        />
 
         <div className="surface-content">
           {canVote ? (
@@ -189,7 +195,12 @@ export default function VotingPanel({
           </p>
         </div>
 
-        <TimerBar startedAt={votingStartedAt} variant="voting" className="mb-4" />
+        <TimerBar
+          startedAt={votingStartedAt}
+          durationMs={RUN_IT_VOTING_TIMEOUT_MS}
+          variant="voting"
+          className="mb-4"
+        />
 
         {canVote ? (
           <div className="flex gap-2 mb-4">

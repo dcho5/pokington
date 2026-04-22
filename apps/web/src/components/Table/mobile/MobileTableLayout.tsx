@@ -1,6 +1,10 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import {
+  BOMB_POT_VOTING_TIMEOUT_MS,
+  RUN_IT_VOTING_TIMEOUT_MS,
+} from "@pokington/engine";
 import TableHeader from "./TableHeader";
 import OpponentStrip from "./OpponentStrip";
 import CommunityCards from "./CommunityCards";
@@ -17,14 +21,25 @@ import {
   isAnimatedRunItShowdown,
   shouldRenderRunItBoard,
 } from "lib/tableVisualState";
+import { deriveVisibleRunState } from "lib/runAnimation";
 import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
 import { MobileWinnerChips } from "./MobileWinnerChips";
 import { MobileSevenTwoBountyChips } from "./MobileSevenTwoBountyChips";
 import AnnouncementBanner from "../AnnouncementBanner";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
 import WinnerBanner from "../WinnerBanner";
+import RunItOddsPanel from "../RunItOddsPanel";
 import type { TableLayoutProps } from "../TableLayout";
+import type { Player } from "types/player";
 import { computeMobileChipAngle } from "lib/chipOrientation";
+import { useTimedPanelVisibility } from "hooks/useTimedPanelVisibility";
+import { useRunItOddsPanelModel } from "hooks/useRunItOddsPanelModel";
+import {
+  buildShowdownSpotlight,
+  mergeEmphasisArrays,
+  resolveSpotlightPlayer,
+} from "lib/showdownSpotlight";
+import type { ResolvedSpotlightPlayer, ShowdownSpotlightModel } from "lib/showdownSpotlight";
 import {
   getEmptySeats,
   getMinPlayerStack,
@@ -36,6 +51,35 @@ import {
 } from "../tableLayoutUtils";
 
 type MobileTableLayoutProps = TableLayoutProps & { totalSeats?: number };
+type CardEmphasis = "neutral" | "highlighted" | "dimmed";
+
+function getSelectedTabledPlayer(
+  players: Array<Player | null>,
+  selectedPlayerId: string | null,
+): ResolvedSpotlightPlayer | null {
+  if (!selectedPlayerId) return null;
+  const selectedPlayer = players.find((player) => player?.id === selectedPlayerId);
+  if (!selectedPlayer?.holeCards?.[0] || !selectedPlayer?.holeCards?.[1]) return null;
+  return {
+    source: "selected",
+    playerId: selectedPlayer.id ?? null,
+    playerName: selectedPlayer.name,
+    holeCards: [selectedPlayer.holeCards[0], selectedPlayer.holeCards[1]],
+  };
+}
+
+function holeCardEmphasisFromSpotlight(spotlight: ShowdownSpotlightModel | null): CardEmphasis[] {
+  return spotlight?.holeCards.map((entry) => entry.emphasis) ?? ["neutral", "neutral"];
+}
+
+function boardCardEmphasisFromSpotlight(spotlight: ShowdownSpotlightModel | null): CardEmphasis[] | null {
+  return spotlight?.boardCards.map((entry) => entry.emphasis) ?? null;
+}
+
+function spotlightHasActiveEmphasis(spotlight: ShowdownSpotlightModel | null) {
+  if (!spotlight) return false;
+  return [...spotlight.holeCards, ...spotlight.boardCards].some((entry) => entry.emphasis !== "neutral");
+}
 
 const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   scene,
@@ -70,10 +114,12 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     runItVotes = {},
     runAnnouncement = null,
     votingStartedAt = null,
+    bombPotVotingStartedAt = null,
     viewerCanVote = false,
     showNextHand = true,
     isRunItBoard = false,
     animatedShowdownReveal = false,
+    publicShowdownRevealComplete = false,
     showWinnerBanner = false,
     runResults = [],
     knownCardCount = 0,
@@ -117,8 +163,13 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   const [bombPotSheetOpen, setBombPotSheetOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
-  const [activeHandIndicatorId, setActiveHandIndicatorId] = useState<string | null>(null);
-  const handIndicatorIdsKey = handIndicators.map((indicator) => indicator.id).join("|");
+  const [selectedSpotlightPlayerId, setSelectedSpotlightPlayerId] = useState<string | null>(null);
+  const [viewerCardsRevealed, setViewerCardsRevealed] = useState(false);
+  const [viewingBombPotBoardIndex, setViewingBombPotBoardIndex] = useState(0);
+  const [selectedBombPotBoardIndex, setSelectedBombPotBoardIndex] = useState<number | null>(null);
+  const [viewingRunIndex, setViewingRunIndex] = useState(0);
+  const [selectedRunIndex, setSelectedRunIndex] = useState<number | null>(null);
+  const runItOddsPanel = useRunItOddsPanelModel(scene);
 
   useEffect(() => {
     if (selectedEmptySeat === null) {
@@ -127,15 +178,25 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   }, [selectedEmptySeat]);
 
   useEffect(() => {
-    setActiveHandIndicatorId((current) => {
-      if (current && handIndicators.some((indicator) => indicator.id === current)) {
-        return current;
-      }
-      return handIndicators[0]?.id ?? null;
-    });
-  }, [handIndicatorIdsKey, handIndicators, handNumber]);
+    setSelectedSpotlightPlayerId(null);
+    setViewerCardsRevealed(false);
+    setViewingBombPotBoardIndex(0);
+    setSelectedBombPotBoardIndex(null);
+    setViewingRunIndex(0);
+    setSelectedRunIndex(null);
+  }, [handNumber]);
 
   const youPlayer = getViewerPlayer(players);
+  const showRunItVotingPanel = useTimedPanelVisibility({
+    visible: phase === "voting",
+    startedAt: votingStartedAt,
+    durationMs: RUN_IT_VOTING_TIMEOUT_MS,
+  });
+  const showBombPotVotingPanel = useTimedPanelVisibility({
+    visible: bombPotVote != null,
+    startedAt: bombPotVotingStartedAt,
+    durationMs: BOMB_POT_VOTING_TIMEOUT_MS,
+  });
   const isRunItDealing = shouldRenderRunItBoard({
     phase,
     isRunItBoard,
@@ -150,6 +211,11 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     runResults,
   });
   const revealRunsConcurrently = shouldRevealRunsConcurrently(isBombPotHand, runResults.length);
+  const runAnimationState = deriveVisibleRunState(
+    runResults,
+    knownCardCount,
+    Math.max(runCount, runResults.length, 1),
+  );
 
   const opponents = getOpponents(players);
   const emptySeats = getEmptySeats(players, totalSeats);
@@ -170,6 +236,115 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       totalSeats,
     }
   );
+  useEffect(() => {
+    if (!animatedRunIt || selectedRunIndex != null) return;
+    setViewingRunIndex(runAnimationState.currentRun);
+  }, [animatedRunIt, runAnimationState.currentRun, selectedRunIndex]);
+
+  const canUseWinnerFallback = phase === "showdown";
+  const canInteractWithSpotlight = phase != null && phase !== "waiting" && phase !== "voting";
+  const selectedSpotlightPlayer = canInteractWithSpotlight
+    ? getSelectedTabledPlayer(players, selectedSpotlightPlayerId)
+    : null;
+  const defaultSpotlightPlayer = canInteractWithSpotlight
+    ? resolveSpotlightPlayer({
+        players,
+        winners: canUseWinnerFallback ? winners : [],
+        viewerHoleCards: holeCards,
+        viewerCardsRevealed,
+      })
+    : null;
+  const bombPotBoards = [communityCards ?? [], communityCards2 ?? []];
+  const bombPotSpotlights = bombPotBoards.map((boardCards, index) => {
+    if (!isBombPotHand) return null;
+    if (selectedSpotlightPlayer) {
+      return buildShowdownSpotlight({
+        playerId: selectedSpotlightPlayer.playerId,
+        playerName: selectedSpotlightPlayer.playerName,
+        holeCards: selectedSpotlightPlayer.holeCards,
+        boardCards,
+        contextLabel: `Board ${index + 1}`,
+      });
+    }
+    if (selectedBombPotBoardIndex !== index || !defaultSpotlightPlayer) return null;
+    return buildShowdownSpotlight({
+      playerId: defaultSpotlightPlayer.playerId,
+      playerName: defaultSpotlightPlayer.playerName,
+      holeCards: defaultSpotlightPlayer.holeCards,
+      boardCards,
+      contextLabel: `Board ${index + 1}`,
+    });
+  });
+  const runSpotlights = runResults.map((run, index) => {
+    if (!animatedRunIt) return null;
+    if (selectedSpotlightPlayer) {
+      return buildShowdownSpotlight({
+        playerId: selectedSpotlightPlayer.playerId,
+        playerName: selectedSpotlightPlayer.playerName,
+        holeCards: selectedSpotlightPlayer.holeCards,
+        boardCards: run.board ?? [],
+        contextLabel: `Run ${index + 1}`,
+      });
+    }
+    const defaultRunIndex = !publicShowdownRevealComplete ? runAnimationState.currentRun : null;
+    const focusedRunIndex = selectedRunIndex ?? defaultRunIndex;
+    if (focusedRunIndex !== index || !defaultSpotlightPlayer) return null;
+    return buildShowdownSpotlight({
+      playerId: defaultSpotlightPlayer.playerId,
+      playerName: defaultSpotlightPlayer.playerName,
+      holeCards: defaultSpotlightPlayer.holeCards,
+      boardCards: run.board ?? [],
+      contextLabel: `Run ${index + 1}`,
+    });
+  });
+  const singleBoardPlayer = selectedSpotlightPlayer ?? defaultSpotlightPlayer;
+  const singleBoardSpotlight = !isBombPotHand && !animatedRunIt && singleBoardPlayer
+    ? buildShowdownSpotlight({
+        playerId: singleBoardPlayer.playerId,
+        playerName: singleBoardPlayer.playerName,
+        holeCards: singleBoardPlayer.holeCards,
+        boardCards: communityCards,
+        contextLabel: null,
+      })
+    : null;
+  const activeSpotlightPlayer = (() => {
+    if (selectedSpotlightPlayer) {
+      const hasSelectedEmphasis = isBombPotHand
+        ? bombPotSpotlights.some(spotlightHasActiveEmphasis)
+        : animatedRunIt
+          ? runSpotlights.some(spotlightHasActiveEmphasis)
+          : spotlightHasActiveEmphasis(singleBoardSpotlight);
+      return hasSelectedEmphasis ? selectedSpotlightPlayer : null;
+    }
+    if (isBombPotHand) {
+      return bombPotSpotlights.some(spotlightHasActiveEmphasis) ? defaultSpotlightPlayer : null;
+    }
+    if (animatedRunIt) {
+      return runSpotlights.some(spotlightHasActiveEmphasis) ? defaultSpotlightPlayer : null;
+    }
+    return spotlightHasActiveEmphasis(singleBoardSpotlight) ? defaultSpotlightPlayer : null;
+  })();
+  const spotlightHoleCardEmphasis = isBombPotHand
+    ? mergeEmphasisArrays(bombPotSpotlights.map(holeCardEmphasisFromSpotlight), 2)
+    : animatedRunIt
+      ? mergeEmphasisArrays(runSpotlights.map(holeCardEmphasisFromSpotlight), 2)
+      : holeCardEmphasisFromSpotlight(singleBoardSpotlight);
+  const spotlightBoardCardEmphasis = boardCardEmphasisFromSpotlight(singleBoardSpotlight);
+  const spotlightBombPotCardEmphasis: [
+    CardEmphasis[] | null,
+    CardEmphasis[] | null,
+  ] = [
+    boardCardEmphasisFromSpotlight(bombPotSpotlights[0]),
+    boardCardEmphasisFromSpotlight(bombPotSpotlights[1]),
+  ];
+  const spotlightRunCardEmphasisByRun = runSpotlights.map(boardCardEmphasisFromSpotlight);
+  const spotlightPlayerId = activeSpotlightPlayer?.playerId ?? null;
+  const isViewerSpotlight = spotlightPlayerId != null && spotlightPlayerId === youPlayer?.id;
+  const activeHandIndicatorId = animatedRunIt && runResults.length > 0
+    ? `run-${viewingRunIndex}`
+    : isBombPotHand
+      ? `board-${viewingBombPotBoardIndex}`
+      : handIndicators[0]?.id ?? null;
 
   return (
     <div className="absolute inset-0 overflow-hidden overscroll-none bg-gray-100 dark:bg-gray-950 transition-colors duration-500">
@@ -258,6 +433,11 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             bigBlindIndex={bigBlindIndex}
             emptySeats={emptySeats}
             seatSelectionLocked={seatSelectionLocked}
+            selectedSpotlightPlayerId={spotlightPlayerId}
+            spotlightHoleCardEmphasisByIndex={spotlightHoleCardEmphasis}
+            onShowdownPlayerTap={canInteractWithSpotlight
+              ? (playerId) => setSelectedSpotlightPlayerId((current) => current === playerId ? null : playerId)
+              : undefined}
             onEmptySeatTap={(seatIndex) => {
               if (seatSelectionLocked) return;
               const isWaiting = !phase || phase === "waiting";
@@ -282,9 +462,35 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             runDealStartedAt={runDealStartedAt}
             runAnnouncement={runAnnouncement}
             handNumber={handNumber}
-            onActiveBoardChange={(boardIndex) => setActiveHandIndicatorId(`board-${boardIndex}`)}
-            onViewingRunChange={(runIndex) => setActiveHandIndicatorId(`run-${runIndex}`)}
+            activeBombPotBoardIndex={viewingBombPotBoardIndex}
+            onActiveBoardChange={(boardIndex) => {
+              setViewingBombPotBoardIndex(boardIndex);
+              setSelectedBombPotBoardIndex((current) => current === boardIndex ? null : boardIndex);
+            }}
+            viewingRunIndex={viewingRunIndex}
+            onViewingRunChange={(runIndex) => {
+              setViewingRunIndex(runIndex);
+              setSelectedRunIndex((current) => current === runIndex ? null : runIndex);
+            }}
+            cardEmphasis={!isBombPotHand && !animatedRunIt ? spotlightBoardCardEmphasis : null}
+            bombPotCardEmphasis={spotlightBombPotCardEmphasis}
+            highlightedRunIndex={null}
+            runCardEmphasisByRun={animatedRunIt ? spotlightRunCardEmphasisByRun : null}
           />
+
+          <AnimatePresence>
+            {isRunItDealing && runItOddsPanel.visible && (
+              <motion.div
+                className="w-full px-2 pt-3"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              >
+                <RunItOddsPanel model={runItOddsPanel} compact />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {pot > 0 && (
@@ -367,6 +573,8 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             onPeekCard={onPeekCard}
             currentBet={youPlayer?.currentBet ?? 0}
             cardPeelPersistenceKey={cardPeelPersistenceKey}
+            onViewerCardsRevealedChange={setViewerCardsRevealed}
+            holeCardEmphasisByIndex={isViewerSpotlight ? spotlightHoleCardEmphasis : undefined}
           />
         </div>
 
@@ -404,7 +612,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       </div>
 
       <AnimatePresence>
-        {phase === "voting" && (
+        {showRunItVotingPanel && (
           <motion.div
             className="absolute inset-x-0 bottom-0 z-[185] pointer-events-none"
             style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
@@ -518,13 +726,14 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       </AnimatePresence>
 
       <AnimatePresence>
-        {bombPotVote && (
+        {showBombPotVotingPanel && bombPotVote && (
           <div className="absolute inset-0 flex items-center justify-center z-[180] pointer-events-none">
             <div className="pointer-events-auto relative isolate px-4 w-full max-w-xs">
               <div className={mobileBannerHaloClass} />
               <div className="relative z-10">
                 <BombPotVotingPanel
                   vote={bombPotVote}
+                  votingStartedAt={bombPotVotingStartedAt}
                   players={players}
                   viewingPlayerId={youPlayer?.id}
                   bigBlind={blinds.big}
