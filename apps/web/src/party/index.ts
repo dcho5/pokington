@@ -795,10 +795,10 @@ export default class PokerRoom implements Party.Server {
         afterPlayer: this.gameState.players[enriched.playerId] ?? null,
       });
     }
+    this.reconcileHandScopedTracking(prevState, this.gameState);
     if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
       this.configureShowdownState(prevState, this.gameState);
     }
-    this.reconcileHandScopedTracking(prevState, this.gameState);
 
     this.manageVotingTimer(prevState, this.gameState);
     this.manageBombPotVotingTimer(prevState, this.gameState);
@@ -1046,7 +1046,10 @@ export default class PokerRoom implements Party.Server {
     next.knownCardCountAtRunIt = knownCardCount;
     next.showdownStartedAt = now;
     if (hasAnimatedRunout(knownCardCount, runCount)) {
-      next.runDealStartedAt = prev.phase === "voting" ? null : now;
+      const shouldDelayRevealStart =
+        prev.phase === "voting" ||
+        (next.isBombPot && prev.phase === "waiting");
+      next.runDealStartedAt = shouldDelayRevealStart ? null : now;
     }
   }
 

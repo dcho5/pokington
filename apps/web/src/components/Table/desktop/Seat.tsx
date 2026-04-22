@@ -6,6 +6,7 @@ import { computeSeatPosition, type TableGeometry } from "lib/seatLayout";
 import { getDesktopSeatBadgeMetrics } from "lib/desktopSeatBadgeLayout.mjs";
 import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_DESKTOP as ACTION_COLORS } from "lib/actionColors";
+import { isFullyTabled } from "lib/showdownSpotlight";
 import type { Player } from "types/player";
 import Card from "components/poker/Card";
 import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
@@ -215,7 +216,7 @@ const Seat: React.FC<SeatProps> = ({
   }
 
   const publicCards = player.holeCards ?? [null, null];
-  const hasBothPublicCards = publicCards[0] != null && publicCards[1] != null;
+  const hasBothPublicCards = isFullyTabled(player.holeCards);
   const cardWidth = Math.round(seatSize * 0.68);
   const cardHeight = Math.round(cardWidth * 1.4);
   const overlap = Math.round(cardWidth * 0.38);

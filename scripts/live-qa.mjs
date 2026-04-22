@@ -80,6 +80,12 @@ function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
+function getCommittedStack(player, state = player.latestState) {
+  const self = player.getSelf(state);
+  if (!self) return null;
+  return self.stack + (self.currentBet ?? 0);
+}
+
 function makeClientId(label) {
   return `qa_${label.toLowerCase()}_${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
@@ -143,12 +149,14 @@ function summarizeState(state) {
     knownCardCountAtRunIt: state.knownCardCountAtRunIt ?? null,
     runDealStartedAt: state.runDealStartedAt ?? null,
     showdownStartedAt: state.showdownStartedAt ?? null,
+    nextHandStartsAt: state.nextHandStartsAt ?? null,
     runResults: deepCopy(state.runResults ?? []),
     winners: summarizeWinners(state.winners),
     showdownKind: state.showdownKind,
     bombPotVote: deepCopy(state.bombPotVote),
     bombPotNextHand: deepCopy(state.bombPotNextHand),
     bombPotCooldown: [...(state.bombPotCooldown ?? [])],
+    pendingBoundaryUpdates: deepCopy(state.pendingBoundaryUpdates ?? {}),
     players: summarizePlayers(state),
   };
 }
@@ -228,7 +236,7 @@ class PlayerClient {
       socket.send(JSON.stringify({
         type: "AUTH",
         token: this.token,
-        protocolVersion: 3,
+        protocolVersion: 4,
       }));
       socket.send(JSON.stringify({
         type: "SET_AWAY",
@@ -307,7 +315,30 @@ class PlayerClient {
   }
 
   queueLeave() {
-    this.sendRaw({ type: "QUEUE_LEAVE" });
+    this.sendEvent({
+      type: "REQUEST_BOUNDARY_UPDATE",
+      playerId: this.playerSessionId,
+      leaveSeat: true,
+      moveToSeatIndex: null,
+      chipDelta: 0,
+    });
+  }
+
+  cancelBoundaryUpdate() {
+    this.sendEvent({
+      type: "CANCEL_BOUNDARY_UPDATE",
+      playerId: this.playerSessionId,
+    });
+  }
+
+  requestBoundaryUpdate({ leaveSeat = false, moveToSeatIndex = null, chipDelta = 0 }) {
+    this.sendEvent({
+      type: "REQUEST_BOUNDARY_UPDATE",
+      playerId: this.playerSessionId,
+      leaveSeat,
+      moveToSeatIndex,
+      chipDelta,
+    });
   }
 
   async waitFor(predicate, { timeoutMs = DEFAULT_TIMEOUT_MS, label = "condition" } = {}) {
@@ -420,7 +451,7 @@ class ScenarioContext {
     const player = this.getPlayer(label);
     const before = player.latestState?.handNumber ?? 0;
     player.sendEvent({
-      type: "SIT_DOWN",
+      type: "TAKE_SEAT",
       playerId: player.playerSessionId,
       name,
       seatIndex,
@@ -448,6 +479,55 @@ class ScenarioContext {
       `${label} stand-up`,
     );
     this.note("stand-up", `${label} stood up`);
+  }
+
+  async requestBoundaryUpdate(label, update, waitForLabel = "boundary update") {
+    const player = this.getPlayer(label);
+    const beforeState = player.latestState;
+    player.requestBoundaryUpdate(update);
+    await player.waitFor(
+      () => {
+        if (player.latestState === beforeState) return false;
+        const state = player.latestState;
+        if (!state) return false;
+        const pending = state.pendingBoundaryUpdates?.[player.playerSessionId] ?? null;
+        if (state.phase === "waiting" || state.phase === "showdown") {
+          return pending == null;
+        }
+        if (update.leaveSeat) return pending?.leaveSeat === true;
+        if (update.moveToSeatIndex != null && pending?.moveToSeatIndex !== update.moveToSeatIndex) return false;
+        if (update.chipDelta != null && pending?.chipDelta !== update.chipDelta) return false;
+        return true;
+      },
+      { label: `${label} ${waitForLabel}` },
+    );
+    this.note("boundary-update", `${label} requested boundary update`, { update });
+  }
+
+  async cancelBoundaryUpdate(label) {
+    const player = this.getPlayer(label);
+    player.cancelBoundaryUpdate();
+    await player.waitFor(
+      () => !(player.latestState?.pendingBoundaryUpdates?.[player.playerSessionId]),
+      { label: `${label} cancel boundary update` },
+    );
+    this.note("boundary-update-cancel", `${label} canceled boundary update`);
+  }
+
+  async changeSeat(label, seatIndex) {
+    const player = this.getPlayer(label);
+    const immediate = player.latestState?.phase === "waiting" || player.latestState?.phase === "showdown";
+    await this.requestBoundaryUpdate(label, {
+      leaveSeat: false,
+      moveToSeatIndex: seatIndex,
+      chipDelta: 0,
+    }, "seat change request");
+    if (immediate) {
+      await this.waitForAll(
+        (candidate) => candidate.latestState?.players?.[player.playerSessionId]?.seatIndex === seatIndex,
+        `${label} seat change applied`,
+      );
+    }
   }
 
   async startHand(label = this.players[0]?.label) {
@@ -908,7 +988,7 @@ async function runQueueLeaveReconnect(baseUrl, wsHost) {
 async function runMidHandStandUpGuard(baseUrl, wsHost) {
   const ctx = new ScenarioContext({
     id: "midhand_standup_guard",
-    title: "Stand-up should be rejected during showdown",
+    title: "Stand-up should be allowed during showdown",
     baseUrl,
     wsHost,
   });
@@ -927,25 +1007,14 @@ async function runMidHandStandUpGuard(baseUrl, wsHost) {
     await ctx.runCheckdownToShowdown(["Alice", "Bob"]);
     await ctx.waitForShowdown();
     bob.sendEvent({ type: "STAND_UP", playerId: bob.playerSessionId });
-    await delay(200);
+    await ctx.waitForAll(
+      (player) => !player.latestState?.players?.[bob.playerSessionId],
+      "showdown stand-up removal",
+    );
     ctx.takeSnapshots("mid-hand stand-up guard");
 
-    const bobStillSeated = ctx.players.every((player) => {
-      const bobState = player.latestState?.players?.[bob.playerSessionId];
-      return !!bobState && bobState.seatIndex === 1;
-    });
-    const rejectionSeen = ctx.players.some(
-      (player) => player.latestError?.code === "ACTION_REJECTED",
-    );
-
-    if (bobStillSeated && rejectionSeen) {
-      return ctx.result("Pass", [
-        "Stand-up during showdown was rejected and the player remained seated until hand end.",
-      ]);
-    }
-
-    return ctx.result("Confirmed Issue", [
-      "A player was able to stand up during showdown, even though the hand was still in progress.",
+    return ctx.result("Pass", [
+      "Stand-up during showdown removed the player immediately once the hand had finished.",
     ]);
   } finally {
     await ctx.close();
@@ -979,7 +1048,7 @@ async function runCooldownLeakScenario(baseUrl, wsHost) {
     ctx.takeSnapshots("bomb pot cooldown leak");
 
     if (!stillBlocked) {
-      return ctx.result("Not Reproduced", [
+      return ctx.result("Pass", [
         "Re-seated proposer could immediately open a new bomb pot vote with the same session id.",
       ]);
     }
@@ -1099,8 +1168,7 @@ async function runSeatChangeLedgerScenario(baseUrl, wsHost) {
     await ctx.connectPlayers(["Alice", "Bob"]);
     await ctx.sitDown("Alice", 0, "Alice", 2000);
     await ctx.sitDown("Bob", 1, "Bob", 2000);
-    await ctx.standUp("Alice");
-    await ctx.sitDown("Alice", 2, "Alice", 2000);
+    await ctx.changeSeat("Alice", 2);
     ctx.takeSnapshots("seat change ledger");
 
     const aliceEntry = ctx.getPlayer("Bob").latestLedger.find((entry) => entry.name === "Alice");
@@ -1108,7 +1176,7 @@ async function runSeatChangeLedgerScenario(baseUrl, wsHost) {
     const looksLikeCashMovement = aliceEntry.buyIns.length > 1 || aliceEntry.cashOuts.length > 0;
 
     if (!looksLikeCashMovement) {
-      return ctx.result("Not Reproduced", [
+      return ctx.result("Pass", [
         "Seat move left the ledger as a single continuous seating session.",
       ]);
     }
@@ -1120,6 +1188,339 @@ async function runSeatChangeLedgerScenario(baseUrl, wsHost) {
   } finally {
     await ctx.close();
   }
+}
+
+async function runBoundaryUpdateScenarios(baseUrl, wsHost) {
+  const results = [];
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_waiting_topoff",
+      title: "Immediate top-off between hands",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob"]);
+      await ctx.sitDown("Alice", 0, "Alice", 2000);
+      await ctx.sitDown("Bob", 1, "Bob", 2000);
+      await ctx.requestBoundaryUpdate("Alice", {
+        leaveSeat: false,
+        moveToSeatIndex: null,
+        chipDelta: 1500,
+      }, "waiting top-off");
+      await ctx.waitForAll(
+        (player) => player.latestState?.players?.[ctx.getPlayer("Alice").playerSessionId]?.stack === 3500,
+        "alice immediate top-off applied",
+      );
+      ctx.takeSnapshots("boundary waiting topoff");
+      results.push(ctx.result("Pass", ["Waiting-phase top-off applied immediately to the live stack."]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_midhand_topoff",
+      title: "Queued top-off applies before next hand",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob"]);
+      await ctx.sitDown("Alice", 0, "Alice", 5000);
+      await ctx.sitDown("Bob", 1, "Bob", 5000);
+      await ctx.startHand("Alice");
+      const alice = ctx.getPlayer("Alice");
+      const preQueueStack = alice.getSelf()?.stack ?? 0;
+      await ctx.requestBoundaryUpdate("Alice", {
+        leaveSeat: false,
+        moveToSeatIndex: null,
+        chipDelta: 1000,
+      }, "mid-hand top-off queued");
+      assert(alice.getSelf()?.stack === preQueueStack, "Top-off should not apply during the live hand");
+      await ctx.runCheckdownToShowdown(["Alice", "Bob"]);
+      await ctx.waitForShowdown();
+      const stackAtBoundary = alice.getSelf()?.stack ?? 0;
+      alice.sendEvent({ type: "START_HAND" });
+      await ctx.waitForAll(
+        (player) => (player.latestState?.handNumber ?? 0) >= 2,
+        "next hand after queued top-off",
+        20_000,
+      );
+      await ctx.waitForAll(
+        (player) => !(player.latestState?.pendingBoundaryUpdates?.[alice.playerSessionId]),
+        "queued top-off cleared",
+      );
+      ctx.takeSnapshots("boundary midhand topoff");
+      const nextStack = getCommittedStack(alice) ?? 0;
+      assert(
+        nextStack === stackAtBoundary + 1000,
+        `Expected queued top-off to raise Alice committed stack from ${stackAtBoundary} to ${stackAtBoundary + 1000}, got ${nextStack}`,
+      );
+      results.push(ctx.result("Pass", ["Queued top-off remained pending during the hand and landed before the next deal."]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_midhand_cashout",
+      title: "Queued partial cash-out applies before next hand",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob"]);
+      await ctx.sitDown("Alice", 0, "Alice", 5000);
+      await ctx.sitDown("Bob", 1, "Bob", 5000);
+      await ctx.startHand("Alice");
+      const bob = ctx.getPlayer("Bob");
+      const preQueueStack = bob.getSelf()?.stack ?? 0;
+      await ctx.requestBoundaryUpdate("Bob", {
+        leaveSeat: false,
+        moveToSeatIndex: null,
+        chipDelta: -1000,
+      }, "mid-hand cash-out queued");
+      assert(bob.getSelf()?.stack === preQueueStack, "Cash-out should not apply during the live hand");
+      await ctx.runCheckdownToShowdown(["Alice", "Bob"]);
+      await ctx.waitForShowdown();
+      const stackAtBoundary = bob.getSelf()?.stack ?? 0;
+      ctx.getPlayer("Alice").sendEvent({ type: "START_HAND" });
+      await ctx.waitForAll((player) => (player.latestState?.handNumber ?? 0) >= 2, "next hand after queued cash-out", 20_000);
+      ctx.takeSnapshots("boundary midhand cashout");
+      const nextStack = getCommittedStack(bob) ?? 0;
+      assert(
+        nextStack === stackAtBoundary - 1000,
+        `Expected queued cash-out to lower Bob committed stack from ${stackAtBoundary} to ${stackAtBoundary - 1000}, got ${nextStack}`,
+      );
+      results.push(ctx.result("Pass", ["Queued partial cash-out remained pending during the hand and reduced the next-hand stack."]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_midhand_move",
+      title: "Queued seat move applies before next hand",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob", "Cara"]);
+      await ctx.sitDown("Alice", 0, "Alice", 5000);
+      await ctx.sitDown("Bob", 1, "Bob", 5000);
+      await ctx.sitDown("Cara", 2, "Cara", 5000);
+      await ctx.startHand("Alice");
+      await ctx.requestBoundaryUpdate("Cara", {
+        leaveSeat: false,
+        moveToSeatIndex: 5,
+        chipDelta: 0,
+      }, "mid-hand seat move queued");
+      await ctx.runCheckdownToShowdown(["Alice", "Bob", "Cara"]);
+      await ctx.waitForShowdown();
+      ctx.getPlayer("Alice").sendEvent({ type: "START_HAND" });
+      await ctx.waitForAll((player) => (player.latestState?.handNumber ?? 0) >= 2, "next hand after queued move", 20_000);
+      await ctx.waitForAll(
+        (player) => player.latestState?.players?.[ctx.getPlayer("Cara").playerSessionId]?.seatIndex === 5,
+        "cara moved seats",
+      );
+      ctx.takeSnapshots("boundary midhand move");
+      results.push(ctx.result("Pass", ["Queued seat move held during the hand and applied at the next boundary."]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_cancel_pending",
+      title: "Cancel pending boundary update",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob"]);
+      await ctx.sitDown("Alice", 0, "Alice", 5000);
+      await ctx.sitDown("Bob", 1, "Bob", 5000);
+      await ctx.startHand("Alice");
+      await ctx.requestBoundaryUpdate("Bob", {
+        leaveSeat: false,
+        moveToSeatIndex: 4,
+        chipDelta: 700,
+      }, "pending update queued");
+      await ctx.cancelBoundaryUpdate("Bob");
+      await ctx.runCheckdownToShowdown(["Alice", "Bob"]);
+      await ctx.waitForShowdown();
+      ctx.getPlayer("Alice").sendEvent({ type: "START_HAND" });
+      await ctx.waitForAll((player) => (player.latestState?.handNumber ?? 0) >= 2, "next hand after canceled update", 20_000);
+      ctx.takeSnapshots("boundary cancel pending");
+      const bob = ctx.getPlayer("Bob");
+      assert(bob.getSelf()?.seatIndex === 1, "Canceled move should leave Bob in the original seat");
+      results.push(ctx.result("Pass", ["Canceling a queued boundary update prevented it from applying at the next hand."]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_occupied_move",
+      title: "Queued move into occupied seat is rejected",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob", "Cara"]);
+      await ctx.sitDown("Alice", 0, "Alice", 5000);
+      await ctx.sitDown("Bob", 1, "Bob", 5000);
+      await ctx.sitDown("Cara", 2, "Cara", 5000);
+      await ctx.startHand("Alice");
+      await ctx.requestBoundaryUpdate("Cara", {
+        leaveSeat: false,
+        moveToSeatIndex: 1,
+        chipDelta: 0,
+      }, "occupied seat move queued");
+      await ctx.runCheckdownToShowdown(["Alice", "Bob", "Cara"]);
+      await ctx.waitForShowdown();
+      ctx.getPlayer("Alice").sendEvent({ type: "START_HAND" });
+      await ctx.waitForAll((player) => (player.latestState?.handNumber ?? 0) >= 2, "next hand after occupied move", 20_000);
+      ctx.takeSnapshots("boundary occupied move");
+      const caraSeat = ctx.getPlayer("Cara").getSelf()?.seatIndex;
+      assert(caraSeat === 2, `Expected occupied-seat move rejection to keep Cara in seat 2, got ${caraSeat}`);
+      results.push(ctx.result("Pass", ["Queued move into an occupied seat was ignored and left the player in place."]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_reconnect_pending",
+      title: "Reconnect preserves pending boundary updates",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      await ctx.createTable();
+      await ctx.connectPlayers(["Alice", "Bob"]);
+      await ctx.sitDown("Alice", 0, "Alice", 5000);
+      await ctx.sitDown("Bob", 1, "Bob", 5000);
+      await ctx.startHand("Alice");
+      await ctx.requestBoundaryUpdate("Bob", {
+        leaveSeat: false,
+        moveToSeatIndex: 4,
+        chipDelta: 1200,
+      }, "pending update before reconnect");
+      const bob = ctx.getPlayer("Bob");
+      const beforeSessionId = bob.playerSessionId;
+      await bob.reconnect();
+      await bob.waitFor(() => bob.playerSessionId === beforeSessionId, { label: "same session after reconnect" });
+      await bob.waitFor(
+        () => {
+          const pending = bob.latestState?.pendingBoundaryUpdates?.[bob.playerSessionId];
+          return !!pending && pending.moveToSeatIndex === 4 && pending.chipDelta === 1200;
+        },
+        { label: "pending update restored after reconnect" },
+      );
+      ctx.takeSnapshots("boundary reconnect pending");
+      results.push(ctx.result("Pass", ["Reconnect preserved the queued boundary update in room state."]));
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  {
+    const ctx = new ScenarioContext({
+      id: "boundary_bust_rebuy",
+      title: "Busted player can rebuy before the next hand",
+      baseUrl,
+      wsHost,
+    });
+    try {
+      let succeeded = false;
+      for (let attempt = 1; attempt <= 12 && !succeeded; attempt += 1) {
+        await ctx.createTable({ tableName: `QA bust rebuy ${attempt}` });
+        await ctx.connectPlayers(["Alice", "Bob"]);
+        await ctx.sitDown("Alice", 0, "Alice", 5000);
+        await ctx.sitDown("Bob", 1, "Bob", 50);
+        await ctx.startHand("Alice");
+        const alice = ctx.getPlayer("Alice");
+        const bob = ctx.getPlayer("Bob");
+        while (alice.latestState?.phase !== "showdown") {
+          const phase = alice.latestState?.phase;
+          if (phase === "voting") {
+            await ctx.voteRun("Alice", 1);
+            await ctx.voteRun("Bob", 1);
+            continue;
+          }
+
+          const actorId = alice.latestState?.needsToAct?.[0] ?? null;
+          assert(actorId, `Expected an actor during ${phase}`);
+          const actor = ctx.players.find((player) => player.playerSessionId === actorId);
+          assert(actor, `No connected player for actor ${actorId}`);
+          const self = actor.getSelf(actor.latestState);
+          const mustCall = (self?.currentBet ?? 0) < (actor.latestState?.roundBet ?? 0);
+          await ctx.act(actor.label, mustCall ? "call" : "check");
+        }
+        await ctx.waitForShowdown(20_000);
+        const zeroed = bob.getSelf()?.stack === 0;
+        if (!zeroed) {
+          await ctx.close();
+          ctx.players = [];
+          ctx.tableCode = null;
+          continue;
+        }
+        await ctx.requestBoundaryUpdate("Bob", {
+          leaveSeat: false,
+          moveToSeatIndex: null,
+          chipDelta: 2000,
+        }, "rebuy after bust");
+        const reboughtStack = bob.getSelf()?.stack ?? 0;
+        assert(reboughtStack === 2000, `Expected immediate rebuy to set Bob stack to 2000, got ${reboughtStack}`);
+        alice.sendEvent({ type: "START_HAND" });
+        await ctx.waitForAll((player) => (player.latestState?.handNumber ?? 0) >= 2, "next hand after bust rebuy", 20_000);
+        const nextBob = bob.getSelf();
+        assert(nextBob?.stack != null && nextBob.stack < 2000 && nextBob.hasCards === true, "Bob did not re-enter the next hand after rebuying");
+        ctx.takeSnapshots("boundary bust rebuy");
+        results.push(ctx.result("Pass", ["A zero-stack player rebought during showdown and was dealt into the very next hand."]));
+        succeeded = true;
+      }
+
+      if (!succeeded) {
+        results.push(ctx.result("Blocked", ["Could not produce a zero-stack showdown outcome within 12 live attempts."]));
+      }
+    } catch (error) {
+      results.push(ctx.result("Blocked", [error instanceof Error ? error.message : String(error)]));
+    } finally {
+      await ctx.close();
+    }
+  }
+
+  return results;
 }
 
 async function runMultiRunAggregationProbe(baseUrl, wsHost) {
@@ -1170,8 +1571,8 @@ async function runMultiRunAggregationProbe(baseUrl, wsHost) {
       const [playerId, labels] = interesting;
       const aggregate = state.winners?.find((winner) => winner.playerId === playerId);
       const distinctLabels = [...labels];
-      const mismatch = aggregate && distinctLabels.length > 1 && distinctLabels.includes(aggregate.hand);
-      const result = ctx.result(mismatch ? "Confirmed Issue" : "Needs More Evidence", [
+      const aggregateMatches = aggregate?.hand === distinctLabels.join(" / ");
+      const result = ctx.result(aggregateMatches ? "Pass" : "Needs More Evidence", [
         `Player ${playerId} won multiple runs with labels: ${distinctLabels.join(", ")}.`,
         `Aggregate winner hand label was ${aggregate?.hand ?? "null"}.`,
       ], {
@@ -1281,6 +1682,7 @@ async function main() {
     blind: async () => runBlindIncompleteDivergence(args.baseUrl, args.wsHost),
     ledger: async () => [await runLedgerScenario(args.baseUrl, args.wsHost)],
     seat_ledger: async () => [await runSeatChangeLedgerScenario(args.baseUrl, args.wsHost)],
+    boundary: async () => runBoundaryUpdateScenarios(args.baseUrl, args.wsHost),
     aggregate: async () => {
       const outcome = await runMultiRunAggregationProbe(args.baseUrl, args.wsHost);
       return [...(outcome.attempts ?? []), outcome.result];

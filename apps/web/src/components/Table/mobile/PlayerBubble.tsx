@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
 import { ACTION_COLORS_MOBILE as ACTION_BADGE } from "lib/actionColors";
+import { isFullyTabled } from "lib/showdownSpotlight";
 import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
 import Card from "components/poker/Card";
 import PlayerPositionMarkers from "../PlayerPositionMarkers";
@@ -97,7 +98,7 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   const badge = action ? ACTION_BADGE[action] : null;
   const publicCards = player.holeCards ?? [null, null];
   const showCards = !!player.holeCards;
-  const hasBothPublicCards = publicCards[0] != null && publicCards[1] != null;
+  const hasBothPublicCards = isFullyTabled(player.holeCards);
   const canFocusShowdownPlayer = hasBothPublicCards && !!player.id && !!onShowdownPlayerTap;
 
   return (

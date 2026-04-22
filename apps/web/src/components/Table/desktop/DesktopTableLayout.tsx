@@ -61,6 +61,7 @@ import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
 import { collectBoardRevealEvents } from "lib/tableFeedback.mjs";
 import {
   buildShowdownSpotlight,
+  isFullyTabled,
   mergeEmphasisArrays,
   resolveSpotlightPlayer,
 } from "lib/showdownSpotlight";
@@ -83,7 +84,7 @@ function getSelectedTabledPlayer(
 ): ResolvedSpotlightPlayer | null {
   if (!selectedPlayerId) return null;
   const selectedPlayer = players.find((player) => player?.id === selectedPlayerId);
-  if (!selectedPlayer?.holeCards?.[0] || !selectedPlayer?.holeCards?.[1]) return null;
+  if (!selectedPlayer || !isFullyTabled(selectedPlayer.holeCards)) return null;
   return {
     source: "selected",
     playerId: selectedPlayer.id ?? null,
@@ -376,6 +377,14 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     setHoveredBombPotBoardIndex(null);
     setHoveredRunIndex(null);
   }, [handNumber]);
+
+  useEffect(() => {
+    if (!hoveredShowdownPlayerId) return;
+    const hoveredPlayer = players.find((player) => player?.id === hoveredShowdownPlayerId);
+    if (!hoveredPlayer || !isFullyTabled(hoveredPlayer.holeCards)) {
+      setHoveredShowdownPlayerId(null);
+    }
+  }, [hoveredShowdownPlayerId, players]);
 
   useEffect(() => {
     if (isRunItDealing) return;

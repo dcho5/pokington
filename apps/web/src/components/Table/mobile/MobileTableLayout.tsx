@@ -35,6 +35,7 @@ import { useTimedPanelVisibility } from "hooks/useTimedPanelVisibility";
 import { useRunItOddsPanelModel } from "hooks/useRunItOddsPanelModel";
 import {
   buildShowdownSpotlight,
+  isFullyTabled,
   mergeEmphasisArrays,
   resolveSpotlightPlayer,
 } from "lib/showdownSpotlight";
@@ -58,7 +59,7 @@ function getSelectedTabledPlayer(
 ): ResolvedSpotlightPlayer | null {
   if (!selectedPlayerId) return null;
   const selectedPlayer = players.find((player) => player?.id === selectedPlayerId);
-  if (!selectedPlayer?.holeCards?.[0] || !selectedPlayer?.holeCards?.[1]) return null;
+  if (!selectedPlayer || !isFullyTabled(selectedPlayer.holeCards)) return null;
   return {
     source: "selected",
     playerId: selectedPlayer.id ?? null,
@@ -184,6 +185,14 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     setViewingRunIndex(0);
     setSelectedRunIndex(null);
   }, [handNumber]);
+
+  useEffect(() => {
+    if (!selectedSpotlightPlayerId) return;
+    const selectedPlayer = players.find((player) => player?.id === selectedSpotlightPlayerId);
+    if (!selectedPlayer || !isFullyTabled(selectedPlayer.holeCards)) {
+      setSelectedSpotlightPlayerId(null);
+    }
+  }, [players, selectedSpotlightPlayerId]);
 
   const youPlayer = getViewerPlayer(players);
   const showRunItVotingPanel = useTimedPanelVisibility({
