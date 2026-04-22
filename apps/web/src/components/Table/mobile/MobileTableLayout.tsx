@@ -28,7 +28,6 @@ import { MobileSevenTwoBountyChips } from "./MobileSevenTwoBountyChips";
 import AnnouncementBanner from "../AnnouncementBanner";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
 import WinnerBanner from "../WinnerBanner";
-import RunItOddsPanel from "../RunItOddsPanel";
 import type { TableLayoutProps } from "../TableLayout";
 import type { Player } from "types/player";
 import { computeMobileChipAngle } from "lib/chipOrientation";
@@ -340,6 +339,11 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   const spotlightRunCardEmphasisByRun = runSpotlights.map(boardCardEmphasisFromSpotlight);
   const spotlightPlayerId = activeSpotlightPlayer?.playerId ?? null;
   const isViewerSpotlight = spotlightPlayerId != null && spotlightPlayerId === youPlayer?.id;
+  const runItOddsPercentagesByPlayerId = Object.fromEntries(
+    runItOddsPanel.rows
+      .filter((row) => row.currentPercentage != null)
+      .map((row) => [row.playerId, row.currentPercentage]),
+  ) as Record<string, number | null>;
   const activeHandIndicatorId = animatedRunIt && runResults.length > 0
     ? `run-${viewingRunIndex}`
     : isBombPotHand
@@ -435,13 +439,13 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             seatSelectionLocked={seatSelectionLocked}
             selectedSpotlightPlayerId={spotlightPlayerId}
             spotlightHoleCardEmphasisByIndex={spotlightHoleCardEmphasis}
+            runItOddsPercentagesByPlayerId={runItOddsPercentagesByPlayerId}
             onShowdownPlayerTap={canInteractWithSpotlight
               ? (playerId) => setSelectedSpotlightPlayerId((current) => current === playerId ? null : playerId)
               : undefined}
             onEmptySeatTap={(seatIndex) => {
               if (seatSelectionLocked) return;
-              const isWaiting = !phase || phase === "waiting";
-              if (youPlayer && isWaiting) {
+              if (youPlayer) {
                 onSitDown(seatIndex);
               } else {
                 setSelectedEmptySeat(seatIndex);
@@ -478,19 +482,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             runCardEmphasisByRun={animatedRunIt ? spotlightRunCardEmphasisByRun : null}
           />
 
-          <AnimatePresence>
-            {isRunItDealing && runItOddsPanel.visible && (
-              <motion.div
-                className="w-full px-2 pt-3"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={{ type: "spring", stiffness: 320, damping: 26 }}
-              >
-                <RunItOddsPanel model={runItOddsPanel} compact />
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {pot > 0 && (
@@ -575,6 +566,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             cardPeelPersistenceKey={cardPeelPersistenceKey}
             onViewerCardsRevealedChange={setViewerCardsRevealed}
             holeCardEmphasisByIndex={isViewerSpotlight ? spotlightHoleCardEmphasis : undefined}
+            runItOddsPercentage={youPlayer?.id ? (runItOddsPercentagesByPlayerId[youPlayer.id] ?? null) : null}
           />
         </div>
 

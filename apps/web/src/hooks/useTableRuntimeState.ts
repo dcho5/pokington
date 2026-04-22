@@ -17,6 +17,7 @@ interface UseTableRuntimeStateArgs {
   viewingPlayer: Player | null;
   viewerStack: number;
   viewingSeat: number;
+  viewerPendingBoundaryUpdate?: { chipDelta: number; leaveSeat: boolean } | null;
 }
 
 export function useTableRuntimeState({
@@ -29,10 +30,12 @@ export function useTableRuntimeState({
   viewingPlayer,
   viewerStack,
   viewingSeat,
+  viewerPendingBoundaryUpdate = null,
 }: UseTableRuntimeStateArgs) {
   const [showdownCountdown, setShowdownCountdown] = useState<number | null>(null);
-  const [showRebuySheet, setShowRebuySheet] = useState(false);
-  const [rebuyInfo, setRebuyInfo] = useState<{ name: string; seat: number } | null>(null);
+  const [showSeatManager, setShowSeatManager] = useState(false);
+  const [seatManagerPrefillSeat, setSeatManagerPrefillSeat] = useState<number | null>(null);
+  const [dismissedSeatManagerHand, setDismissedSeatManagerHand] = useState<number | null>(null);
 
   useEffect(() => {
     const allSettled = hasCompletedShowdownPresentation({
@@ -40,16 +43,26 @@ export function useTableRuntimeState({
       runCount,
       publicShowdownRevealComplete,
     });
-    if (phase === "showdown" && viewerStack === 0 && viewingPlayer !== null && allSettled) {
-      setRebuyInfo({ name: viewingPlayer.name, seat: viewingSeat });
-      setShowRebuySheet(true);
+    const hasQueuedReload = !!viewerPendingBoundaryUpdate && viewerPendingBoundaryUpdate.chipDelta > 0;
+    const boundaryPhase = phase === "showdown" || phase === "waiting";
+    if (
+      boundaryPhase &&
+      viewerStack === 0 &&
+      viewingPlayer !== null &&
+      allSettled &&
+      !hasQueuedReload &&
+      dismissedSeatManagerHand !== handNumber
+    ) {
+      setSeatManagerPrefillSeat(viewingSeat);
+      setShowSeatManager(true);
     }
 
-    if (showRebuySheet && viewerStack > 0) {
-      setShowRebuySheet(false);
-      setRebuyInfo(null);
+    if (showSeatManager && viewerStack > 0) {
+      setShowSeatManager(false);
+      setSeatManagerPrefillSeat(null);
+      setDismissedSeatManagerHand(null);
     }
-  }, [phase, viewerStack, viewingPlayer, viewingSeat, settledRunCount, runCount, publicShowdownRevealComplete, showRebuySheet]);
+  }, [phase, viewerStack, viewingPlayer, viewingSeat, settledRunCount, runCount, publicShowdownRevealComplete, showSeatManager, viewerPendingBoundaryUpdate, dismissedSeatManagerHand, handNumber]);
 
   useEffect(() => {
     if (phase !== "showdown" || !publicShowdownRevealComplete || nextHandStartsAt == null) {
@@ -78,15 +91,22 @@ export function useTableRuntimeState({
     nextHandStartsAt,
   ]);
 
-  const dismissRebuy = useCallback(() => {
-    setShowRebuySheet(false);
-    setRebuyInfo(null);
+  const openSeatManager = useCallback((prefillSeat: number | null = null) => {
+    setSeatManagerPrefillSeat(prefillSeat);
+    setShowSeatManager(true);
   }, []);
+
+  const dismissSeatManager = useCallback(() => {
+    setShowSeatManager(false);
+    setSeatManagerPrefillSeat(null);
+    setDismissedSeatManagerHand(handNumber);
+  }, [handNumber]);
 
   return {
     showdownCountdown,
-    showRebuySheet,
-    rebuyInfo,
-    dismissRebuy,
+    showSeatManager,
+    seatManagerPrefillSeat,
+    openSeatManager,
+    dismissSeatManager,
   };
 }

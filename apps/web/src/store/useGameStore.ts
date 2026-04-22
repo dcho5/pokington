@@ -5,6 +5,7 @@ import {
   createInitialState,
   type GameEvent,
   type GameFeedbackCueEnvelope,
+  type PendingBoundaryUpdate,
   type WinnerInfo,
   type RunResult,
   type SevenTwoBountyBB,
@@ -29,6 +30,7 @@ import {
 } from "lib/holeCardReveal.mjs";
 import { isTableClearedForNextHand } from "lib/tableVisualState";
 import { deriveStreetPauseChips } from "lib/streetSweep.mjs";
+import { shouldClearHandScopedState } from "party/handScopedState.mjs";
 
 export interface BombPotAnnouncement {
   kind: "scheduled" | "canceled";
@@ -97,6 +99,12 @@ interface GameStore {
   disconnect: () => void;
   sendEvent: (event: GameEvent) => void;
   sitDown: (seatIndex: number, name: string, buyInCents: number) => void;
+  requestBoundaryUpdate: (update: {
+    leaveSeat?: boolean;
+    moveToSeatIndex?: number | null;
+    chipDelta?: number;
+  }) => void;
+  cancelBoundaryUpdate: () => void;
   standUp: () => void;
   queueLeave: () => void;
   cancelQueuedLeave: () => void;
@@ -150,6 +158,7 @@ interface GameStore {
   isBombPotHand: () => boolean;
   getCommunityCards2: () => Card[];
   getBombPotCooldown: () => string[];
+  getViewerPendingBoundaryUpdate: () => PendingBoundaryUpdate | null;
 
   // Session ledger
   ledger: LedgerEntry[];
@@ -286,6 +295,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     const hadBombPotNextHand = !!prev?.bombPotNextHand;
     const wasBombPot = prev?.isBombPot ?? false;
     const advancedHand = (next.handNumber ?? 0) > (prev?.handNumber ?? 0);
+    const shouldClearRevealedCards = prev ? shouldClearHandScopedState(prev, next) : false;
 
     // ── Street transition: live bets cleared ──
     const streetPauseSnapshot = prev ? deriveStreetPauseChips(prev, next) : null;
@@ -353,13 +363,31 @@ export const useGameStore = create<GameStore>((set, get) => {
         knownCardCountAtRunIt: 0,
         runDealStartedAt: null,
         showdownStartedAt: null,
+        revealedHoleCards: {},
         myRevealedCardIndices: new Set(),
       });
     }
 
     // ── New hand: reset animation state and per-card reveal ──
     if (prev && next.handNumber > prev.handNumber) {
-      set({ runAnnouncement: null, votingStartedAt: null, bombPotVotingStartedAt: null, isRunItBoard: false, knownCardCountAtRunIt: 0, runDealStartedAt: null, showdownStartedAt: null, myRevealedCardIndices: new Set() });
+      set({
+        runAnnouncement: null,
+        votingStartedAt: null,
+        bombPotVotingStartedAt: null,
+        isRunItBoard: false,
+        knownCardCountAtRunIt: 0,
+        runDealStartedAt: null,
+        showdownStartedAt: null,
+        revealedHoleCards: {},
+        myRevealedCardIndices: new Set(),
+      });
+    }
+
+    if (shouldClearRevealedCards) {
+      set({
+        revealedHoleCards: {},
+        myRevealedCardIndices: new Set(),
+      });
     }
 
     // ── Auto-sync viewingSeat from myPlayerId on reconnect ──
@@ -723,35 +751,52 @@ export const useGameStore = create<GameStore>((set, get) => {
     sitDown: (seatIndex, name, buyInCents) => {
       const myPlayerId = get().myPlayerId;
       if (!myPlayerId) return;
-      get().sendEvent({ type: "SIT_DOWN", playerId: myPlayerId, name, seatIndex, buyIn: buyInCents });
+      get().sendEvent({ type: "TAKE_SEAT", playerId: myPlayerId, name, seatIndex, buyIn: buyInCents });
       set({ viewingSeat: seatIndex, leaveQueued: false });
     },
 
-    standUp: () => {
+    requestBoundaryUpdate: ({ leaveSeat = false, moveToSeatIndex = null, chipDelta = 0 }) => {
       const myPlayerId = get().myPlayerId;
       if (!myPlayerId) return;
-      get().sendEvent({ type: "STAND_UP", playerId: myPlayerId });
-      set({ viewingSeat: -1, leaveQueued: false });
+      get().sendEvent({
+        type: "REQUEST_BOUNDARY_UPDATE",
+        playerId: myPlayerId,
+        leaveSeat,
+        moveToSeatIndex,
+        chipDelta,
+      });
+      if (moveToSeatIndex != null) {
+        set({ viewingSeat: moveToSeatIndex });
+      }
+    },
+
+    cancelBoundaryUpdate: () => {
+      const myPlayerId = get().myPlayerId;
+      if (!myPlayerId) return;
+      get().sendEvent({ type: "CANCEL_BOUNDARY_UPDATE", playerId: myPlayerId });
+      set({ leaveQueued: false });
+    },
+
+    standUp: () => {
+      get().requestBoundaryUpdate({ leaveSeat: true });
+      const phase = get().gameState.phase;
+      if (phase === "waiting" || phase === "showdown") {
+        set({ viewingSeat: -1, leaveQueued: false });
+      }
     },
 
     queueLeave: () => {
-      if (!_socket) return;
-      _socket.send(JSON.stringify({ type: "QUEUE_LEAVE" }));
+      get().requestBoundaryUpdate({ leaveSeat: true });
       set({ leaveQueued: true });
     },
 
     cancelQueuedLeave: () => {
-      if (!_socket) return;
-      _socket.send(JSON.stringify({ type: "CANCEL_QUEUE_LEAVE" }));
+      get().cancelBoundaryUpdate();
       set({ leaveQueued: false });
     },
 
     changeSeat: (newSeatIndex: number) => {
-      const myPlayerId = get().myPlayerId;
-      if (!myPlayerId) return;
-      const player = get().gameState.players[myPlayerId];
-      if (!player) return;
-      get().sendEvent({ type: "CHANGE_SEAT", playerId: myPlayerId, seatIndex: newSeatIndex });
+      get().requestBoundaryUpdate({ moveToSeatIndex: newSeatIndex });
       set({ viewingSeat: newSeatIndex, leaveQueued: false });
     },
 
@@ -929,6 +974,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     isBombPotHand: () => get().gameState.isBombPot,
     getCommunityCards2: () => get().gameState.communityCards2,
     getBombPotCooldown: () => get().gameState.bombPotCooldown,
+    getViewerPendingBoundaryUpdate: () => {
+      const { myPlayerId, gameState } = get();
+      return myPlayerId ? gameState.pendingBoundaryUpdates?.[myPlayerId] ?? null : null;
+    },
 
     getLedgerRows: () => deriveLedgerRows(get().ledger),
 

@@ -15,6 +15,7 @@ const ShowdownSpotlight: React.FC<ShowdownSpotlightProps> = ({
 }) => {
   const compact = variant === "mobile";
   const cardClassName = compact ? "w-[34px] h-[48px] rounded-[10px]" : "w-[52px] h-[74px] rounded-[14px]";
+  const cardSize = compact ? "compact" : "default";
   const sectionLabelClassName = compact
     ? "text-[9px] tracking-[0.22em]"
     : "text-[10px] tracking-[0.28em]";
@@ -55,6 +56,7 @@ const ShowdownSpotlight: React.FC<ShowdownSpotlightProps> = ({
                 key={entry.key}
                 card={entry.card ?? undefined}
                 emphasis={entry.emphasis}
+                size={cardSize}
                 className={`${cardClassName} shadow-lg`}
               />
             ))}
@@ -73,6 +75,7 @@ const ShowdownSpotlight: React.FC<ShowdownSpotlightProps> = ({
                 key={entry.key}
                 card={entry.card ?? undefined}
                 emphasis={entry.emphasis}
+                size={cardSize}
                 className={`${cardClassName} shadow-lg`}
               />
             ))}

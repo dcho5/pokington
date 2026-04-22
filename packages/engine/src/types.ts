@@ -31,6 +31,14 @@ export interface SidePot {
   eligiblePlayerIds: string[]; // non-folded players eligible to win this pot
 }
 
+export interface PendingBoundaryUpdate {
+  playerId: string;
+  leaveSeat: boolean;
+  moveToSeatIndex: number | null;
+  chipDelta: number;
+  requestedAt: number;
+}
+
 // ── Full game state (engine-internal, contains hidden info) ──
 export interface GameState {
   phase: GamePhase;
@@ -82,6 +90,7 @@ export interface GameState {
   bombPotVotingStartedAt: number | null;
   bombPotNextHand: { anteBB: BombPotAnteBB } | null;
   bombPotCooldown: string[]; // player IDs who proposed this orbit
+  pendingBoundaryUpdates: Record<string, PendingBoundaryUpdate>;
 }
 
 export type ShowdownKind = "none" | "contested" | "uncontested";
@@ -138,8 +147,17 @@ export interface HandResult {
 // ── Events (discriminated union) ──
 export type GameEvent =
   | { type: "SIT_DOWN"; playerId: string; name: string; seatIndex: number; buyIn: number }
+  | { type: "TAKE_SEAT"; playerId: string; name: string; seatIndex: number; buyIn: number }
   | { type: "CHANGE_SEAT"; playerId: string; seatIndex: number }
   | { type: "STAND_UP"; playerId: string }
+  | {
+      type: "REQUEST_BOUNDARY_UPDATE";
+      playerId: string;
+      leaveSeat: boolean;
+      moveToSeatIndex: number | null;
+      chipDelta: number;
+    }
+  | { type: "CANCEL_BOUNDARY_UPDATE"; playerId: string }
   | { type: "START_HAND" }
   | {
       type: "PLAYER_ACTION";
@@ -199,5 +217,6 @@ export function createInitialState(
     bombPotVotingStartedAt: null,
     bombPotNextHand: null,
     bombPotCooldown: [],
+    pendingBoundaryUpdates: {},
   };
 }

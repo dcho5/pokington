@@ -113,14 +113,16 @@ export function useTableSceneModel(code: string): TableSceneModel {
     viewingPlayer: baseScene.viewingPlayer,
     viewerStack: baseScene.layout.viewerStack,
     viewingSeat: clientUiState.viewingSeat,
+    viewerPendingBoundaryUpdate: baseScene.layout.viewerPendingBoundaryUpdate,
   });
 
   return useMemo(
     () => ({
       ...baseScene,
-      showRebuySheet: runtimeState.showRebuySheet,
-      rebuyInfo: runtimeState.rebuyInfo,
-      dismissRebuy: runtimeState.dismissRebuy,
+      showSeatManager: runtimeState.showSeatManager,
+      seatManagerPrefillSeat: runtimeState.seatManagerPrefillSeat,
+      dismissSeatManager: runtimeState.dismissSeatManager,
+      openSeatManager: runtimeState.openSeatManager,
       layout: {
         ...baseScene.layout,
         showdownCountdown: runtimeState.showdownCountdown,

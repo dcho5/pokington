@@ -34,6 +34,76 @@ function isValidChipCount(amount: number): boolean {
   return Number.isSafeInteger(amount) && amount >= 0;
 }
 
+function isValidChipDelta(amount: number): boolean {
+  return Number.isSafeInteger(amount);
+}
+
+function isBoundaryPhase(phase: GameState["phase"]): boolean {
+  return phase === "waiting" || phase === "showdown";
+}
+
+function removePlayerFromState(state: GameState, playerId: string): boolean {
+  const player = state.players[playerId];
+  if (!player) return false;
+
+  delete state.players[playerId];
+  delete state.pendingBoundaryUpdates[playerId];
+  state.needsToAct = state.needsToAct.filter((id) => id !== playerId);
+  state.closedActors = state.closedActors.filter((id) => id !== playerId);
+  state.bombPotCooldown = state.bombPotCooldown.filter((id) => id !== playerId);
+  if (state.bombPotVote?.proposedBy === playerId) {
+    state.bombPotVote = null;
+    state.bombPotVotingStartedAt = null;
+  } else if (state.bombPotVote && playerId in state.bombPotVote.votes) {
+    delete state.bombPotVote.votes[playerId];
+  }
+  return true;
+}
+
+function applyBoundaryUpdateInPlace(
+  state: GameState,
+  playerId: string,
+  leaveSeat: boolean,
+  moveToSeatIndex: number | null,
+  chipDelta: number,
+): boolean {
+  const player = state.players[playerId];
+  if (!player) return false;
+
+  delete state.pendingBoundaryUpdates[playerId];
+
+  if (leaveSeat) {
+    return removePlayerFromState(state, playerId);
+  }
+
+  if (moveToSeatIndex != null && isValidSeatIndex(moveToSeatIndex) && moveToSeatIndex !== player.seatIndex) {
+    const occupied = playerAtSeat(moveToSeatIndex, state.players);
+    if (!occupied || occupied.id === playerId) {
+      player.seatIndex = moveToSeatIndex;
+    }
+  }
+
+  if (chipDelta !== 0) {
+    const nextStack = player.stack + chipDelta;
+    if (chipDelta > 0 || nextStack > 0) {
+      player.stack = nextStack;
+    }
+  }
+
+  if (player.stack > 0 && isBoundaryPhase(state.phase)) {
+    player.sitOutUntilBB = false;
+  }
+  if (isBoundaryPhase(state.phase)) {
+    player.holeCards = null;
+    player.currentBet = 0;
+    player.totalContribution = 0;
+    player.isFolded = false;
+    player.isAllIn = player.stack <= 0;
+    player.lastAction = null;
+  }
+  return true;
+}
+
 /** Collect bounty from all seated players except the winner and add to winner's stack. */
 function applySevenTwoBounty(state: GameState, winnerId: string): void {
   const winner = state.players[winnerId];
@@ -505,6 +575,7 @@ function resetTableToWaiting(state: GameState): GameState {
   state.voluntaryShownPlayerIds = [];
   state.smallBlindSeatIndex = -1;
   state.bigBlindSeatIndex = -1;
+  state.pendingBoundaryUpdates = {};
   return state;
 }
 
@@ -520,10 +591,22 @@ export function gameReducer(
     // ────── SIT DOWN ──────
     // Players may sit at any time. If a hand is in progress, they join with
     // sitOutUntilBB=true and will participate once BB reaches their seat.
-    case "SIT_DOWN": {
+    case "SIT_DOWN":
+    case "TAKE_SEAT": {
       if (!isValidSeatIndex(event.seatIndex) || !isValidChipCount(event.buyIn)) return prevState;
+      const existing = state.players[event.playerId];
+      if (existing) {
+        if (existing.seatIndex !== event.seatIndex) return prevState;
+        if (event.type === "TAKE_SEAT") return prevState;
+        return gameReducer(prevState, {
+          type: "REQUEST_BOUNDARY_UPDATE",
+          playerId: event.playerId,
+          leaveSeat: false,
+          moveToSeatIndex: null,
+          chipDelta: event.buyIn,
+        });
+      }
       if (playerAtSeat(event.seatIndex, state.players)) return prevState;
-      if (state.players[event.playerId]) return prevState;
 
       state.players[event.playerId] = {
         id: event.playerId,
@@ -536,13 +619,14 @@ export function gameReducer(
         isFolded: false,
         isAllIn: false,
         lastAction: null,
-        sitOutUntilBB: state.phase !== "waiting",
+        sitOutUntilBB: !isBoundaryPhase(state.phase),
       };
+      delete state.pendingBoundaryUpdates[event.playerId];
       return state;
     }
 
     case "CHANGE_SEAT": {
-      if (state.phase !== "waiting") return prevState;
+      if (!isBoundaryPhase(state.phase)) return prevState;
       if (!isValidSeatIndex(event.seatIndex)) return prevState;
 
       const player = state.players[event.playerId];
@@ -558,23 +642,46 @@ export function gameReducer(
     case "STAND_UP": {
       const player = state.players[event.playerId];
       if (!player) return prevState;
-      if (shouldQueueLeave({
+      if (!isBoundaryPhase(state.phase) && shouldQueueLeave({
         phase: state.phase,
         hasCards: player.holeCards !== null,
         currentBet: player.currentBet,
         totalContribution: player.totalContribution,
         sitOutUntilBB: player.sitOutUntilBB,
       })) return prevState;
-      delete state.players[event.playerId];
-      state.needsToAct = state.needsToAct.filter((id) => id !== event.playerId);
-      state.closedActors = state.closedActors.filter((id) => id !== event.playerId);
-      state.bombPotCooldown = state.bombPotCooldown.filter((id) => id !== event.playerId);
-      if (state.bombPotVote?.proposedBy === event.playerId) {
-        state.bombPotVote = null;
-        state.bombPotVotingStartedAt = null;
-      } else if (state.bombPotVote && event.playerId in state.bombPotVote.votes) {
-        delete state.bombPotVote.votes[event.playerId];
+      return removePlayerFromState(state, event.playerId) ? state : prevState;
+    }
+
+    case "REQUEST_BOUNDARY_UPDATE": {
+      const player = state.players[event.playerId];
+      if (!player) return prevState;
+      if (!isValidChipDelta(event.chipDelta)) return prevState;
+      if (event.moveToSeatIndex != null && !isValidSeatIndex(event.moveToSeatIndex)) return prevState;
+      if (!event.leaveSeat && event.chipDelta < 0 && player.stack + event.chipDelta <= 0) return prevState;
+
+      if (isBoundaryPhase(state.phase)) {
+        return applyBoundaryUpdateInPlace(
+          state,
+          event.playerId,
+          event.leaveSeat,
+          event.moveToSeatIndex,
+          event.chipDelta,
+        ) ? state : prevState;
       }
+
+      state.pendingBoundaryUpdates[event.playerId] = {
+        playerId: event.playerId,
+        leaveSeat: event.leaveSeat,
+        moveToSeatIndex: event.moveToSeatIndex,
+        chipDelta: event.chipDelta,
+        requestedAt: Date.now(),
+      };
+      return state;
+    }
+
+    case "CANCEL_BOUNDARY_UPDATE": {
+      if (!state.pendingBoundaryUpdates[event.playerId]) return prevState;
+      delete state.pendingBoundaryUpdates[event.playerId];
       return state;
     }
 
@@ -623,11 +730,12 @@ export function gameReducer(
       state.autoRevealWinningHands = false;
   state.autoRevealWinningHandsAt = null;
   state.knownCardCountAtRunIt = 0;
-  state.runDealStartedAt = null;
-  state.showdownStartedAt = null;
-  state.nextHandStartsAt = null;
-  state.sevenTwoBountyTrigger = null;
-  state.voluntaryShownPlayerIds = [];
+      state.runDealStartedAt = null;
+      state.showdownStartedAt = null;
+      state.nextHandStartsAt = null;
+      state.sevenTwoBountyTrigger = null;
+      state.voluntaryShownPlayerIds = [];
+      state.pendingBoundaryUpdates = {};
       state.isBlindIncomplete = false;
 
       // Moving Button rule (online poker standard). Dead Button (TDA Rule 7)

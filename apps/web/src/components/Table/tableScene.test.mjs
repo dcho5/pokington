@@ -89,7 +89,7 @@ test("showdown scene annotates the viewer with deferred win styling", () => {
   assert.equal(scene.layout.handIndicators[0]?.label, "Straight Flush");
   assert.equal(scene.layout.players[0]?.winType, undefined);
   assert.equal(scene.layout.canShowCards, true);
-  assert.equal(scene.layout.mustQueueLeave, true);
+  assert.equal(scene.layout.mustQueueLeave, false);
 });
 
 test("showdown keeps winner seat data from the snapshot after a stand-up", () => {

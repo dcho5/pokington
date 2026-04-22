@@ -84,7 +84,7 @@ export function shouldShowRunItOddsPanel({
   runResults = [],
 } = {}) {
   if (phase !== "showdown") return false;
-  if ((runResults?.length ?? 0) < 2) return false;
+  if ((runResults?.length ?? 0) < 1) return false;
   const livePlayers = getLiveRunItPlayers(players);
   if (livePlayers.length < 2) return false;
   return livePlayers.every((player) => getFullyRevealedHoleCards(player));

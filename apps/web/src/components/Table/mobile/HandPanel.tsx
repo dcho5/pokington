@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import HoleCards from "components/poker/HoleCards";
 import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
+import RunItOddsBadge from "../RunItOddsBadge";
 import type { HandIndicator } from "lib/handIndicators";
 import type { Player } from "types/player";
 import type { Card as CardType } from "@pokington/shared";
@@ -25,6 +26,7 @@ interface HandPanelProps {
   cardPeelPersistenceKey?: string | null;
   onViewerCardsRevealedChange?: (revealed: boolean) => void;
   holeCardEmphasisByIndex?: CardEmphasis[];
+  runItOddsPercentage?: number | null;
 }
 
 const HandPanel: React.FC<HandPanelProps> = ({
@@ -42,6 +44,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
   cardPeelPersistenceKey,
   onViewerCardsRevealedChange,
   holeCardEmphasisByIndex = ["neutral", "neutral"],
+  runItOddsPercentage = null,
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
   const cardHeight = 100;
@@ -68,21 +71,26 @@ const HandPanel: React.FC<HandPanelProps> = ({
         {/* Left: player identity + auto-flip toggle */}
         <div className="flex-1 min-w-0 flex flex-col justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2 py-2">
           {/* Top: avatar + YOU + name */}
-          <div className="flex items-center gap-1.5">
-            <div
-              className="rounded-full flex items-center justify-center flex-shrink-0 w-7 h-7"
-              style={{ backgroundColor: avatarColor }}
-            >
-              <span className="font-black text-white select-none text-[9px]">{initials}</span>
-            </div>
-            <div className="min-w-0">
-              <span className="text-[8px] bg-red-100 dark:bg-red-900/30 text-red-600 px-1 py-0.5 rounded font-black uppercase">
-                You
-              </span>
-              <div className="text-[10px] font-bold text-gray-900 dark:text-white truncate mt-0.5">
-                {player.name}
+          <div className="flex items-start justify-between gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div
+                className="rounded-full flex items-center justify-center flex-shrink-0 w-7 h-7"
+                style={{ backgroundColor: avatarColor }}
+              >
+                <span className="font-black text-white select-none text-[9px]">{initials}</span>
+              </div>
+              <div className="min-w-0">
+                <span className="text-[8px] bg-red-100 dark:bg-red-900/30 text-red-600 px-1 py-0.5 rounded font-black uppercase">
+                  You
+                </span>
+                <div className="text-[10px] font-bold text-gray-900 dark:text-white truncate mt-0.5">
+                  {player.name}
+                </div>
               </div>
             </div>
+            {runItOddsPercentage != null && (
+              <RunItOddsBadge percentage={runItOddsPercentage} compact className="flex-shrink-0" />
+            )}
           </div>
 
           {/* Bottom: auto-flip toggle */}

@@ -16,6 +16,7 @@ interface OpponentStripProps {
   selectedSpotlightPlayerId?: string | null;
   onShowdownPlayerTap?: (playerId: string) => void;
   spotlightHoleCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
+  runItOddsPercentagesByPlayerId?: Record<string, number | null>;
 }
 
 /** Merge occupied + empty into a single clockwise-ordered list */
@@ -35,6 +36,7 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
   selectedSpotlightPlayerId = null,
   onShowdownPlayerTap,
   spotlightHoleCardEmphasisByIndex = ["neutral", "neutral"],
+  runItOddsPercentagesByPlayerId = {},
 }) => {
   const items: SeatItem[] = [
     ...players.map(({ player, seatIndex }) => ({
@@ -73,6 +75,7 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
           showdownSpotlightSelected={item.player.id === selectedSpotlightPlayerId}
           onShowdownPlayerTap={onShowdownPlayerTap}
           showdownCardEmphasisByIndex={item.player.id === selectedSpotlightPlayerId ? spotlightHoleCardEmphasisByIndex : undefined}
+          runItOddsPercentage={item.player.id ? (runItOddsPercentagesByPlayerId[item.player.id] ?? null) : null}
         />
       );
     }

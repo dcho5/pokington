@@ -13,12 +13,12 @@ import {
 test("rebuys append exactly one new buy-in and keep previous cash-outs intact", () => {
   const sessionLedger = createSessionLedger();
 
-  recordSessionBuyIn(sessionLedger, { playerId: "p1", name: "Alice", buyIn: 10000 });
+  recordSessionBuyIn(sessionLedger, { playerId: "p1", name: "Alice", buyIn: 10000, currentStack: 10000 });
   syncSessionLedgerStacks(sessionLedger, {
     p1: { stack: 0 },
   });
-  recordSessionCashOut(sessionLedger, { playerId: "p1", stack: 0 });
-  recordSessionBuyIn(sessionLedger, { playerId: "p1", name: "Alice", buyIn: 8000 });
+  recordSessionCashOut(sessionLedger, { playerId: "p1", stack: 0, remainingStack: 0, isSeated: true });
+  recordSessionBuyIn(sessionLedger, { playerId: "p1", name: "Alice", buyIn: 8000, currentStack: 8000 });
   syncSessionLedgerStacks(sessionLedger, {
     p1: { stack: 11250 },
   });
@@ -43,7 +43,7 @@ test("rebuys append exactly one new buy-in and keep previous cash-outs intact", 
 test("seat changes do not create synthetic buy-ins or cash-outs", () => {
   const sessionLedger = createSessionLedger();
 
-  recordSessionBuyIn(sessionLedger, { playerId: "p1", name: "Alice", buyIn: 15000 });
+  recordSessionBuyIn(sessionLedger, { playerId: "p1", name: "Alice", buyIn: 15000, currentStack: 15000 });
   syncSessionLedgerStacks(sessionLedger, {
     p1: { stack: 18750 },
   });
@@ -78,7 +78,7 @@ test("restored ledgers clone persisted state before future mutations", () => {
   ];
 
   const sessionLedger = createSessionLedger(persisted);
-  recordSessionBuyIn(sessionLedger, { playerId: "p2", name: "Bob", buyIn: 6000 });
+  recordSessionBuyIn(sessionLedger, { playerId: "p2", name: "Bob", buyIn: 6000, currentStack: 13500 });
 
   assert.deepEqual(persisted, [
     {
@@ -114,7 +114,25 @@ test("restored ledgers clone persisted state before future mutations", () => {
       buyIns: [10000, 6000],
       cashOuts: [],
       isSeated: true,
-      currentStack: 6000,
+      currentStack: 13500,
+    },
+  ]);
+});
+
+test("partial cash-outs keep the player seated with the reduced stack", () => {
+  const sessionLedger = createSessionLedger();
+
+  recordSessionBuyIn(sessionLedger, { playerId: "p1", name: "Alice", buyIn: 10000, currentStack: 10000 });
+  recordSessionCashOut(sessionLedger, { playerId: "p1", stack: 2500, remainingStack: 7500, isSeated: true });
+
+  assert.deepEqual(snapshotSessionLedger(sessionLedger), [
+    {
+      playerId: "p1",
+      name: "Alice",
+      buyIns: [10000],
+      cashOuts: [2500],
+      isSeated: true,
+      currentStack: 7500,
     },
   ]);
 });

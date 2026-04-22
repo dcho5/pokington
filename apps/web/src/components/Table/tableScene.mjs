@@ -241,6 +241,21 @@ function buildDisplayPot({
   return totalPot - settledAmount;
 }
 
+function describePendingBoundaryUpdate(update) {
+  if (!update) return null;
+  if (update.leaveSeat) return "Leaving after this hand";
+  if (update.moveToSeatIndex != null && update.chipDelta > 0) {
+    return `Moving to Seat ${update.moveToSeatIndex + 1} and adding chips next hand`;
+  }
+  if (update.moveToSeatIndex != null && update.chipDelta < 0) {
+    return `Moving to Seat ${update.moveToSeatIndex + 1} and cashing out next hand`;
+  }
+  if (update.moveToSeatIndex != null) return `Seat change queued to Seat ${update.moveToSeatIndex + 1}`;
+  if (update.chipDelta > 0) return "Adding chips next hand";
+  if (update.chipDelta < 0) return "Cashing out chips next hand";
+  return "Seat update queued for next hand";
+}
+
 export function deriveTableScene({
   gameState,
   timingFlags = {},
@@ -339,7 +354,7 @@ export function deriveTableScene({
     currentBet: viewingPlayer.currentBet ?? 0,
     totalContribution: gameState.players?.[viewingPlayer.id]?.totalContribution ?? 0,
     sitOutUntilBB: gameState.players?.[viewingPlayer.id]?.sitOutUntilBB ?? true,
-  });
+  }) && phase !== "showdown" && phase !== "waiting";
   const isSoleUncontestedWinner =
     gameState.showdownKind === "uncontested" &&
     !gameState.autoRevealWinningHands &&
@@ -371,6 +386,9 @@ export function deriveTableScene({
     sevenTwoEligible,
   });
   const displayViewingPlayer = displayPlayers.find((player) => player?.isYou) ?? null;
+  const viewerPendingBoundaryUpdate = viewingPlayer?.id
+    ? gameState.pendingBoundaryUpdates?.[viewingPlayer.id] ?? null
+    : null;
   const displayPot = buildDisplayPot({
     phase,
     pot: gameState.pot + Object.values(gameState.players ?? {}).reduce(
@@ -405,7 +423,7 @@ export function deriveTableScene({
         return liveLabel ? [{ id: "single", title: "Hand", label: liveLabel }] : [];
       })();
 
-  const seatSelectionLocked = viewerIsSeated && !!phase && phase !== "waiting";
+  const seatSelectionLocked = false;
   const showBlockingConnectionOverlay = !isFirstStateReceived;
   const blockingConnectionTitle =
     connectionStatus === "disconnected" ? "Reconnecting table" : "Loading table";
@@ -480,6 +498,9 @@ export function deriveTableScene({
       actionError,
       mustQueueLeave,
       leaveQueued,
+      viewerPendingBoundaryUpdate,
+      viewerHasPendingBoundaryUpdate: viewerPendingBoundaryUpdate != null,
+      viewerPendingBoundaryLabel: describePendingBoundaryUpdate(viewerPendingBoundaryUpdate),
       cardPeelPersistenceKey,
     },
   };

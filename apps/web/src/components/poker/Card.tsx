@@ -22,6 +22,7 @@ interface CardProps {
   className?: string;
   style?: React.CSSProperties;
   emphasis?: "neutral" | "highlighted" | "dimmed";
+  size?: "default" | "compact";
 }
 
 function emphasisClassName(emphasis: CardProps["emphasis"]): string {
@@ -34,8 +35,30 @@ function emphasisClassName(emphasis: CardProps["emphasis"]): string {
   return "";
 }
 
-const Card: React.FC<CardProps> = ({ card, className = "", style, emphasis = "neutral" }) => {
+const CARD_SIZE_CLASSES = {
+  default: {
+    facePadding: "p-1.5",
+    corner: "gap-0.5 text-sm",
+    center: "text-2xl",
+    backInset: "inset-[4px] rounded-[8px]",
+  },
+  compact: {
+    facePadding: "p-1",
+    corner: "gap-px text-[10px]",
+    center: "text-[18px]",
+    backInset: "inset-[3px] rounded-[6px]",
+  },
+} as const;
+
+const Card: React.FC<CardProps> = ({
+  card,
+  className = "",
+  style,
+  emphasis = "neutral",
+  size = "default",
+}) => {
   const emphasisClasses = emphasisClassName(emphasis);
+  const metrics = CARD_SIZE_CLASSES[size];
   if (!card) {
     // Face-down back — white card frame with dark blue gradient inner
     return (
@@ -45,7 +68,7 @@ const Card: React.FC<CardProps> = ({ card, className = "", style, emphasis = "ne
       >
         {/* Inner back area */}
         <div
-          className="absolute inset-[4px] rounded-[8px] overflow-hidden"
+          className={`absolute overflow-hidden ${metrics.backInset}`}
           style={{
             background: "linear-gradient(145deg, #1e3a5f 0%, #0f2040 50%, #1a3356 100%)",
           }}
@@ -77,22 +100,22 @@ const Card: React.FC<CardProps> = ({ card, className = "", style, emphasis = "ne
 
   return (
     <div
-      className={`card-face relative flex flex-col justify-between p-1.5 transition-[opacity,filter,transform,box-shadow] duration-200 ${red ? "red" : ""} ${emphasisClasses} ${className}`}
+      className={`card-face relative flex flex-col justify-between transition-[opacity,filter,transform,box-shadow] duration-200 ${metrics.facePadding} ${red ? "red" : ""} ${emphasisClasses} ${className}`}
       style={style}
     >
       {/* Top-left: rank + suit */}
-      <div className="flex items-center gap-0.5 leading-none text-sm font-bold">
+      <div className={`flex items-center leading-none font-bold ${metrics.corner}`}>
         <span>{rank}</span>
         <span>{symbol}</span>
       </div>
 
       {/* Center suit */}
-      <div className="flex-1 flex items-center justify-center text-2xl">
+      <div className={`flex flex-1 items-center justify-center leading-none ${metrics.center}`}>
         {symbol}
       </div>
 
       {/* Bottom-right: rotated 180° */}
-      <div className="flex items-center gap-0.5 leading-none text-sm font-bold self-end rotate-180">
+      <div className={`flex items-center leading-none font-bold self-end rotate-180 ${metrics.corner}`}>
         <span>{rank}</span>
         <span>{symbol}</span>
       </div>

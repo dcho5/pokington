@@ -24,7 +24,6 @@ import DesktopRaisePopover from "./DesktopRaisePopover";
 import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
 import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
 import RunItBoard from "../RunItBoard";
-import RunItOddsPanel from "../RunItOddsPanel";
 
 import AnnouncementBanner from "../AnnouncementBanner";
 import WinnerBanner from "../WinnerBanner";
@@ -50,7 +49,6 @@ import {
   shouldRenderRunItBoard,
 } from "lib/tableVisualState";
 import {
-  getDesktopCenterStageBounds,
   getDesktopTableLayoutProfile,
   type DesktopBombPotCenterStage,
   type DesktopRunItCenterStage,
@@ -245,11 +243,6 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     centerStage.kind === "runIt"
       ? centerStage as DesktopRunItCenterStage
       : null;
-  const runItCenterStageBounds = getDesktopCenterStageBounds({
-    isBombPotHand: isShowingBombPotCenterStage,
-    isRunItBoard: isRunItCenterStage,
-    runCount: resolvedRunCount,
-  });
   const g: TableGeometry = desktopLayout.seat.geometry;
   const stageInset = Math.max(0, (1 - desktopScale) * 22);
   const overlayLift = -Math.round(desktopLayout.overlays.lift + stageInset * 0.75);
@@ -513,6 +506,11 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   const spotlightRunCardEmphasisByRun = runSpotlights.map(boardCardEmphasisFromSpotlight);
   const spotlightPlayerId = activeSpotlightPlayer?.playerId ?? null;
   const isViewerSpotlight = spotlightPlayerId != null && spotlightPlayerId === viewingPlayerId;
+  const runItOddsPercentagesByPlayerId = Object.fromEntries(
+    runItOddsPanel.rows
+      .filter((row) => row.currentPercentage != null)
+      .map((row) => [row.playerId, row.currentPercentage]),
+  ) as Record<string, number | null>;
 
   return (
     <div className={`relative flex flex-col h-full w-full overflow-hidden bg-gray-100 dark:bg-gray-950 transition-colors duration-500 ${isYourTurn ? "animate-turn-perimeter" : ""}`}>
@@ -767,24 +765,6 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               </div>
             )}
 
-            <AnimatePresence>
-              {isRunItDealing && runItOddsPanel.visible && (
-                <motion.div
-                  className="absolute left-1/2 -translate-x-1/2 z-[18]"
-                  initial={{ opacity: 0, y: 18 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 12 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 26 }}
-                  style={{
-                    top: runItCenterStageBounds.boardBottom + 36,
-                    width: Math.min(Math.max(runItCenterStageBounds.rowWidth + 28, 460), 640),
-                  }}
-                >
-                  <RunItOddsPanel model={runItOddsPanel} />
-                </motion.div>
-              )}
-            </AnimatePresence>
-
             {/* Pot Display — visible whenever pot > 0 (voting, active play, and throughout showdown) */}
             {(pot ?? 0) > 0 && (
               <motion.div
@@ -940,6 +920,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               onShowdownHoverChange={canInteractWithSpotlight ? setHoveredShowdownPlayerId : undefined}
               showdownSpotlightSelected={players[i]?.id === spotlightPlayerId}
               showdownCardEmphasisByIndex={players[i]?.id === spotlightPlayerId ? spotlightHoleCardEmphasis : undefined}
+              runItOddsPercentage={players[i]?.id ? (runItOddsPercentagesByPlayerId[players[i].id] ?? null) : null}
             />
           ))}
 

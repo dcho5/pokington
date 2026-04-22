@@ -133,6 +133,31 @@ test("mid-hand stand up is ignored once a player is committed", () => {
   assert.deepEqual(Object.keys(next.players).sort(), ["a", "b"]);
 });
 
+test("mid-hand boundary updates are queued instead of changing the live hand state", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "TAKE_SEAT", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
+  state = gameReducer(state, { type: "TAKE_SEAT", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
+  state = gameReducer(state, { type: "START_HAND" });
+
+  const next = gameReducer(state, {
+    type: "REQUEST_BOUNDARY_UPDATE",
+    playerId: "a",
+    leaveSeat: false,
+    moveToSeatIndex: 4,
+    chipDelta: 500,
+  });
+
+  assert.equal(next.players.a.seatIndex, state.players.a.seatIndex);
+  assert.equal(next.players.a.stack, state.players.a.stack);
+  assert.deepEqual(next.pendingBoundaryUpdates.a, {
+    playerId: "a",
+    leaveSeat: false,
+    moveToSeatIndex: 4,
+    chipDelta: 500,
+    requestedAt: next.pendingBoundaryUpdates.a.requestedAt,
+  });
+});
+
 test("waiting-room seat changes move the player without changing stack or identity", () => {
   let state = createInitialState("table", { small: 25, big: 50 });
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1300 });
@@ -157,7 +182,7 @@ test("seat changes are rejected once a hand has started", () => {
   assert.equal(next.players.a.seatIndex, state.players.a.seatIndex);
 });
 
-test("showdown stand up is ignored because the hand is still in progress", () => {
+test("showdown stand up is allowed between hands", () => {
   let state = createInitialState("table", { small: 25, big: 50 });
   state.phase = "showdown";
   state.players = {
@@ -189,11 +214,54 @@ test("showdown stand up is ignored because the hand is still in progress", () =>
     },
   };
 
-  const before = JSON.stringify(state);
   const next = gameReducer(state, { type: "STAND_UP", playerId: "a" });
 
-  assert.equal(JSON.stringify(next), before);
-  assert.deepEqual(Object.keys(next.players).sort(), ["a", "b"]);
+  assert.deepEqual(Object.keys(next.players).sort(), ["b"]);
+});
+
+test("busted showdown players can rebuy immediately without leaving their seat", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state.phase = "showdown";
+  state.players = {
+    a: {
+      id: "a",
+      name: "A",
+      seatIndex: 0,
+      stack: 0,
+      holeCards: [card("A", "spades"), card("K", "spades")],
+      currentBet: 0,
+      totalContribution: 200,
+      isFolded: false,
+      isAllIn: true,
+      lastAction: null,
+      sitOutUntilBB: true,
+    },
+    b: {
+      id: "b",
+      name: "B",
+      seatIndex: 1,
+      stack: 1200,
+      holeCards: [card("Q", "clubs"), card("Q", "diamonds")],
+      currentBet: 0,
+      totalContribution: 200,
+      isFolded: false,
+      isAllIn: false,
+      lastAction: null,
+      sitOutUntilBB: false,
+    },
+  };
+
+  state = gameReducer(state, {
+    type: "REQUEST_BOUNDARY_UPDATE",
+    playerId: "a",
+    leaveSeat: false,
+    moveToSeatIndex: null,
+    chipDelta: 1500,
+  });
+
+  assert.equal(state.players.a.seatIndex, 0);
+  assert.equal(state.players.a.stack, 1500);
+  assert.equal(state.players.a.sitOutUntilBB, false);
 });
 
 test("showdown falls back to waiting when fewer than two stacks are ready for the next hand", () => {

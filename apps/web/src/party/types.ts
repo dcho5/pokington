@@ -13,7 +13,7 @@ import { buildPublicGameState } from "./publicState.mjs";
 
 // Re-export so consumers only need to import from one place
 export type { GameEvent, WinnerInfo, RunResult, SidePot, GamePhase };
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 export const CORE_SEVEN_TWO_BOUNTY_BB = 0;
 
 // ── Public player: same as EnginePlayer but holeCards is always null, hasCards added ──

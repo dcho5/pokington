@@ -108,6 +108,27 @@ test("visibility gating requires every live contender to be fully tabled", () =>
   assert.equal(getRunItOddsContenders(players).length, 1);
 });
 
+test("single-run all-in showdowns can still show live odds", () => {
+  const players = [
+    createPlayer({
+      id: "p1",
+      name: "Alex",
+      holeCards: [c("A", "spades"), c("K", "spades")],
+    }),
+    createPlayer({
+      id: "p2",
+      name: "Blake",
+      holeCards: [c("Q", "hearts"), c("Q", "clubs")],
+    }),
+  ];
+
+  assert.equal(shouldShowRunItOddsPanel({
+    phase: "showdown",
+    players,
+    runResults: [{ board: [c("2", "diamonds"), c("7", "clubs"), c("J", "hearts")] }],
+  }), true);
+});
+
 test("exact flop odds match exhaustive reference enumeration", () => {
   const players = [
     createPlayer({

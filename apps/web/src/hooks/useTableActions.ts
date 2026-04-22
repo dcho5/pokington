@@ -5,29 +5,12 @@
 import { useCallback } from "react";
 import { useGameStore } from "store/useGameStore";
 import type { TableActions } from "components/Table/tableScene";
-import { classifySitDownRequest } from "lib/sitDownEligibility.mjs";
 
 export function useTableActions(_code: string): TableActions {
   const onSitDown = useCallback<TableActions["onSitDown"]>((seatIndex, name, buyInCents) => {
-    const store = useGameStore.getState();
-    const mode = classifySitDownRequest({
-      phase: store.gameState.phase,
-      myPlayerId: store.myPlayerId,
-      players: store.gameState.players,
-      seatIndex,
-    });
-
     if (name != null && buyInCents != null) {
-      if (mode === "blocked" || mode === "change-seat") return;
-      store.sitDown(seatIndex, name, buyInCents);
-      return;
+      useGameStore.getState().sitDown(seatIndex, name, buyInCents);
     }
-
-    if (mode === "change-seat") {
-      store.changeSeat(seatIndex);
-    }
-
-    // New-seat dialogs are owned by the caller (desktop page or mobile sheet flow).
   }, []);
 
   const onRaise = useCallback<TableActions["onRaise"]>((totalAmount) => {
@@ -52,6 +35,8 @@ export function useTableActions(_code: string): TableActions {
 
   return {
     onSitDown,
+    onRequestBoundaryUpdate: (update) => useGameStore.getState().requestBoundaryUpdate(update),
+    onCancelBoundaryUpdate: () => useGameStore.getState().cancelBoundaryUpdate(),
     onStandUp: () => useGameStore.getState().standUp(),
     onQueueLeave: () => useGameStore.getState().queueLeave(),
     onCancelQueuedLeave: () => useGameStore.getState().cancelQueuedLeave(),

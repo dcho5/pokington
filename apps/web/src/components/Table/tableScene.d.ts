@@ -113,6 +113,9 @@ export interface TableLayoutScene {
   actionError: TableTimingFlags["actionError"];
   mustQueueLeave: boolean;
   leaveQueued: boolean;
+  viewerPendingBoundaryUpdate: PublicGameState["pendingBoundaryUpdates"][string] | null;
+  viewerHasPendingBoundaryUpdate: boolean;
+  viewerPendingBoundaryLabel: string | null;
   cardPeelPersistenceKey: string | null;
 }
 
@@ -125,9 +128,10 @@ export interface TableSceneModel {
   blockingConnectionMessage: string;
   viewingPlayer: Player | null;
   layout: TableLayoutScene;
-  showRebuySheet?: boolean;
-  rebuyInfo?: { name: string; seat: number } | null;
-  dismissRebuy?: () => void;
+  showSeatManager?: boolean;
+  seatManagerPrefillSeat?: number | null;
+  dismissSeatManager?: () => void;
+  openSeatManager?: (prefillSeat?: number | null) => void;
 }
 
 export function deriveTableScene(input: {
@@ -139,6 +143,13 @@ export function deriveTableScene(input: {
 
 export interface TableActions {
   onSitDown: (seatIndex: number, name?: string, buyInCents?: number) => void;
+  onOpenSeatManager?: (seatIndex?: number | null) => void;
+  onRequestBoundaryUpdate?: (update: {
+    leaveSeat?: boolean;
+    moveToSeatIndex?: number | null;
+    chipDelta?: number;
+  }) => void;
+  onCancelBoundaryUpdate?: () => void;
   onStandUp?: () => void;
   onQueueLeave?: () => void;
   onCancelQueuedLeave?: () => void;

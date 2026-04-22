@@ -36,6 +36,7 @@ export type {
   ShowdownKind,
   SevenTwoBountyBB,
   BombPotAnteBB,
+  PendingBoundaryUpdate,
   Card,
   Rank,
   Suit,

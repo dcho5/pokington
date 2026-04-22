@@ -10,6 +10,7 @@ import type { Player } from "types/player";
 import Card from "components/poker/Card";
 import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
 import PlayerPositionMarkers from "../PlayerPositionMarkers";
+import RunItOddsBadge from "../RunItOddsBadge";
 
 function PeekEye({ count, size = 14 }: { count: number; size?: number }) {
   const bgClass =
@@ -129,6 +130,7 @@ interface SeatProps {
   onShowdownHoverChange?: (playerId: string | null) => void;
   showdownSpotlightSelected?: boolean;
   showdownCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
+  runItOddsPercentage?: number | null;
 }
 
 const Seat: React.FC<SeatProps> = ({
@@ -149,6 +151,7 @@ const Seat: React.FC<SeatProps> = ({
   onShowdownHoverChange,
   showdownSpotlightSelected = false,
   showdownCardEmphasisByIndex = ["neutral", "neutral"],
+  runItOddsPercentage = null,
 }) => {
   const pos = computeSeatPosition(seatIndex, totalSeats, geometry);
   const action = player?.lastAction ?? null;
@@ -470,6 +473,18 @@ const Seat: React.FC<SeatProps> = ({
                 Show for 7-2 bounty
               </SeatBadge>
             </motion.div>
+          )}
+
+          {runItOddsPercentage != null && (
+            <div
+              className="absolute z-20 pointer-events-none"
+              style={{
+                left: 0,
+                top: -18,
+              }}
+            >
+              <RunItOddsBadge percentage={runItOddsPercentage} />
+            </div>
           )}
 
           {statusBadges.length > 0 && (

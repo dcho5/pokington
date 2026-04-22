@@ -21,6 +21,7 @@ interface PlayerBubbleProps {
   showdownSpotlightSelected?: boolean;
   onShowdownPlayerTap?: (playerId: string) => void;
   showdownCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
+  runItOddsPercentage?: number | null;
 }
 
 const PlayerBubble: React.FC<PlayerBubbleProps> = ({
@@ -35,6 +36,7 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   showdownSpotlightSelected = false,
   onShowdownPlayerTap,
   showdownCardEmphasisByIndex = ["neutral", "neutral"],
+  runItOddsPercentage = null,
 }) => {
   const minWidth = 58;
   const avatarSize = 42;
@@ -176,6 +178,7 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
                 <Card
                   card={card}
                   emphasis={showdownCardEmphasisByIndex[i] ?? "neutral"}
+                  size="compact"
                   className="w-[34px] h-[50px] rounded-[5px] shadow-xl"
                 />
               ) : (
@@ -247,16 +250,50 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
           </AnimatePresence>
 
           <motion.div animate={avatarBounce}>
-          <div
-            className={[
-              "rounded-full flex items-center justify-center relative z-10",
-              player.isCurrentActor ? "ring-2 ring-red-500" : "",
-              isFolded ? "grayscale" : "",
-            ].join(" ")}
-            style={{ backgroundColor: avatarColor, width: avatarSize, height: avatarSize }}
-          >
-            <span className="font-black text-white text-xs select-none">{initials}</span>
-          </div>
+          {runItOddsPercentage != null ? (
+            <motion.div
+              key={runItOddsPercentage.toFixed(1)}
+              initial={{ opacity: 0, scale: 0.82, y: 6 }}
+              animate={{ opacity: 1, scale: [1, 1.05, 1], y: 0 }}
+              transition={{
+                opacity: { duration: 0.18 },
+                y: { type: "spring", stiffness: 320, damping: 26 },
+                scale: { duration: 0.34 },
+              }}
+            >
+              <div
+                className={[
+                  "rounded-full flex items-center justify-center relative z-10 border text-white shadow-lg",
+                  player.isCurrentActor ? "ring-2 ring-red-500" : "",
+                ].join(" ")}
+                style={{
+                  width: avatarSize,
+                  height: avatarSize,
+                  background: "linear-gradient(135deg, rgba(239,68,68,0.96), rgba(185,28,28,0.94))",
+                  borderColor: "rgba(254,226,226,0.42)",
+                  boxShadow: "0 8px 20px rgba(127,29,29,0.34)",
+                }}
+              >
+                <span
+                  className="font-black tabular-nums select-none leading-none tracking-[-0.02em]"
+                  style={{ fontSize: runItOddsPercentage >= 100 ? 10 : 11 }}
+                >
+                  {runItOddsPercentage.toFixed(1)}%
+                </span>
+              </div>
+            </motion.div>
+          ) : (
+            <div
+              className={[
+                "rounded-full flex items-center justify-center relative z-10",
+                player.isCurrentActor ? "ring-2 ring-red-500" : "",
+                isFolded ? "grayscale" : "",
+              ].join(" ")}
+              style={{ backgroundColor: avatarColor, width: avatarSize, height: avatarSize }}
+            >
+              <span className="font-black text-white text-xs select-none">{initials}</span>
+            </div>
+          )}
           </motion.div>
 
           {/* Peek indicator */}

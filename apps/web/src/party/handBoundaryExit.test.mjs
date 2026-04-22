@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { removePlayersBeforeNextHand } from "./handBoundaryExit.mjs";
+import { applyPendingBoundaryUpdates } from "./handBoundaryExit.mjs";
 
 function makePlayer(overrides = {}) {
   return {
@@ -70,6 +70,7 @@ function makeState(overrides = {}) {
     knownCardCountAtRunIt: 5,
     runDealStartedAt: null,
     showdownStartedAt: 1000,
+    nextHandStartsAt: 2000,
     sevenTwoBountyBB: 0,
     sevenTwoBountyTrigger: null,
     voluntaryShownPlayerIds: [],
@@ -79,31 +80,87 @@ function makeState(overrides = {}) {
       proposedBy: "p1",
       votes: { p1: true, p2: true, p3: false },
     },
+    bombPotVotingStartedAt: 1000,
     bombPotNextHand: null,
     bombPotCooldown: ["p1", "p2", "p3"],
+    pendingBoundaryUpdates: {},
     ...overrides,
   };
 }
 
-test("removes queued leavers before the next hand even if the table is still in showdown", () => {
-  const { gameState, removedPlayers } = removePlayersBeforeNextHand(makeState(), ["p1"]);
+test("applies queued leave requests before the next hand", () => {
+  const { gameState, realizedTransitions } = applyPendingBoundaryUpdates(makeState({
+    pendingBoundaryUpdates: {
+      p1: {
+        playerId: "p1",
+        leaveSeat: true,
+        moveToSeatIndex: null,
+        chipDelta: 0,
+        requestedAt: 1,
+      },
+    },
+  }));
 
-  assert.deepEqual(removedPlayers, [
-    { playerId: "p1", stack: 1000 },
-    { playerId: "p2", stack: 0 },
+  assert.deepEqual(realizedTransitions, [
+    {
+      playerId: "p1",
+      beforePlayer: makePlayer(),
+      afterPlayer: null,
+    },
   ]);
-  assert.deepEqual(Object.keys(gameState.players).sort(), ["p3"]);
-  assert.deepEqual(gameState.needsToAct, []);
-  assert.deepEqual(gameState.closedActors, ["p3"]);
-  assert.deepEqual(gameState.bombPotCooldown, ["p3"]);
+  assert.deepEqual(Object.keys(gameState.players).sort(), ["p2", "p3"]);
+  assert.deepEqual(gameState.needsToAct, ["p2"]);
+  assert.deepEqual(gameState.closedActors, ["p2", "p3"]);
+  assert.deepEqual(gameState.bombPotCooldown, ["p2", "p3"]);
   assert.equal(gameState.bombPotVote, null);
 });
 
-test("deduplicates queued and zero-stack removals cleanly", () => {
-  const { gameState, removedPlayers } = removePlayersBeforeNextHand(makeState(), ["p2"]);
+test("keeps busted players seated and applies queued chip and seat updates", () => {
+  const { gameState, realizedTransitions } = applyPendingBoundaryUpdates(makeState({
+    pendingBoundaryUpdates: {
+      p2: {
+        playerId: "p2",
+        leaveSeat: false,
+        moveToSeatIndex: 5,
+        chipDelta: 2000,
+        requestedAt: 2,
+      },
+    },
+  }));
 
-  assert.deepEqual(removedPlayers, [
-    { playerId: "p2", stack: 0 },
+  assert.equal(gameState.players.p2.seatIndex, 5);
+  assert.equal(gameState.players.p2.stack, 2000);
+  assert.equal(gameState.players.p2.sitOutUntilBB, false);
+  assert.deepEqual(realizedTransitions, [
+    {
+      playerId: "p2",
+      beforePlayer: makePlayer({
+        id: "p2",
+        name: "Player 2",
+        seatIndex: 1,
+        stack: 0,
+        totalContribution: 150,
+        isAllIn: true,
+      }),
+      afterPlayer: gameState.players.p2,
+    },
   ]);
-  assert.deepEqual(Object.keys(gameState.players).sort(), ["p1", "p3"]);
+});
+
+test("rejects full-stack cash-outs while still allowing the seat move portion", () => {
+  const { gameState } = applyPendingBoundaryUpdates(makeState({
+    pendingBoundaryUpdates: {
+      p3: {
+        playerId: "p3",
+        leaveSeat: false,
+        moveToSeatIndex: 6,
+        chipDelta: -1800,
+        requestedAt: 3,
+      },
+    },
+  }));
+
+  assert.equal(gameState.players.p3.seatIndex, 6);
+  assert.equal(gameState.players.p3.stack, 1800);
+  assert.equal(gameState.players.p3.isAllIn, false);
 });

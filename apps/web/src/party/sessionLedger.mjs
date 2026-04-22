@@ -34,14 +34,14 @@ export function snapshotSessionLedger(sessionLedger) {
 
 /**
  * @param {Map<string, LedgerEntry>} sessionLedger
- * @param {{ playerId: string; name: string; buyIn: number }} seat
+ * @param {{ playerId: string; name: string; buyIn: number; currentStack?: number; isSeated?: boolean }} seat
  */
-export function recordSessionBuyIn(sessionLedger, { playerId, name, buyIn }) {
+export function recordSessionBuyIn(sessionLedger, { playerId, name, buyIn, currentStack = buyIn, isSeated = true }) {
   const entry = sessionLedger.get(playerId);
   if (entry) {
     entry.buyIns.push(buyIn);
-    entry.isSeated = true;
-    entry.currentStack = buyIn;
+    entry.isSeated = isSeated;
+    entry.currentStack = currentStack;
     entry.name = name;
     return;
   }
@@ -51,21 +51,21 @@ export function recordSessionBuyIn(sessionLedger, { playerId, name, buyIn }) {
     name,
     buyIns: [buyIn],
     cashOuts: [],
-    isSeated: true,
-    currentStack: buyIn,
+    isSeated,
+    currentStack,
   });
 }
 
 /**
  * @param {Map<string, LedgerEntry>} sessionLedger
- * @param {{ playerId: string; stack: number }} standUp
+ * @param {{ playerId: string; stack: number; remainingStack?: number; isSeated?: boolean }} standUp
  */
-export function recordSessionCashOut(sessionLedger, { playerId, stack }) {
+export function recordSessionCashOut(sessionLedger, { playerId, stack, remainingStack = 0, isSeated = false }) {
   const entry = sessionLedger.get(playerId);
   if (!entry) return;
   entry.cashOuts.push(stack);
-  entry.isSeated = false;
-  entry.currentStack = 0;
+  entry.isSeated = isSeated;
+  entry.currentStack = remainingStack;
 }
 
 /**

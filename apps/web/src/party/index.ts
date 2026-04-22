@@ -8,11 +8,10 @@ import {
   getAllInShowdownRevealDelayMs,
   hasAnimatedRunout,
   RUN_IT_VOTING_TIMEOUT_MS,
-  shouldQueueLeave,
   shouldRevealRunsConcurrently,
   shouldAutoRevealWinningHands,
 } from "@pokington/engine";
-import type { GameState, GameEvent } from "@pokington/engine";
+import type { GameState, GameEvent, EnginePlayer } from "@pokington/engine";
 import type { GameFeedbackCueEnvelope } from "@pokington/engine";
 import type { Card } from "@pokington/shared";
 import {
@@ -32,7 +31,11 @@ import {
   canPubliclyRevealCard,
   cardIndexToMask,
 } from "./revealTracking.mjs";
-import { removePlayersBeforeNextHand } from "./handBoundaryExit.mjs";
+import {
+  restoreHandScopedMapEntries,
+  shouldClearHandScopedState,
+} from "./handScopedState.mjs";
+import { applyPendingBoundaryUpdates } from "./handBoundaryExit.mjs";
 import { shouldRotatePlayerSession } from "./playerSessionIdentity.mjs";
 import {
   createSessionLedger,
@@ -114,16 +117,18 @@ interface TokenAuthResponse {
 }
 
 interface PersistedRoomState {
-  version: 2 | 3;
+  version: 2 | 3 | 4;
   status: TableStatus;
   creatorClientId: string | null;
   gameState: GameState | null;
   sessionLedger: LedgerEntry[];
-  pendingLeavePlayerIds: string[];
+  pendingLeavePlayerIds?: string[];
   playerSessions: PlayerSessionRecord[];
   joinTokens: JoinTokenRecord[];
   peekedCardMasks: Array<[string, number]>;
+  peekedCardMasksHandNumber?: number | null;
   publicShownCardMasks?: Array<[string, number]>;
+  publicShownCardMasksHandNumber?: number | null;
 }
 
 const CONTROL_ROOM_ID = "__control__";
@@ -183,7 +188,6 @@ export default class PokerRoom implements Party.Server {
   private sessionLedger = new Map<string, LedgerEntry>();
   private sessionTrackedPlayerIds = new Set<string>();
   private awayClientIds = new Set<string>();
-  private pendingLeavePlayerIds = new Set<string>();
   private peekedCardMasks = new Map<string, number>();
   private publicShownCardMasks = new Map<string, number>();
   private votingTimer: ReturnType<typeof setTimeout> | null = null;
@@ -233,15 +237,25 @@ export default class PokerRoom implements Party.Server {
       if (typeof this.gameState.nextHandStartsAt !== "number") {
         this.gameState.nextHandStartsAt = this.computeNextHandStartAt(this.gameState);
       }
+      if (!this.gameState.pendingBoundaryUpdates || typeof this.gameState.pendingBoundaryUpdates !== "object") {
+        this.gameState.pendingBoundaryUpdates = {};
+      }
     }
 
     this.sessionLedger = createSessionLedger(saved.sessionLedger);
     this.sessionTrackedPlayerIds = new Set(saved.sessionLedger.map((entry) => entry.playerId));
-    this.pendingLeavePlayerIds = new Set(saved.pendingLeavePlayerIds);
     this.playerSessions = new Map(saved.playerSessions.map((session) => [session.clientId, session]));
     this.joinTokens = new Map(saved.joinTokens.map((token) => [token.token, token]));
-    this.peekedCardMasks = new Map(saved.peekedCardMasks ?? []);
-    this.publicShownCardMasks = new Map(saved.publicShownCardMasks ?? []);
+    this.peekedCardMasks = restoreHandScopedMapEntries(
+      saved.peekedCardMasks ?? [],
+      this.gameState,
+      saved.peekedCardMasksHandNumber ?? null,
+    );
+    this.publicShownCardMasks = restoreHandScopedMapEntries(
+      saved.publicShownCardMasks ?? [],
+      this.gameState,
+      saved.publicShownCardMasksHandNumber ?? null,
+    );
     this.cleanExpiredJoinTokens();
     this.lastBroadcastRevealSignature = null;
     if (this.gameState.phase === "voting") {
@@ -301,14 +315,6 @@ export default class PokerRoom implements Party.Server {
       return;
     }
 
-    if (msg.type === "QUEUE_LEAVE") {
-      this.handleQueueLeave(sender);
-      return;
-    }
-
-    if (msg.type === "CANCEL_QUEUE_LEAVE") {
-      this.handleCancelQueueLeave(sender);
-    }
   }
 
   onClose(conn: Party.Connection) {
@@ -612,7 +618,6 @@ export default class PokerRoom implements Party.Server {
     this.creatorClientId = body.creatorClientId;
     this.sessionLedger.clear();
     this.sessionTrackedPlayerIds.clear();
-    this.pendingLeavePlayerIds.clear();
     this.playerSessions.clear();
     this.joinTokens.clear();
     this.peekedCardMasks.clear();
@@ -744,33 +749,6 @@ export default class PokerRoom implements Party.Server {
       return;
     }
 
-    if (enriched.type === "STAND_UP") {
-      const player = this.gameState.players[enriched.playerId];
-      if (player && shouldQueueLeave({
-        phase: this.gameState.phase,
-        hasCards: player.holeCards !== null,
-        currentBet: player.currentBet,
-        totalContribution: player.totalContribution,
-        sitOutUntilBB: player.sitOutUntilBB,
-      })) {
-        this.send(conn, {
-          type: "ERROR",
-          code: "ACTION_REJECTED",
-          message: "Use Leave Next Hand while a hand is in progress",
-        });
-        return;
-      }
-    }
-
-    if (enriched.type === "SIT_DOWN") {
-      const existing = this.gameState.players[enriched.playerId];
-      if (existing && existing.stack === 0) {
-        this.onStandUp(enriched.playerId, 0);
-        void this.persistCashOut(enriched.playerId, 0);
-        this.gameState = gameReducer(this.gameState, { type: "STAND_UP", playerId: enriched.playerId });
-      }
-    }
-
     if (enriched.type === "START_HAND") {
       this.applyStartHandBoundary();
     }
@@ -783,34 +761,44 @@ export default class PokerRoom implements Party.Server {
       return;
     }
 
-    if (enriched.type === "SIT_DOWN" && !prevState.players[enriched.playerId] && this.gameState.players[enriched.playerId]) {
-      this.pendingLeavePlayerIds.delete(enriched.playerId);
+    if (
+      (enriched.type === "SIT_DOWN" || enriched.type === "TAKE_SEAT") &&
+      !prevState.players[enriched.playerId] &&
+      this.gameState.players[enriched.playerId]
+    ) {
       const seatedPlayer = this.gameState.players[enriched.playerId];
       if (seatedPlayer) {
-        this.onSitDown(seatedPlayer.id, seatedPlayer.name, seatedPlayer.stack);
+        this.onSeatBuyIn(seatedPlayer.id, seatedPlayer.name, seatedPlayer.stack, seatedPlayer.stack);
       }
     }
-    if (enriched.type === "STAND_UP" && prevState.players[enriched.playerId] && !this.gameState.players[enriched.playerId]) {
-      this.pendingLeavePlayerIds.delete(enriched.playerId);
-      const player = prevState.players[enriched.playerId];
-      if (player) {
-        this.onStandUp(enriched.playerId, player.stack);
-        void this.persistCashOut(enriched.playerId, player.stack);
-        this.peekedCardMasks.delete(enriched.playerId);
-        this.publicShownCardMasks.delete(enriched.playerId);
-      }
+    if (
+      enriched.type === "REQUEST_BOUNDARY_UPDATE" &&
+      (this.gameState.phase === "waiting" || this.gameState.phase === "showdown")
+    ) {
+      this.recordBoundaryTransition({
+        playerId: enriched.playerId,
+        beforePlayer: prevState.players[enriched.playerId] ?? null,
+        afterPlayer: this.gameState.players[enriched.playerId] ?? null,
+      });
+    }
+    if (enriched.type === "STAND_UP") {
+      this.recordBoundaryTransition({
+        playerId: enriched.playerId,
+        beforePlayer: prevState.players[enriched.playerId] ?? null,
+        afterPlayer: this.gameState.players[enriched.playerId] ?? null,
+      });
+    }
+    if (enriched.type === "CHANGE_SEAT") {
+      this.recordBoundaryTransition({
+        playerId: enriched.playerId,
+        beforePlayer: prevState.players[enriched.playerId] ?? null,
+        afterPlayer: this.gameState.players[enriched.playerId] ?? null,
+      });
     }
     if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
       this.configureShowdownState(prevState, this.gameState);
     }
-    if (this.gameState.handNumber !== prevState.handNumber) {
-      this.peekedCardMasks.clear();
-      this.publicShownCardMasks.clear();
-      this.clearWinnerRevealTimer();
-      this.clearPublicRevealTimers();
-      this.clearNextHandTimer();
-      this.lastBroadcastRevealSignature = null;
-    }
+    this.reconcileHandScopedTracking(prevState, this.gameState);
 
     this.manageVotingTimer(prevState, this.gameState);
     this.manageBombPotVotingTimer(prevState, this.gameState);
@@ -841,7 +829,7 @@ export default class PokerRoom implements Party.Server {
   private rotatePlayerSessionForSitDownIfNeeded(conn: Party.Connection, clientId: string, event: GameEvent): string {
     const currentPlayerId = this.clientIdToPlayerSessionId.get(clientId) ?? "";
     if (
-      event.type !== "SIT_DOWN" ||
+      (event.type !== "SIT_DOWN" && event.type !== "TAKE_SEAT") ||
       !shouldRotatePlayerSession({
         currentPlayerId,
         gameStatePlayers: this.gameState.players,
@@ -874,26 +862,6 @@ export default class PokerRoom implements Party.Server {
     if (!clientId) return;
     setAwayPresence(this.awayClientIds, clientId, away);
     this.broadcastRoomPresence();
-  }
-
-  private handleQueueLeave(conn: Party.Connection) {
-    const clientId = this.connIdToClientId.get(conn.id);
-    if (!clientId) return;
-    const playerId = this.clientIdToPlayerSessionId.get(clientId);
-    if (!playerId || !this.gameState.players[playerId]) return;
-    this.pendingLeavePlayerIds.add(playerId);
-    this.broadcastRoomPresence();
-    void this.persistRoomState();
-  }
-
-  private handleCancelQueueLeave(conn: Party.Connection) {
-    const clientId = this.connIdToClientId.get(conn.id);
-    if (!clientId) return;
-    const playerId = this.clientIdToPlayerSessionId.get(clientId);
-    if (!playerId) return;
-    this.pendingLeavePlayerIds.delete(playerId);
-    this.broadcastRoomPresence();
-    void this.persistRoomState();
   }
 
   private handleRevealCard(conn: Party.Connection, cardIndex: 0 | 1) {
@@ -1032,19 +1000,24 @@ export default class PokerRoom implements Party.Server {
     }
   }
 
+  private clearHandScopedTracking() {
+    this.peekedCardMasks.clear();
+    this.publicShownCardMasks.clear();
+    this.clearWinnerRevealTimer();
+    this.clearPublicRevealTimers();
+    this.lastBroadcastRevealSignature = null;
+  }
+
+  private reconcileHandScopedTracking(prev: GameState, next: GameState) {
+    if (!shouldClearHandScopedState(prev, next)) return;
+    this.clearHandScopedTracking();
+  }
+
   private applyStartHandBoundary() {
-    const { gameState, removedPlayers } = removePlayersBeforeNextHand(
-      this.gameState,
-      Array.from(this.pendingLeavePlayerIds),
-    );
+    const { gameState, realizedTransitions } = applyPendingBoundaryUpdates(this.gameState);
     this.gameState = gameState;
-    this.pendingLeavePlayerIds.clear();
-    for (const { playerId, stack } of removedPlayers) {
-      this.pendingLeavePlayerIds.delete(playerId);
-      this.onStandUp(playerId, stack);
-      void this.persistCashOut(playerId, stack);
-      this.peekedCardMasks.delete(playerId);
-      this.publicShownCardMasks.delete(playerId);
+    for (const transition of realizedTransitions) {
+      this.recordBoundaryTransition(transition);
     }
   }
 
@@ -1218,6 +1191,7 @@ export default class PokerRoom implements Party.Server {
       this.applyStartHandBoundary();
       const prevState = this.gameState;
       this.gameState = gameReducer(this.gameState, { type: "START_HAND" });
+      this.reconcileHandScopedTracking(prevState, this.gameState);
       this.manageNextHandTimer(prevState, this.gameState);
       this.broadcastState(this.deriveFeedback(prevState, { type: "START_HAND" }, this.gameState, "timer"));
       this.broadcastAllPrivate();
@@ -1278,8 +1252,8 @@ export default class PokerRoom implements Party.Server {
     }
   }
 
-  private onSitDown(playerId: string, name: string, buyIn: number) {
-    recordSessionBuyIn(this.sessionLedger, { playerId, name, buyIn });
+  private onSeatBuyIn(playerId: string, name: string, buyIn: number, currentStack: number) {
+    recordSessionBuyIn(this.sessionLedger, { playerId, name, buyIn, currentStack, isSeated: true });
     if (!this.sessionTrackedPlayerIds.has(playerId)) {
       this.sessionTrackedPlayerIds.add(playerId);
       void this.incrementSession(playerId, name, buyIn);
@@ -1289,9 +1263,45 @@ export default class PokerRoom implements Party.Server {
     this.broadcastLedger();
   }
 
-  private onStandUp(playerId: string, stack: number) {
-    recordSessionCashOut(this.sessionLedger, { playerId, stack });
+  private onSeatCashOut(playerId: string, stack: number, remainingStack = 0, isSeated = false) {
+    recordSessionCashOut(this.sessionLedger, { playerId, stack, remainingStack, isSeated });
+    void this.persistCashOut(playerId, stack);
     this.broadcastLedger();
+  }
+
+  private recordBoundaryTransition({
+    playerId,
+    beforePlayer,
+    afterPlayer,
+  }: {
+    playerId: string;
+    beforePlayer: EnginePlayer | null;
+    afterPlayer: EnginePlayer | null;
+  }) {
+    if (!beforePlayer && !afterPlayer) return;
+
+    if (!beforePlayer && afterPlayer) {
+      this.onSeatBuyIn(afterPlayer.id, afterPlayer.name, afterPlayer.stack, afterPlayer.stack);
+      return;
+    }
+
+    if (beforePlayer && !afterPlayer) {
+      this.onSeatCashOut(playerId, beforePlayer.stack, 0, false);
+      this.peekedCardMasks.delete(playerId);
+      this.publicShownCardMasks.delete(playerId);
+      return;
+    }
+
+    if (!beforePlayer || !afterPlayer) return;
+
+    const chipDelta = afterPlayer.stack - beforePlayer.stack;
+    if (chipDelta > 0) {
+      this.onSeatBuyIn(afterPlayer.id, afterPlayer.name, chipDelta, afterPlayer.stack);
+      return;
+    }
+    if (chipDelta < 0) {
+      this.onSeatCashOut(afterPlayer.id, Math.abs(chipDelta), afterPlayer.stack, true);
+    }
   }
 
   private async incrementSession(playerId: string, name: string, buyIn: number) {
@@ -1392,17 +1402,19 @@ export default class PokerRoom implements Party.Server {
   }
 
   private async persistRoomState() {
+    const trackedHandNumber = this.gameState.phase === "waiting" ? null : this.gameState.handNumber;
     const snapshot: PersistedRoomState = {
-      version: 3,
+      version: 4,
       status: this.roomStatus,
       creatorClientId: this.creatorClientId,
       gameState: this.roomStatus === "active" ? this.gameState : null,
       sessionLedger: snapshotSessionLedger(this.sessionLedger),
-      pendingLeavePlayerIds: Array.from(this.pendingLeavePlayerIds),
       playerSessions: Array.from(this.playerSessions.values()),
       joinTokens: Array.from(this.joinTokens.values()),
       peekedCardMasks: Array.from(this.peekedCardMasks.entries()),
+      peekedCardMasksHandNumber: trackedHandNumber,
       publicShownCardMasks: Array.from(this.publicShownCardMasks.entries()),
+      publicShownCardMasksHandNumber: trackedHandNumber,
     };
     await this.room.storage.put<PersistedRoomState>(ROOM_STATE_KEY, snapshot);
   }
@@ -1454,7 +1466,9 @@ export default class PokerRoom implements Party.Server {
       connectedPlayerIds,
       awayPlayerIds,
       peekedCounts,
-      queuedLeavePlayerIds: Array.from(this.pendingLeavePlayerIds),
+      queuedLeavePlayerIds: Object.values(this.gameState.pendingBoundaryUpdates ?? {})
+        .filter((update) => update.leaveSeat)
+        .map((update) => update.playerId),
     });
   }
 
