@@ -3,6 +3,7 @@ import type { Card } from "@pokington/shared";
 import { createDeck, shuffle } from "./deck";
 import { evaluate7, compareHands } from "./evaluator";
 import { shouldQueueLeave } from "./leaveQueue";
+import { canApplySeatingUpdateImmediately } from "./seating";
 import { shouldAutoRevealWinningHands } from "./types";
 
 // ── Helpers ──
@@ -40,6 +41,17 @@ function isValidChipDelta(amount: number): boolean {
 
 function isBoundaryPhase(phase: GameState["phase"]): boolean {
   return phase === "waiting" || phase === "showdown";
+}
+
+function canApplyImmediateSeatingUpdate(state: GameState, player: EnginePlayer): boolean {
+  if (isBoundaryPhase(state.phase)) return true;
+  return canApplySeatingUpdateImmediately({
+    phase: state.phase,
+    hasCards: player.holeCards !== null,
+    currentBet: player.currentBet,
+    totalContribution: player.totalContribution,
+    sitOutUntilBB: player.sitOutUntilBB,
+  });
 }
 
 function removePlayerFromState(state: GameState, playerId: string): boolean {
@@ -626,11 +638,11 @@ export function gameReducer(
     }
 
     case "CHANGE_SEAT": {
-      if (!isBoundaryPhase(state.phase)) return prevState;
       if (!isValidSeatIndex(event.seatIndex)) return prevState;
 
       const player = state.players[event.playerId];
       if (!player) return prevState;
+      if (!canApplyImmediateSeatingUpdate(state, player)) return prevState;
       if (player.seatIndex === event.seatIndex) return prevState;
       if (playerAtSeat(event.seatIndex, state.players)) return prevState;
 
@@ -659,7 +671,7 @@ export function gameReducer(
       if (event.moveToSeatIndex != null && !isValidSeatIndex(event.moveToSeatIndex)) return prevState;
       if (!event.leaveSeat && event.chipDelta < 0 && player.stack + event.chipDelta <= 0) return prevState;
 
-      if (isBoundaryPhase(state.phase)) {
+      if (canApplyImmediateSeatingUpdate(state, player)) {
         return applyBoundaryUpdateInPlace(
           state,
           event.playerId,

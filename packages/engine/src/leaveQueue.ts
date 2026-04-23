@@ -1,4 +1,5 @@
 import type { GamePhase } from "@pokington/shared";
+import { isCommittedToCurrentHand } from "./seating";
 
 export interface LeaveQueueState {
   phase: GamePhase;
@@ -8,15 +9,6 @@ export interface LeaveQueueState {
   sitOutUntilBB: boolean;
 }
 
-const ACTIVE_HAND_PHASES = new Set<GamePhase>([
-  "pre-flop",
-  "flop",
-  "turn",
-  "river",
-  "voting",
-  "showdown",
-]);
-
 export function shouldQueueLeave({
   phase,
   hasCards,
@@ -24,6 +16,11 @@ export function shouldQueueLeave({
   totalContribution,
   sitOutUntilBB,
 }: LeaveQueueState): boolean {
-  if (!ACTIVE_HAND_PHASES.has(phase)) return false;
-  return hasCards || currentBet > 0 || totalContribution > 0 || !sitOutUntilBB;
+  return isCommittedToCurrentHand({
+    phase,
+    hasCards,
+    currentBet,
+    totalContribution,
+    sitOutUntilBB,
+  });
 }

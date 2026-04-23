@@ -1,7 +1,9 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCopyCurrentUrl } from "hooks/useCopyCurrentUrl";
 import { formatCents } from "lib/formatCents";
+import { getMobileHeaderHeight, getMobileSafeAreaTop } from "lib/mobileShell.mjs";
 import type { SevenTwoBountyBB } from "@pokington/engine";
 
 interface TableHeaderProps {
@@ -28,6 +30,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
   onCancelLeavePress,
 }) => {
   const router = useRouter();
+  const { copied, copyLink } = useCopyCurrentUrl();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -53,8 +56,8 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         border-b border-gray-200/50 dark:border-white/[0.06]
         backdrop-blur-md"
       style={{
-        paddingTop: "env(safe-area-inset-top)",
-        height: "calc(52px + env(safe-area-inset-top))",
+        paddingTop: getMobileSafeAreaTop(),
+        height: getMobileHeaderHeight(),
       }}
     >
       {/* Left: back + table name */}
@@ -76,27 +79,40 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         <span className="shrink-0 font-mono text-xs text-gray-500 dark:text-gray-400">
           {formatCents(smallBlind)} / {formatCents(bigBlind)}
         </span>
-        {showLeaveButton && (
-          <div className="relative shrink-0" ref={menuRef}>
-            <button
-              type="button"
-              onClick={() => setMenuOpen((open) => !open)}
-              className={`flex h-8 w-6 items-center justify-center transition-colors ${
-                leaveQueued
-                  ? "text-amber-500"
-                  : "text-gray-700 dark:text-gray-200"
-              }`}
-              aria-label="Table menu"
-              aria-expanded={menuOpen}
-            >
-              <span className="flex h-full flex-col items-center justify-center gap-0.5">
-                <span className="h-1 w-1 rounded-full bg-current" />
-                <span className="h-1 w-1 rounded-full bg-current" />
-                <span className="h-1 w-1 rounded-full bg-current" />
-              </span>
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-[calc(100%+8px)] min-w-[170px] overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 p-1 shadow-xl backdrop-blur-md dark:border-white/[0.08] dark:bg-[rgba(3,7,18,0.96)]">
+        <div className="relative shrink-0" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className={`flex h-8 w-6 items-center justify-center transition-colors ${
+              leaveQueued
+                ? "text-amber-500"
+                : "text-gray-700 dark:text-gray-200"
+            }`}
+            aria-label="Table menu"
+            aria-expanded={menuOpen}
+          >
+            <span className="flex h-full flex-col items-center justify-center gap-0.5">
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+              <span className="h-1 w-1 rounded-full bg-current" />
+            </span>
+          </button>
+          {menuOpen && (
+            <div className="absolute right-0 top-[calc(100%+8px)] min-w-[170px] overflow-hidden rounded-2xl border border-gray-200/80 bg-white/95 p-1 shadow-xl backdrop-blur-md dark:border-white/[0.08] dark:bg-[rgba(3,7,18,0.96)]">
+              <button
+                type="button"
+                onClick={async () => {
+                  await copyLink();
+                }}
+                className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${
+                  copied
+                    ? "text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-300"
+                    : "text-gray-800 hover:bg-gray-100 dark:text-white dark:hover:bg-white/[0.06]"
+                }`}
+              >
+                <span>{copied ? "Link Copied" : "Copy Link"}</span>
+              </button>
+              {showLeaveButton && (
                 <button
                   type="button"
                   onClick={() => {
@@ -120,10 +136,10 @@ const TableHeader: React.FC<TableHeaderProps> = ({
                     </span>
                   )}
                 </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

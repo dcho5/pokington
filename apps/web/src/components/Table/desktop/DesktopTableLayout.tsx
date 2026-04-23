@@ -10,6 +10,7 @@ import {
 } from "@pokington/engine";
 import { type TableGeometry } from "lib/seatLayout";
 import { useColorScheme } from "hooks/useColorScheme";
+import { useCopyCurrentUrl } from "hooks/useCopyCurrentUrl";
 import { useTimedPanelVisibility } from "hooks/useTimedPanelVisibility";
 import { useRunItOddsPanelModel } from "hooks/useRunItOddsPanelModel";
 import PokerChip from "components/poker/PokerChip";
@@ -26,6 +27,8 @@ import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
 import RunItBoard from "../RunItBoard";
 
 import AnnouncementBanner from "../AnnouncementBanner";
+import SitDownForm from "../SitDownForm";
+import SeatManager from "../SeatManager";
 import WinnerBanner from "../WinnerBanner";
 import VotingPanel from "../VotingPanel";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
@@ -116,9 +119,12 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   scene,
   actions,
   desktopScale = 1,
+  showSeatManager = false,
+  onDismissSeatManager,
 }) => {
   const {
     seatSelectionLocked = false,
+    openSeatMode = "sit-down",
     players = [],
     dealerIndex = 0,
     tableName,
@@ -177,6 +183,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   } = scene;
   const {
     onSitDown,
+    onChangeSeat,
     onFold,
     onCheck,
     onCall,
@@ -189,11 +196,14 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     onProposeBombPot,
     onVoteBombPot,
     onOpenSeatManager,
+    onRequestBoundaryUpdate,
+    onCancelBoundaryUpdate,
     onStandUp,
     onQueueLeave,
     onCancelQueuedLeave,
   } = actions;
   const isDark = useColorScheme() === "dark";
+  const { copied, copyLink } = useCopyCurrentUrl();
   const router = useRouter();
   const runItOddsPanel = useRunItOddsPanelModel(scene);
   const isShowdown = phase === "showdown";
@@ -301,6 +311,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   const infoBarBadgeFontSize = 12;
 
   const [bothRevealed, setBothRevealed] = useState(false);
+  const [selectedEmptySeat, setSelectedEmptySeat] = useState<number | null>(null);
   const [raiseOpen, setRaiseOpen] = useState(false);
   const [foldConfirm, setFoldConfirm] = useState(false);
   const [hoveredShowdownPlayerId, setHoveredShowdownPlayerId] = useState<string | null>(null);
@@ -321,6 +332,12 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     setContainerWidth(el.offsetWidth);
     return () => obs.disconnect();
   }, []);
+
+  useEffect(() => {
+    if (openSeatMode !== "sit-down" && selectedEmptySeat !== null) {
+      setSelectedEmptySeat(null);
+    }
+  }, [openSeatMode, selectedEmptySeat]);
 
   const youPlayer = getViewerPlayer(players);
   const viewingPlayerId = getViewingPlayerId(players);
@@ -345,6 +362,14 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   });
 
   const CARD_COUNT = 5;
+  const handleOpenSeat = (seatIndex: number) => {
+    if (openSeatMode === "blocked") return;
+    if (openSeatMode === "change-seat") {
+      onChangeSeat?.(seatIndex);
+      return;
+    }
+    setSelectedEmptySeat(seatIndex);
+  };
   const isVoting = phase === "voting";
   const showRunItVotingPanel = useTimedPanelVisibility({
     visible: isVoting,
@@ -552,6 +577,24 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               {tableName ?? "Pokington"}
             </span>
           </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            void copyLink();
+          }}
+          className={`rounded-2xl border font-bold transition-colors whitespace-nowrap ${
+            copied
+              ? "border-emerald-400/40 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/22 dark:text-emerald-300"
+              : "border-gray-300/80 bg-white/88 text-gray-800 hover:bg-white hover:text-gray-900 dark:border-white/10 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20 dark:hover:text-white"
+          }`}
+          style={{
+            padding: `${leaveButtonPaddingY - 1}px ${Math.max(16, leaveButtonPaddingX - 6)}px`,
+            fontSize: 14,
+          }}
+          aria-label={copied ? "Table link copied" : "Copy table link"}
+        >
+          {copied ? "Copied" : "Copy Link"}
         </button>
         {onStandUp && youPlayer && (
           <button
@@ -936,7 +979,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               isSmallBlind={i === smallBlindIndex}
               isBigBlind={i === bigBlindIndex}
               isCurrentActor={seatPlayer?.isCurrentActor ?? false}
-              onSitDown={onSitDown}
+              onSitDown={handleOpenSeat}
               onOpenSeatManager={seatPlayer?.isYou ? onOpenSeatManager : undefined}
               seatSelectionLocked={seatSelectionLocked}
               seatSize={seatSize}
@@ -1333,6 +1376,38 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
           </div>
         </div>
       )}
+      <AnimatePresence>
+        {showSeatManager && youPlayer && (
+          <SeatManager
+            playerName={youPlayer.name}
+            currentSeatIndex={youPlayer.seatIndex ?? 0}
+            currentStackCents={viewerStack}
+            bigBlindCents={blinds.big}
+            applyImmediately={phase === "waiting" || phase === "showdown"}
+            pendingUpdate={scene.viewerPendingBoundaryUpdate}
+            onSubmit={(update) => {
+              onRequestBoundaryUpdate?.(update);
+              onDismissSeatManager?.();
+            }}
+            onCancelPending={onCancelBoundaryUpdate}
+            onDismiss={onDismissSeatManager ?? (() => {})}
+            variant="dialog"
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {selectedEmptySeat !== null && (
+          <SitDownForm
+            seatIndex={selectedEmptySeat}
+            bigBlindCents={blinds.big}
+            onConfirm={(name, buyInCents) => {
+              onSitDown(selectedEmptySeat, name, buyInCents);
+              setSelectedEmptySeat(null);
+            }}
+            onDismiss={() => setSelectedEmptySeat(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

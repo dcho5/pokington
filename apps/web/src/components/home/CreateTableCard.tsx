@@ -56,6 +56,9 @@ const CreateTableCard = ({
       placeholder="Table name (optional)"
       value={tableName}
       onChange={(e) => setTableName(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && !isCreating) onCreate();
+      }}
     />
 
     <div className="space-y-1">

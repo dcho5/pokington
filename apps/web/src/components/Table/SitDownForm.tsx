@@ -1,7 +1,8 @@
 "use client";
-import React, { useState } from "react";
-import { motion } from "framer-motion";
+import React, { useEffect, useRef, useState } from "react";
 import { getBuyInPresets } from "constants/game";
+import MobileBottomSheet from "./mobile/MobileBottomSheet";
+import DesktopTableDialog from "./DesktopTableDialog";
 
 interface SitDownFormProps {
   seatIndex: number;
@@ -20,6 +21,8 @@ export default function SitDownForm({
   variant = "dialog",
 }: SitDownFormProps) {
   const presets = getBuyInPresets(bigBlindCents);
+  const isDesktopDialog = variant === "dialog";
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(() => {
     if (typeof window === "undefined") return "";
     return localStorage.getItem("pokington_player_name") ?? "";
@@ -36,16 +39,42 @@ export default function SitDownForm({
     }
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const focusDelayMs = variant === "sheet" ? 260 : 0;
+    const timer = window.setTimeout(() => {
+      const input = nameInputRef.current;
+      if (!input) return;
+      try {
+        input.focus(variant === "sheet" ? { preventScroll: true } : undefined);
+      } catch {
+        input.focus();
+      }
+    }, focusDelayMs);
+    return () => window.clearTimeout(timer);
+  }, [variant]);
+
   // ── Shared form body ──
   const formBody = (
     <>
-      <div className="text-center mb-5">
-        <span className="text-lg font-black text-gray-900 dark:text-white">
+      <div className={`text-center ${isDesktopDialog ? "mb-7" : "mb-5"}`}>
+        {isDesktopDialog && (
+          <p className="text-[13px] font-black uppercase tracking-[0.28em] text-gray-500 dark:text-gray-400">
+            Sit Down
+          </p>
+        )}
+        <span className={`${isDesktopDialog ? "mt-3 block text-[2rem]" : "text-lg"} font-black text-gray-900 dark:text-white`}>
           Seat {seatIndex + 1}
         </span>
+        {isDesktopDialog && (
+          <p className="mt-2 text-[17px] leading-7 text-gray-600 dark:text-gray-300">
+            Choose your name and buy-in to join the table.
+          </p>
+        )}
       </div>
 
       <input
+        ref={nameInputRef}
         type="text"
         placeholder="Your name"
         value={name}
@@ -54,19 +83,20 @@ export default function SitDownForm({
           if (e.key === "Enter" && canConfirm) handleConfirm();
         }}
         maxLength={20}
-        autoFocus
-        className="w-full h-14 px-4 rounded-2xl
+        className={`w-full rounded-2xl
           bg-gray-100 dark:bg-gray-800
           border border-gray-300 dark:border-gray-700
-          text-gray-900 dark:text-white text-base font-medium
+          text-gray-900 dark:text-white font-medium
           placeholder:text-gray-400 dark:placeholder:text-gray-500
-          outline-none focus:ring-2 focus:ring-red-500/50 mb-4"
+          outline-none focus:ring-2 focus:ring-red-500/50 ${
+            isDesktopDialog ? "mb-5 h-16 px-5 text-lg" : "mb-4 h-14 px-4 text-base"
+          }`}
       />
 
-      <label className="text-xs font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2 block">
+      <label className={`font-black text-gray-500 dark:text-gray-400 uppercase tracking-widest mb-2 block ${isDesktopDialog ? "text-[13px]" : "text-xs"}`}>
         Buy-in
       </label>
-      <div className="flex items-center gap-2 mb-3">
+      <div className={`flex items-center gap-2 ${isDesktopDialog ? "mb-4" : "mb-3"}`}>
         <span className="text-gray-500 dark:text-gray-400 font-bold">$</span>
         <input
           type="text"
@@ -76,24 +106,26 @@ export default function SitDownForm({
             const v = e.target.value;
             if (/^\d*\.?\d{0,2}$/.test(v)) setBuyIn(v);
           }}
-          className="flex-1 h-12 px-4 rounded-xl
+          className={`flex-1 rounded-xl
             bg-gray-100 dark:bg-gray-800
             border border-gray-300 dark:border-gray-700
-            text-gray-900 dark:text-white text-lg font-mono font-bold
+            text-gray-900 dark:text-white font-mono font-bold
             placeholder:text-gray-400 dark:placeholder:text-gray-500
-            outline-none focus:ring-2 focus:ring-red-500/50"
+            outline-none focus:ring-2 focus:ring-red-500/50 ${
+              isDesktopDialog ? "h-16 px-5 text-[1.45rem]" : "h-12 px-4 text-lg"
+            }`}
         />
       </div>
-      <div className="flex gap-2 mb-5">
+      <div className={`flex gap-2 ${isDesktopDialog ? "mb-7" : "mb-5"}`}>
         {presets.map((preset) => (
           <button
             key={preset.label}
             onClick={() => setBuyIn(preset.dollars.toFixed(2))}
-            className={`flex-1 py-2 rounded-xl text-sm font-bold transition-colors ${
+            className={`flex-1 rounded-xl font-bold transition-colors ${
               buyIn === preset.dollars.toFixed(2)
                 ? "bg-red-500/10 text-red-500 border border-red-500/30"
                 : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700"
-            }`}
+            } ${isDesktopDialog ? "py-3 text-base" : "py-2 text-sm"}`}
           >
             ${preset.dollars % 1 === 0 ? preset.dollars.toFixed(0) : preset.dollars.toFixed(2)}
           </button>
@@ -102,84 +134,56 @@ export default function SitDownForm({
     </>
   );
 
+  const actionRow = (
+    <div className={`flex gap-3 ${isDesktopDialog ? "" : ""}`}>
+      <button
+        onClick={onDismiss}
+        className={`flex-1 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold border border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700 ${
+          isDesktopDialog ? "h-16 text-lg" : "h-14 text-base"
+        }`}
+      >
+        Cancel
+      </button>
+      <button
+        disabled={!canConfirm}
+        onClick={handleConfirm}
+        className={`flex-1 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none ${
+          isDesktopDialog ? "h-16 text-lg" : "h-14 text-base"
+        }`}
+      >
+        Sit Down
+      </button>
+    </div>
+  );
+
   // ── Desktop: centered dialog ──
   if (variant === "dialog") {
     return (
-      <>
-        <motion.div
-          className="overlay-scrim-strong absolute inset-0 z-40"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onDismiss}
-        />
-        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
-          <motion.div
-            className="elevated-surface-light w-full max-w-sm rounded-2xl border p-6 pointer-events-auto"
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-          >
-            <div className="surface-content">
-              {formBody}
-              <div className="flex gap-3">
-                <button
-                  onClick={onDismiss}
-                  className="flex-1 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-bold text-base border border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={!canConfirm}
-                  onClick={handleConfirm}
-                  className="flex-1 h-14 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none"
-                >
-                  Sit Down
-                </button>
-              </div>
-            </div>
-          </motion.div>
+      <DesktopTableDialog onDismiss={onDismiss}>
+        <div className="surface-content">
+          {formBody}
+          {actionRow}
         </div>
-      </>
+      </DesktopTableDialog>
     );
   }
 
   // ── Mobile: bottom sheet ──
   return (
-    <>
-      <motion.div
-        className="overlay-scrim-strong absolute inset-0 z-40"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onDismiss}
-      />
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl
-          elevated-surface-light border-t
-          px-4 pt-4"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-        drag="y"
-        dragConstraints={{ top: 0 }}
-        onDragEnd={(_event: unknown, info: { offset: { y: number } }) => { if (info.offset.y > 80) onDismiss(); }}
-      >
-        <div className="surface-content">
-          <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-5" />
-          {formBody}
-          <button
-            disabled={!canConfirm}
-            onClick={handleConfirm}
-            className="w-full h-14 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none"
-          >
-            Sit Down
-          </button>
-        </div>
-      </motion.div>
-    </>
+    <MobileBottomSheet
+      onDismiss={onDismiss}
+      className="elevated-surface-light border-t px-4 pt-4"
+    >
+      <div className="surface-content">
+        {formBody}
+        <button
+          disabled={!canConfirm}
+          onClick={handleConfirm}
+          className="w-full h-14 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-base shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:shadow-[0_0_25px_rgba(239,68,68,0.6)] transition-shadow disabled:opacity-40 disabled:shadow-none"
+        >
+          Sit Down
+        </button>
+      </div>
+    </MobileBottomSheet>
   );
 }

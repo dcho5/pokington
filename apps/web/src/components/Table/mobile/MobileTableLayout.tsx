@@ -11,6 +11,7 @@ import CommunityCards from "./CommunityCards";
 import HandPanel from "./HandPanel";
 import ActionBar from "./ActionBar";
 import SitDownForm from "../SitDownForm";
+import SeatManager from "../SeatManager";
 import BombPotVotingPanel from "../BombPotVotingPanel";
 import VotingPanel from "../VotingPanel";
 import BombPotSheet from "./BombPotSheet";
@@ -42,16 +43,26 @@ import {
 } from "lib/showdownSpotlight";
 import type { ResolvedSpotlightPlayer, ShowdownSpotlightModel } from "lib/showdownSpotlight";
 import {
-  getEmptySeats,
   getMinPlayerStack,
-  getOpponents,
   getRunAnnouncementContent,
   getViewerPlayer,
   getWaitingForName,
   isCanceledBombPotAnnouncement,
 } from "../tableLayoutUtils";
+import {
+  MOBILE_OVERLAY_Z,
+  MOBILE_SHELL,
+  getMobileHeaderHeight,
+  getMobileSafeAreaBottom,
+  getMobileSheetPaddingBottom,
+  getMobileWinnerBannerBottom,
+} from "lib/mobileShell.mjs";
 
-type MobileTableLayoutProps = TableLayoutProps & { totalSeats?: number };
+type MobileTableLayoutProps = TableLayoutProps & {
+  totalSeats?: number;
+  showSeatManager?: boolean;
+  onDismissSeatManager?: () => void;
+};
 type CardEmphasis = "neutral" | "highlighted" | "dimmed";
 
 function getSelectedTabledPlayer(
@@ -99,9 +110,12 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   scene,
   actions,
   totalSeats = 10,
+  showSeatManager = false,
+  onDismissSeatManager,
 }) => {
   const {
     seatSelectionLocked = false,
+    openSeatMode = "sit-down",
     players = [],
     dealerIndex = 0,
     tableName = "Table",
@@ -158,6 +172,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   } = scene;
   const {
     onSitDown,
+    onChangeSeat,
     onFold,
     onCheck,
     onCall,
@@ -192,6 +207,12 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   }, [selectedEmptySeat]);
 
   useEffect(() => {
+    if (openSeatMode !== "sit-down" && selectedEmptySeat !== null) {
+      setSelectedEmptySeat(null);
+    }
+  }, [openSeatMode, selectedEmptySeat]);
+
+  useEffect(() => {
     setSelectedSpotlightPlayerId(null);
     setViewingBombPotBoardIndex(0);
     setSelectedBombPotBoardIndex(null);
@@ -208,6 +229,14 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   }, [players, selectedSpotlightPlayerId]);
 
   const youPlayer = getViewerPlayer(players);
+  const handleOpenSeat = (seatIndex: number) => {
+    if (openSeatMode === "blocked") return;
+    if (openSeatMode === "change-seat") {
+      onChangeSeat?.(seatIndex);
+      return;
+    }
+    setSelectedEmptySeat(seatIndex);
+  };
   const showRunItVotingPanel = useTimedPanelVisibility({
     visible: phase === "voting",
     startedAt: votingStartedAt,
@@ -238,8 +267,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     Math.max(runCount, runResults.length, 1),
   );
 
-  const opponents = getOpponents(players);
-  const emptySeats = getEmptySeats(players, totalSeats);
   const seatedPlayerCount = players.filter((player) => player != null).length;
 
   const isYourTurn = isYourTurnProp ?? (youPlayer?.isCurrentActor ?? false);
@@ -466,18 +493,17 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       <div
         className="absolute inset-0 flex flex-col min-h-0"
         style={{
-          paddingTop: "calc(52px + env(safe-area-inset-top))",
-          paddingBottom: "env(safe-area-inset-bottom)",
+          paddingTop: getMobileHeaderHeight(),
+          paddingBottom: getMobileSafeAreaBottom(),
         }}
       >
         <div className="flex-shrink-0 pt-7">
           <OpponentStrip
-            players={opponents}
+            players={players}
             playerCount={seatedPlayerCount}
             dealerIndex={dealerIndex}
             smallBlindIndex={smallBlindIndex}
             bigBlindIndex={bigBlindIndex}
-            emptySeats={emptySeats}
             seatSelectionLocked={seatSelectionLocked}
             selectedSpotlightPlayerId={spotlightPlayerId}
             spotlightHoleCardEmphasisByIndex={spotlightHoleCardEmphasis}
@@ -485,14 +511,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             onShowdownPlayerTap={canInteractWithSpotlight
               ? (playerId) => setSelectedSpotlightPlayerId((current) => current === playerId ? null : playerId)
               : undefined}
-            onEmptySeatTap={(seatIndex) => {
-              if (seatSelectionLocked) return;
-              if (youPlayer) {
-                return;
-              } else {
-                setSelectedEmptySeat(seatIndex);
-              }
-            }}
+            onEmptySeatTap={handleOpenSeat}
           />
         </div>
 
@@ -677,8 +696,11 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       <AnimatePresence>
         {showRunItVotingPanel && (
           <motion.div
-            className="absolute inset-x-0 bottom-0 z-[185] pointer-events-none"
-            style={{ paddingBottom: "max(env(safe-area-inset-bottom), 12px)" }}
+            className="absolute inset-x-0 bottom-0 pointer-events-none"
+            style={{
+              zIndex: MOBILE_OVERLAY_Z.runItVote,
+              paddingBottom: `max(env(safe-area-inset-bottom), ${MOBILE_SHELL.defaultSheetInsetBottomPx - 4}px)`,
+            }}
             initial={{ opacity: 0, y: 36 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 24 }}
@@ -703,15 +725,19 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         {leaveConfirm && youPlayer && onStandUp && (
           <>
             <motion.div
-              className="overlay-scrim-strong absolute inset-0 z-[190]"
+              className="overlay-scrim-strong absolute inset-0"
+              style={{ zIndex: MOBILE_OVERLAY_Z.prioritySheetScrim }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setLeaveConfirm(false)}
             />
             <motion.div
-              className="elevated-surface-light absolute bottom-0 left-0 right-0 z-[195] rounded-t-2xl border-t px-4 pt-4"
-              style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)" }}
+              className="elevated-surface-light absolute bottom-0 left-0 right-0 rounded-t-2xl border-t px-4 pt-4"
+              style={{
+                zIndex: MOBILE_OVERLAY_Z.prioritySheet,
+                paddingBottom: getMobileSheetPaddingBottom(MOBILE_SHELL.raisedSheetInsetBottomPx),
+              }}
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -756,7 +782,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
       <AnimatePresence>
         {sevenTwoAnnouncement && (
-          <div className="absolute inset-0 flex items-start justify-center pt-[30%] z-[170] pointer-events-none">
+          <div
+            className="absolute inset-0 flex items-start justify-center pt-[30%] pointer-events-none"
+            style={{ zIndex: MOBILE_OVERLAY_Z.sevenTwoAnnouncement }}
+          >
             <div className="relative isolate px-4">
               <div className={mobileBannerHaloClass} />
               <div className="relative z-10">
@@ -774,7 +803,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
       <AnimatePresence>
         {runAnnouncement != null && (
-          <div className="absolute inset-0 flex items-center justify-center z-[175] pointer-events-none">
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ zIndex: MOBILE_OVERLAY_Z.runAnnouncement }}
+          >
             <div className="relative isolate px-4 w-full max-w-sm">
               <div className={mobileBannerHaloClass} />
               <div className="relative z-10">
@@ -790,7 +822,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
       <AnimatePresence>
         {showBombPotVotingPanel && bombPotVote && (
-          <div className="absolute inset-0 flex items-center justify-center z-[180] pointer-events-none">
+          <div
+            className="absolute inset-0 flex items-center justify-center pointer-events-none"
+            style={{ zIndex: MOBILE_OVERLAY_Z.bombPotVote }}
+          >
             <div className="pointer-events-auto relative isolate px-4 w-full max-w-xs">
               <div className={mobileBannerHaloClass} />
               <div className="relative z-10">
@@ -812,7 +847,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
       <AnimatePresence>
         {actionError && (
-          <div className="absolute inset-0 flex items-center justify-center pt-[12%] z-[179] pointer-events-none">
+          <div
+            className="absolute inset-0 flex items-center justify-center pt-[12%] pointer-events-none"
+            style={{ zIndex: MOBILE_OVERLAY_Z.actionError }}
+          >
             <div className="relative isolate px-4 w-full max-w-sm">
               <div className={mobileBannerHaloClass} />
               <div className="relative z-10">
@@ -832,7 +870,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
       <AnimatePresence>
         {bombPotAnnouncement && (
-          <div className="absolute inset-0 flex items-center justify-center pt-[20%] z-[178] pointer-events-none">
+          <div
+            className="absolute inset-0 flex items-center justify-center pt-[20%] pointer-events-none"
+            style={{ zIndex: MOBILE_OVERLAY_Z.bombPotAnnouncement }}
+          >
             <div className="relative isolate px-4 w-full max-w-sm">
               <div className={mobileBannerHaloClass} />
               <div className="relative z-10">
@@ -866,10 +907,30 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       </AnimatePresence>
 
       <AnimatePresence>
+        {showSeatManager && youPlayer && (
+          <SeatManager
+            playerName={youPlayer.name}
+            currentSeatIndex={youPlayer.seatIndex ?? 0}
+            currentStackCents={youPlayer.stack ?? 0}
+            bigBlindCents={blinds.big}
+            applyImmediately={phase === "waiting" || phase === "showdown"}
+            pendingUpdate={scene.viewerPendingBoundaryUpdate}
+            onSubmit={(update) => {
+              actions.onRequestBoundaryUpdate?.(update);
+              onDismissSeatManager?.();
+            }}
+            onCancelPending={actions.onCancelBoundaryUpdate}
+            onDismiss={onDismissSeatManager ?? (() => {})}
+            variant="sheet"
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {phase === "showdown" && !animatedRunIt && showWinnerBanner && winners && winners.length > 0 && (
           <motion.div
-            className="absolute z-[160] left-4 right-4 pointer-events-none"
-            style={{ bottom: "calc(env(safe-area-inset-bottom) + 180px)" }}
+            className="absolute left-4 right-4 pointer-events-none"
+            style={{ zIndex: MOBILE_OVERLAY_Z.winnerBanner, bottom: getMobileWinnerBannerBottom() }}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}

@@ -30,3 +30,24 @@ test("blocks seated players from using sit-down during active hands", () => {
     "blocked",
   );
 });
+
+test("allows seated players who are waiting for the big blind to switch to another open seat", () => {
+  assert.equal(
+    classifySitDownRequest({
+      phase: "turn",
+      myPlayerId: "me",
+      seatIndex: 4,
+      players: {
+        me: {
+          stack: 1200,
+          seatIndex: 1,
+          hasCards: false,
+          currentBet: 0,
+          totalContribution: 0,
+          sitOutUntilBB: true,
+        },
+      },
+    }),
+    "change-seat",
+  );
+});

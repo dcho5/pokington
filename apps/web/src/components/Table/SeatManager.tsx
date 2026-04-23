@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
-import { motion } from "framer-motion";
 import { getBuyInPresets } from "constants/game";
 import { formatCents } from "lib/formatCents";
+import MobileBottomSheet from "./mobile/MobileBottomSheet";
+import DesktopTableDialog from "./DesktopTableDialog";
 
 interface SeatManagerProps {
   playerName: string;
@@ -48,6 +49,7 @@ export default function SeatManager({
   variant = "dialog",
 }: SeatManagerProps) {
   const presets = getBuyInPresets(bigBlindCents);
+  const isDesktopDialog = variant === "dialog";
   const [amount, setAmount] = useState(presets[1]?.dollars.toFixed(2) ?? "0.00");
 
   const parsedCents = Math.round((Number.parseFloat(amount || "0") || 0) * 100);
@@ -59,22 +61,29 @@ export default function SeatManager({
 
   const body = (
     <div className="surface-content">
-      <div className="mb-5 text-center">
-        <p className="text-lg font-black text-white">{playerName}</p>
-        <p className="text-sm text-gray-400">
+      <div className={`text-center ${isDesktopDialog ? "mb-7" : "mb-5"}`}>
+        {isDesktopDialog && (
+          <p className="text-[13px] font-black uppercase tracking-[0.28em] text-gray-500 dark:text-gray-400">
+            Add Chips
+          </p>
+        )}
+        <p className={`${isDesktopDialog ? "mt-3 text-[2rem]" : "text-lg"} font-black text-gray-900 dark:text-white`}>
+          {playerName}
+        </p>
+        <p className={`${isDesktopDialog ? "mt-2 text-[17px] leading-7" : "text-sm"} text-gray-600 dark:text-gray-400`}>
           Seat {currentSeatIndex + 1} · Stack {formatCents(currentStackCents)}
         </p>
       </div>
 
       {pendingCopy && (
-        <div className="mb-4 rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-          <p className="font-bold uppercase tracking-[0.18em] text-[10px] text-amber-300">Queued Update</p>
+        <div className={`mb-5 rounded-[24px] border border-amber-500/30 bg-amber-500/10 ${isDesktopDialog ? "px-5 py-4 text-base" : "px-4 py-3 text-sm"} text-amber-900 dark:text-amber-100`}>
+          <p className={`font-bold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-300 ${isDesktopDialog ? "text-[11px]" : "text-[10px]"}`}>Queued Update</p>
           <p className="mt-1">{pendingCopy}</p>
           {onCancelPending && (
             <button
               type="button"
               onClick={onCancelPending}
-              className="mt-3 rounded-xl border border-amber-400/30 px-3 py-2 text-xs font-bold text-amber-200 hover:bg-amber-500/10"
+              className={`mt-3 rounded-xl border border-amber-400/30 px-3 py-2 font-bold text-amber-700 hover:bg-amber-500/10 dark:text-amber-200 ${isDesktopDialog ? "text-sm" : "text-xs"}`}
             >
               Cancel Pending Update
             </button>
@@ -82,10 +91,10 @@ export default function SeatManager({
         </div>
       )}
 
-      <label className="mb-2 block text-xs font-black uppercase tracking-widest text-gray-500">
-        Buy-In
+      <label className={`mb-2 block font-black uppercase tracking-widest text-gray-500 dark:text-gray-400 ${isDesktopDialog ? "text-[13px]" : "text-xs"}`}>
+        Buy-In Amount
       </label>
-      <div className="mb-3 flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${isDesktopDialog ? "mb-4" : "mb-3"}`}>
         <span className="font-bold text-gray-500">$</span>
         <input
           type="text"
@@ -95,10 +104,12 @@ export default function SeatManager({
             const next = event.target.value;
             if (/^\d*\.?\d{0,2}$/.test(next)) setAmount(next);
           }}
-          className="h-12 flex-1 rounded-xl border border-gray-700 bg-gray-900 px-4 text-lg font-mono font-bold text-white outline-none focus:ring-2 focus:ring-red-500/40"
+          className={`flex-1 rounded-xl border border-gray-300 bg-gray-100 px-4 font-mono font-bold text-gray-900 outline-none focus:ring-2 focus:ring-red-500/40 dark:border-gray-700 dark:bg-gray-800 dark:text-white ${
+            isDesktopDialog ? "h-16 px-5 text-[1.45rem]" : "h-12 text-lg"
+          }`}
         />
       </div>
-      <div className="mb-4 flex gap-2">
+      <div className={`flex gap-2 ${isDesktopDialog ? "mb-7" : "mb-4"}`}>
         {presets.map((preset) => {
           const presetValue = preset.dollars.toFixed(2);
           const selected = amount === presetValue;
@@ -107,11 +118,11 @@ export default function SeatManager({
               key={preset.label}
               type="button"
               onClick={() => setAmount(presetValue)}
-              className={`flex-1 rounded-xl border px-2 py-2 text-sm font-bold transition-colors ${
+              className={`flex-1 rounded-xl border font-bold transition-colors ${
                 selected
-                  ? "border-red-500/30 bg-red-500/10 text-red-300"
-                  : "border-gray-700 bg-gray-800 text-gray-300 hover:bg-gray-700"
-              }`}
+                  ? "border-red-500/30 bg-red-500/10 text-red-500 dark:text-red-300"
+                  : "border-gray-200 bg-gray-100 text-gray-600 hover:bg-gray-200 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+              } ${isDesktopDialog ? "px-2 py-3 text-base" : "px-2 py-2 text-sm"}`}
             >
               ${preset.dollars % 1 === 0 ? preset.dollars.toFixed(0) : preset.dollars.toFixed(2)}
             </button>
@@ -123,7 +134,9 @@ export default function SeatManager({
         <button
           type="button"
           onClick={onDismiss}
-          className="flex-1 rounded-2xl border border-gray-700 bg-gray-800 px-4 py-4 text-sm font-bold text-gray-100"
+          className={`flex-1 rounded-2xl border border-gray-200 bg-gray-100 font-bold text-gray-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 ${
+            isDesktopDialog ? "px-4 py-4 text-lg" : "px-4 py-4 text-sm"
+          }`}
         >
           Cancel
         </button>
@@ -131,7 +144,9 @@ export default function SeatManager({
           type="button"
           disabled={!canSubmit}
           onClick={() => onSubmit({ chipDelta })}
-          className="flex-1 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 px-4 py-4 text-sm font-black text-white disabled:opacity-40"
+          className={`flex-1 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 font-black text-white disabled:opacity-40 ${
+            isDesktopDialog ? "px-4 py-4 text-lg shadow-[0_0_20px_rgba(239,68,68,0.35)]" : "px-4 py-4 text-sm"
+          }`}
         >
           {submitLabel}
         </button>
@@ -141,49 +156,19 @@ export default function SeatManager({
 
   if (variant === "sheet") {
     return (
-      <>
-        <motion.div
-          className="overlay-scrim-strong absolute inset-0 z-40"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onDismiss}
-        />
-        <motion.div
-          className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl border-t border-white/10 bg-[rgba(3,7,18,0.96)] px-4 pt-4"
-          style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
-          initial={{ y: "100%" }}
-          animate={{ y: 0 }}
-          exit={{ y: "100%" }}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-        >
-          <div className="mb-5 h-1 w-10 rounded-full bg-gray-700 mx-auto" />
-          {body}
-        </motion.div>
-      </>
+      <MobileBottomSheet
+        onDismiss={onDismiss}
+        className="border-t border-white/10 bg-[rgba(3,7,18,0.96)] px-4 pt-4"
+        handleClassName="bg-gray-700"
+      >
+        {body}
+      </MobileBottomSheet>
     );
   }
 
   return (
-    <>
-      <motion.div
-        className="overlay-scrim-strong absolute inset-0 z-40"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onDismiss}
-      />
-      <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-none">
-        <motion.div
-          className="elevated-surface-dark w-full max-w-md rounded-2xl border p-6 pointer-events-auto"
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ type: "spring", stiffness: 400, damping: 30 }}
-        >
-          {body}
-        </motion.div>
-      </div>
-    </>
+    <DesktopTableDialog onDismiss={onDismiss}>
+      {body}
+    </DesktopTableDialog>
   );
 }

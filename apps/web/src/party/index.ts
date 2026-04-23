@@ -771,10 +771,7 @@ export default class PokerRoom implements Party.Server {
         this.onSeatBuyIn(seatedPlayer.id, seatedPlayer.name, seatedPlayer.stack, seatedPlayer.stack);
       }
     }
-    if (
-      enriched.type === "REQUEST_BOUNDARY_UPDATE" &&
-      (this.gameState.phase === "waiting" || this.gameState.phase === "showdown")
-    ) {
+    if (enriched.type === "REQUEST_BOUNDARY_UPDATE") {
       this.recordBoundaryTransition({
         playerId: enriched.playerId,
         beforePlayer: prevState.players[enriched.playerId] ?? null,

@@ -158,6 +158,27 @@ test("mid-hand boundary updates are queued instead of changing the live hand sta
   });
 });
 
+test("mid-hand entrants who are still waiting for the big blind can change seats immediately", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "TAKE_SEAT", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
+  state = gameReducer(state, { type: "TAKE_SEAT", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
+  state = gameReducer(state, { type: "START_HAND" });
+  state = gameReducer(state, { type: "TAKE_SEAT", playerId: "c", name: "C", seatIndex: 2, buyIn: 1000 });
+
+  const next = gameReducer(state, {
+    type: "REQUEST_BOUNDARY_UPDATE",
+    playerId: "c",
+    leaveSeat: false,
+    moveToSeatIndex: 4,
+    chipDelta: 0,
+  });
+
+  assert.equal(next.players.c.seatIndex, 4);
+  assert.equal(next.pendingBoundaryUpdates.c, undefined);
+  assert.equal(next.players.c.sitOutUntilBB, true);
+  assert.equal(next.players.c.holeCards, null);
+});
+
 test("waiting-room seat changes move the player without changing stack or identity", () => {
   let state = createInitialState("table", { small: 25, big: 50 });
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1300 });

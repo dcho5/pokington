@@ -47,7 +47,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
   onOpenSeatManager,
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
-  const cardHeight = 100;
+  const cardHeight = 115;
   const autoPeelEnabled = useGameStore((state) => state.autoPeelEnabled);
   const setAutoPeelEnabled = useGameStore((state) => state.setAutoPeelEnabled);
 
@@ -70,7 +70,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
 
         {/* Left: player identity + auto-flip toggle */}
         <div
-          className={`flex-1 min-w-0 flex flex-col justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2 py-2 ${
+          className={`flex-1 min-w-0 flex flex-col justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2.5 py-2.5 ${
             onOpenSeatManager ? "cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/90" : ""
           }`}
           onClick={onOpenSeatManager}
@@ -85,27 +85,28 @@ const HandPanel: React.FC<HandPanelProps> = ({
               }
             : undefined}
         >
-          {/* Top: avatar + YOU + name */}
-          <div className="flex items-start justify-between gap-1.5">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <div
-                className="rounded-full flex items-center justify-center flex-shrink-0 w-7 h-7"
-                style={{ backgroundColor: avatarColor }}
-              >
-                <span className="font-black text-white select-none text-[9px]">{initials}</span>
-              </div>
-              <div className="min-w-0">
-                <span className="text-[8px] bg-red-100 dark:bg-red-900/30 text-red-600 px-1 py-0.5 rounded font-black uppercase">
-                  You
-                </span>
-                <div className="text-[10px] font-bold text-gray-900 dark:text-white truncate mt-0.5">
-                  {player.name}
-                </div>
-              </div>
-            </div>
+          <div className="flex items-start justify-between gap-2">
+            <span className="inline-flex w-fit self-center text-[9px] bg-red-100 dark:bg-red-900/30 text-red-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wide">
+              You
+            </span>
             {runItOddsPercentage != null && (
               <RunItOddsBadge percentage={runItOddsPercentage} compact className="flex-shrink-0" />
             )}
+          </div>
+
+          <div className="flex items-center justify-center min-w-0 flex-1 pt-1">
+            <div
+              className="rounded-full flex items-center justify-center flex-shrink-0 w-9 h-9"
+              style={{ backgroundColor: avatarColor }}
+            >
+              <span className="font-black text-white select-none text-[11px]">{initials}</span>
+            </div>
+          </div>
+
+          <div className="min-w-0 pb-1 text-center">
+            <div className="text-[12px] font-bold text-gray-900 dark:text-white truncate leading-tight">
+              {player.name}
+            </div>
           </div>
 
           {/* Bottom: auto-flip toggle */}
@@ -115,7 +116,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
                 event.stopPropagation();
                 setAutoPeelEnabled(!autoPeelEnabled);
               }}
-              className={`flex-1 flex items-center justify-center gap-1 rounded-lg font-black uppercase tracking-wide transition-colors py-1 text-[8px] ${
+              className={`flex-1 flex items-center justify-center gap-1 rounded-lg font-black uppercase tracking-wide transition-colors py-1.5 text-[9px] ${
                 autoPeelEnabled
                   ? "bg-red-500 text-white"
                   : "bg-gray-100 dark:bg-white/[0.07] text-gray-500 dark:text-gray-300"
@@ -154,28 +155,28 @@ const HandPanel: React.FC<HandPanelProps> = ({
         </div>
 
         {/* Right: hand strength + bet + stack */}
-        <div className="flex-1 min-w-0 flex flex-col items-center justify-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2 py-2.5 gap-1.5">
+        <div className="flex-1 min-w-0 flex flex-col items-center justify-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2.5 py-3 gap-2">
           {holeCards && (
             <div className="text-center max-w-full">
-              <div className="text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">
+              <div className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">
                 {activeHandIndicator?.title ?? "Hand"}
               </div>
-              <div className={`text-[11px] font-black ${bothRevealed ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}>
+              <div className={`text-xs font-black ${bothRevealed ? "text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}>
                 {bothRevealed ? (activeHandIndicator?.label ?? "--") : "--"}
               </div>
             </div>
           )}
           {currentBet > 0 && (
             <div className="text-center">
-              <div className="text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">Bet</div>
+              <div className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">Bet</div>
               <div className="font-mono font-black px-1.5 py-[1px] rounded-full bg-yellow-400 text-black text-xs">
                 {formatCents(currentBet)}
               </div>
             </div>
           )}
           <div className="text-center">
-            <div className="text-[9px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">Stack</div>
-            <div className="font-mono font-black text-gray-900 dark:text-white text-xs">
+            <div className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">Stack</div>
+            <div className="font-mono font-black text-gray-900 dark:text-white text-sm">
               {formatCents(player.stack)}
             </div>
           </div>

@@ -17,6 +17,7 @@ interface PlayerBubbleProps {
   isSmallBlind?: boolean;
   isBigBlind?: boolean;
   emptySeatIndex?: number;
+  isViewerSeatPlaceholder?: boolean;
   seatSelectionLocked?: boolean;
   onEmptyTap?: () => void;
   showdownSpotlightSelected?: boolean;
@@ -32,6 +33,7 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   isSmallBlind = false,
   isBigBlind = false,
   emptySeatIndex,
+  isViewerSeatPlaceholder = false,
   seatSelectionLocked = false,
   onEmptyTap,
   showdownSpotlightSelected = false,
@@ -52,6 +54,48 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
     avatarBounce.start({ scale: [1, 1.12, 0.95, 1.04, 1], transition: { duration: 0.45 } });
   }, [avatarBounce, player?.winAnimationKey, player?.winType]);
 
+  if (isViewerSeatPlaceholder) {
+    return (
+      <div
+        className="flex flex-col items-center gap-0.5 px-0.5"
+        style={{ minWidth }}
+        aria-label={`You are seated in seat ${(emptySeatIndex ?? 0) + 1}`}
+      >
+        <div className="relative">
+          <div
+            className="relative flex items-center justify-center rounded-full border"
+            style={{
+              width: avatarSize,
+              height: avatarSize,
+              borderColor: "rgba(244, 114, 182, 0.34)",
+              background: "linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(253,242,248,0.96) 100%)",
+              boxShadow: "0 10px 24px rgba(190,24,93,0.12)",
+            }}
+          >
+            <span
+              className="absolute inset-[4px] rounded-full border"
+              style={{ borderColor: "rgba(244, 114, 182, 0.18)" }}
+            />
+            <span className="text-[9px] font-black uppercase tracking-[0.18em] text-rose-600">
+              You
+            </span>
+          </div>
+          <PlayerPositionMarkers
+            isDealer={isDealer}
+            isSmallBlind={isSmallBlind}
+            isBigBlind={isBigBlind}
+            playerCount={playerCount}
+            variant="mobile"
+          />
+        </div>
+        <span className="text-[9px] font-semibold leading-tight text-rose-500 dark:text-rose-300">
+          Seat {(emptySeatIndex ?? 0) + 1}
+        </span>
+        <div className="h-2" />
+      </div>
+    );
+  }
+
   if (!player) {
     return (
       <motion.button
@@ -59,10 +103,10 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
         disabled={seatSelectionLocked}
         className={`flex flex-col items-center gap-0.5 px-0.5 ${seatSelectionLocked ? "opacity-55" : ""}`}
         style={{ minWidth }}
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.25 } }}
-        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+        layout="position"
+        initial={false}
+        animate={{ opacity: seatSelectionLocked ? 0.55 : 1 }}
+        transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.7 }}
         whileTap={seatSelectionLocked ? undefined : { scale: 0.95 }}
         onClick={seatSelectionLocked ? undefined : onEmptyTap}
         aria-disabled={seatSelectionLocked}
@@ -108,10 +152,10 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
     <motion.div
       className={`flex flex-col items-center gap-0.5 px-0.5 relative ${showdownSpotlightSelected ? "z-20" : ""}`}
       style={{ minWidth }}
-      initial={{ scale: 0 }}
+      layout="position"
+      initial={false}
       animate={{ scale: 1, opacity: isFolded ? 0.35 : isAway ? 0.55 : 1 }}
-      exit={{ scale: 0.8, opacity: 0, transition: { duration: 0.25 } }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+      transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.7 }}
       aria-label={`${player.name}, stack ${formatCents(player.stack)}`}
     >
       {/* Showdown: face-up cards peek over the avatar from behind (z-0) */}

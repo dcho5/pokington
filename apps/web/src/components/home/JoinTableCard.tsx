@@ -44,6 +44,9 @@ const JoinTableCard = ({
         placeholder="Enter table code"
         value={tableCode}
         onChange={(e) => setTableCode(e.target.value.toUpperCase())}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !isJoining) onJoin();
+        }}
       />
 
       <button

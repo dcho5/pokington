@@ -35,6 +35,7 @@ export function useTableActions(_code: string): TableActions {
 
   return {
     onSitDown,
+    onChangeSeat: (seatIndex) => useGameStore.getState().changeSeat(seatIndex),
     onRequestBoundaryUpdate: (update) => useGameStore.getState().requestBoundaryUpdate(update),
     onCancelBoundaryUpdate: () => useGameStore.getState().cancelBoundaryUpdate(),
     onStandUp: () => useGameStore.getState().standUp(),

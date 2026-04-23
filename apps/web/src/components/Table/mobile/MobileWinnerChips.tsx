@@ -10,6 +10,7 @@ import {
   buildWinnerChipLandingEvents,
 } from "lib/tableFeedback.mjs";
 import type { WinnerInfo } from "@pokington/engine";
+import { getMobileSeatStripViewportPoint } from "lib/mobileSeatStripLayout.mjs";
 
 interface WinnerChipMotion {
   winner: WinnerInfo;
@@ -38,8 +39,6 @@ const buildWinnerChipLandingEventsTyped = buildWinnerChipLandingEvents as (optio
 // Approximate viewport fractions for each layout zone
 const POT_X_FRAC = 0.50;   // center of screen horizontally
 const POT_Y_FRAC = 0.38;   // roughly center of the CommunityCards zone
-const OPP_Y_FRAC = 0.14;   // OpponentStrip row 1 center (accounts for extra pt-7 padding)
-const OPP_ROW2_Y_FRAC = 0.24; // OpponentStrip row 2 center
 const YOU_Y_FRAC = 0.76;   // HandPanel / viewer area
 
 interface MobileWinnerChipsProps {
@@ -66,42 +65,13 @@ export const MobileWinnerChips: React.FC<MobileWinnerChipsProps> = ({
   const potPxY = vpH * POT_Y_FRAC;
   const emitVisualFeedback = useTableVisualFeedback();
 
-  // Seated non-null players
   const seated = players.filter((p): p is NonNullable<typeof p> => p != null);
-
-  // Build all non-viewer columns (occupied + empty) sorted by seatIndex —
-  // mirrors the merged items list that OpponentStrip uses for column assignment.
-  const allNonViewerCols = players
-    .map((p, i) => ({ seatIndex: i, id: p?.id ?? null, isViewer: p?.isYou ?? false }))
-    .filter((item) => !item.isViewer)
-    .sort((a, b) => a.seatIndex - b.seatIndex);
 
   function getPlayerPx(playerId: string): { x: number; y: number } | null {
     const p = seated.find((s) => s.id === playerId);
     if (!p) return null;
     if (p.isYou) return { x: vpW * 0.5, y: vpH * YOU_Y_FRAC };
-
-    // Row 1: first 5 columns
-    const row1 = allNonViewerCols.slice(0, 5);
-    const col = row1.findIndex((item) => item.id === playerId);
-    if (col >= 0) {
-      return { x: vpW * ((col + 0.5) / 5), y: vpH * OPP_Y_FRAC };
-    }
-
-    // Row 2: left half (cols 0–1), gap (col 2 = viewer gap), right half (cols 3–4)
-    const row2 = allNonViewerCols.slice(5);
-    const row2Left = row2.slice(0, Math.ceil(row2.length / 2));
-    const row2Right = row2.slice(Math.ceil(row2.length / 2));
-    const colLeft = row2Left.findIndex((item) => item.id === playerId);
-    if (colLeft >= 0) {
-      return { x: vpW * ((colLeft + 0.5) / 5), y: vpH * OPP_ROW2_Y_FRAC };
-    }
-    const colRight = row2Right.findIndex((item) => item.id === playerId);
-    if (colRight >= 0) {
-      return { x: vpW * ((colRight + 3 + 0.5) / 5), y: vpH * OPP_ROW2_Y_FRAC };
-    }
-
-    return null;
+    return getMobileSeatStripViewportPoint(p.seatIndex, vpW, vpH);
   }
 
   const chips = buildWinnerChipFeedbackPlanTyped({

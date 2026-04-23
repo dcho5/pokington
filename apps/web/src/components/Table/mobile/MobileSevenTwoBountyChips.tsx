@@ -2,12 +2,12 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCents } from "lib/formatCents";
+import { getMobileSeatStripViewportPoint } from "lib/mobileSeatStripLayout.mjs";
 
 const CHIP_DURATION_S = 1.8;
 
 const POT_X_FRAC = 0.50;
 const POT_Y_FRAC = 0.38;
-const OPP_Y_FRAC = 0.12;
 const YOU_Y_FRAC = 0.76;
 
 interface MobileSevenTwoBountyChipsProps {
@@ -27,17 +27,12 @@ export const MobileSevenTwoBountyChips: React.FC<MobileSevenTwoBountyChipsProps>
   const vpH = typeof window !== "undefined" ? window.innerHeight : 844;
 
   const seated = players.filter((p): p is NonNullable<typeof p> => p != null);
-  const opponents = seated.filter((p) => !p.isYou).sort((a, b) => a.seatIndex - b.seatIndex);
 
   function getPlayerPx(playerId: string): { x: number; y: number } | null {
     const p = seated.find((s) => s.id === playerId);
     if (!p) return null;
     if (p.isYou) return { x: vpW * 0.5, y: vpH * YOU_Y_FRAC };
-    const idx = opponents.findIndex((o) => o.id === playerId);
-    if (idx < 0) return null;
-    const col = idx % 5;
-    const x = vpW * ((col + 0.5) / 5);
-    return { x, y: vpH * OPP_Y_FRAC };
+    return getMobileSeatStripViewportPoint(p.seatIndex, vpW, vpH);
   }
 
   const winnerPos = getPlayerPx(winnerId);

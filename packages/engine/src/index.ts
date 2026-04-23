@@ -4,6 +4,10 @@ export { createDeck, shuffle } from "./deck";
 export { deriveFeedbackFromTransition } from "./feedback";
 export { shouldQueueLeave } from "./leaveQueue";
 export {
+  canApplySeatingUpdateImmediately,
+  isCommittedToCurrentHand,
+} from "./seating";
+export {
   ANNOUNCE_DELAY_MS,
   ANNOUNCE_DELAY_S,
   CHIP_DURATION_S,
@@ -51,3 +55,4 @@ export type {
   GameFeedbackTransitionContext,
 } from "./feedback";
 export type { LeaveQueueState } from "./leaveQueue";
+export type { SeatUpdateState } from "./seating";

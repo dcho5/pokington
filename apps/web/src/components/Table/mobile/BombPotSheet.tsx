@@ -2,6 +2,11 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { formatCents } from "lib/formatCents";
+import {
+  MOBILE_OVERLAY_Z,
+  MOBILE_SHELL,
+  getMobileSheetPaddingBottom,
+} from "lib/mobileShell.mjs";
 import type { BombPotAnteBB } from "@pokington/engine";
 import { BOMB_POT_ANTE_BB_VALUES } from "constants/game";
 
@@ -16,7 +21,8 @@ const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBl
   return (
     <>
       <motion.div
-        className="overlay-scrim-strong absolute inset-0 z-[180]"
+        className="overlay-scrim-strong absolute inset-0"
+        style={{ zIndex: MOBILE_OVERLAY_Z.bombPotVote }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -24,8 +30,11 @@ const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBl
       />
 
       <motion.div
-        className="elevated-surface-dark absolute bottom-0 left-0 right-0 z-[190] rounded-t-[2rem] border-t px-4 pt-4"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 22px)" }}
+        className="elevated-surface-dark absolute bottom-0 left-0 right-0 rounded-t-[2rem] border-t px-4 pt-4"
+        style={{
+          zIndex: MOBILE_OVERLAY_Z.prioritySheetScrim,
+          paddingBottom: getMobileSheetPaddingBottom(MOBILE_SHELL.wideSheetInsetBottomPx),
+        }}
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
@@ -33,7 +42,7 @@ const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBl
         drag="y"
         dragConstraints={{ top: 0 }}
         onDragEnd={(_event: unknown, info: { offset: { y: number } }) => {
-          if (info.offset.y > 80) onDismiss();
+          if (info.offset.y > MOBILE_SHELL.sheetDismissOffsetPx) onDismiss();
         }}
       >
         <div className="surface-content">

@@ -2,6 +2,11 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCents } from "lib/formatCents";
+import {
+  MOBILE_OVERLAY_Z,
+  MOBILE_SHELL,
+  getMobileSheetPaddingBottom,
+} from "lib/mobileShell.mjs";
 import { useRaiseAmount } from "hooks/useRaiseAmount";
 
 interface RaiseSheetProps {
@@ -33,7 +38,8 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
   return (
     <>
       <motion.div
-        className="overlay-scrim-strong absolute inset-0 z-40"
+        className="overlay-scrim-strong absolute inset-0"
+        style={{ zIndex: MOBILE_OVERLAY_Z.sheetScrim }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
@@ -41,10 +47,13 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
       />
 
       <motion.div
-        className="absolute bottom-0 left-0 right-0 z-50 rounded-t-3xl
+        className="absolute bottom-0 left-0 right-0 rounded-t-3xl
           elevated-surface-light border-t
           px-4 pt-4"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}
+        style={{
+          zIndex: MOBILE_OVERLAY_Z.sheet,
+          paddingBottom: getMobileSheetPaddingBottom(),
+        }}
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
@@ -52,7 +61,7 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
         drag="y"
         dragConstraints={{ top: 0 }}
         onDragEnd={(_event: unknown, info: { offset: { y: number } }) => {
-          if (info.offset.y > 80) onDismiss();
+          if (info.offset.y > MOBILE_SHELL.sheetDismissOffsetPx) onDismiss();
         }}
       >
         <div className="surface-content">
@@ -143,14 +152,16 @@ function FoldConfirmSheet({ onConfirm, onDismiss }: { onConfirm: () => void; onD
   return (
     <>
       <motion.div
-        className="overlay-scrim-strong absolute inset-0 z-40"
+        className="overlay-scrim-strong absolute inset-0"
+        style={{ zIndex: MOBILE_OVERLAY_Z.sheetScrim }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onDismiss}
       />
       <motion.div
-        className="elevated-surface-light absolute bottom-0 left-0 right-0 z-50 rounded-t-2xl border-t px-4 pt-4 pb-6"
+        className="elevated-surface-light absolute bottom-0 left-0 right-0 rounded-t-2xl border-t px-4 pt-4 pb-6"
+        style={{ zIndex: MOBILE_OVERLAY_Z.sheet }}
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}

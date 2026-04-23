@@ -133,6 +133,8 @@ test("live-hand scene keeps tabling available even when it is not the viewer's t
 
   assert.equal(scene.layout.isYourTurn, false);
   assert.equal(scene.layout.canShowCards, true);
+  assert.equal(scene.layout.openSeatMode, "blocked");
+  assert.equal(scene.layout.seatSelectionLocked, true);
 });
 
 test("new mid-hand entrants who are still sitting out can leave immediately", () => {
@@ -155,6 +157,8 @@ test("new mid-hand entrants who are still sitting out can leave immediately", ()
   });
 
   assert.equal(scene.layout.mustQueueLeave, false);
+  assert.equal(scene.layout.openSeatMode, "change-seat");
+  assert.equal(scene.layout.seatSelectionLocked, false);
 });
 
 test("folded viewers with prior contribution still must queue leave", () => {

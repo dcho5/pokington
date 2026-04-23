@@ -6,7 +6,7 @@ import {
 } from "../../lib/tableVisualState.mjs";
 import { canPlayerTableOwnHand } from "../../lib/tableHandRules.mjs";
 
-const { evaluateBest, shouldQueueLeave } = enginePkg;
+const { evaluateBest, shouldQueueLeave, canApplySeatingUpdateImmediately } = enginePkg;
 
 const TOTAL_SEATS = 10;
 
@@ -256,6 +256,24 @@ function describePendingBoundaryUpdate(update) {
   return "Seat update queued for next hand";
 }
 
+function getOpenSeatMode(gameState, viewingPlayer) {
+  if (!viewingPlayer?.id) return "sit-down";
+
+  const viewer = gameState.players?.[viewingPlayer.id];
+  if (!viewer) return "sit-down";
+  if (gameState.phase === "waiting" || gameState.phase === "showdown") return "change-seat";
+
+  return canApplySeatingUpdateImmediately({
+    phase: gameState.phase,
+    hasCards: viewer.holeCards !== null,
+    currentBet: viewer.currentBet ?? 0,
+    totalContribution: viewer.totalContribution ?? 0,
+    sitOutUntilBB: viewer.sitOutUntilBB ?? false,
+  })
+    ? "change-seat"
+    : "blocked";
+}
+
 export function deriveTableScene({
   gameState,
   timingFlags = {},
@@ -423,7 +441,8 @@ export function deriveTableScene({
         return liveLabel ? [{ id: "single", title: "Hand", label: liveLabel }] : [];
       })();
 
-  const seatSelectionLocked = false;
+  const openSeatMode = getOpenSeatMode(gameState, viewingPlayer);
+  const seatSelectionLocked = openSeatMode === "blocked";
   const showBlockingConnectionOverlay = !isFirstStateReceived;
   const blockingConnectionTitle =
     connectionStatus === "disconnected" ? "Reconnecting table" : "Loading table";
@@ -444,6 +463,7 @@ export function deriveTableScene({
     viewingPlayer: displayViewingPlayer,
     layout: {
       seatSelectionLocked,
+      openSeatMode,
       players: displayPlayers,
       dealerIndex: gameState.dealerSeatIndex,
       tableName: gameState.tableName,

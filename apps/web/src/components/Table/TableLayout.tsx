@@ -2,6 +2,7 @@
 
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { useIsMobileLayout } from "hooks/useIsMobileLayout";
+import { getMobileViewportMaxWidth } from "lib/mobileShell.mjs";
 import type { TableActions, TableSceneModel } from "./tableScene";
 import MobileTableLayout from "./mobile/MobileTableLayout";
 import DesktopTableLayout from "./desktop/DesktopTableLayout";
@@ -9,6 +10,8 @@ import DesktopTableLayout from "./desktop/DesktopTableLayout";
 export interface TableLayoutProps {
   scene: TableSceneModel["layout"];
   actions: TableActions;
+  showSeatManager?: boolean;
+  onDismissSeatManager?: () => void;
 }
 
 const TOTAL_SEATS = 10;
@@ -19,7 +22,12 @@ const TOTAL_SEATS = 10;
 const DESKTOP_REF_W = 2560;
 const DESKTOP_REF_H = 1440;  // 2560 × 9/16
 
-const TableLayout: React.FC<TableLayoutProps> = ({ scene, actions }) => {
+const TableLayout: React.FC<TableLayoutProps> = ({
+  scene,
+  actions,
+  showSeatManager = false,
+  onDismissSeatManager,
+}) => {
   const isMobileLayout = useIsMobileLayout();
   const [desktopScale, setDesktopScale] = useState(1);
   // Desktop-only: scale wrapper refs + ResizeObserver
@@ -55,9 +63,15 @@ const TableLayout: React.FC<TableLayoutProps> = ({ scene, actions }) => {
         {/* Inner container: minimum 10:16 aspect (portrait 16:10). Stretches taller on narrow phones. */}
         <div
           className="relative w-full h-full overflow-hidden"
-          style={{ maxWidth: "calc(100dvh * 10 / 16)" }}
+          style={{ maxWidth: getMobileViewportMaxWidth() }}
         >
-          <MobileTableLayout scene={scene} actions={actions} totalSeats={TOTAL_SEATS} />
+          <MobileTableLayout
+            scene={scene}
+            actions={actions}
+            totalSeats={TOTAL_SEATS}
+            showSeatManager={showSeatManager}
+            onDismissSeatManager={onDismissSeatManager}
+          />
         </div>
       </div>
     );
@@ -83,7 +97,13 @@ const TableLayout: React.FC<TableLayoutProps> = ({ scene, actions }) => {
             ["--desktop-scale" as string]: `${desktopScale}`,
           }}
         >
-          <DesktopTableLayout scene={scene} actions={actions} desktopScale={desktopScale} />
+          <DesktopTableLayout
+            scene={scene}
+            actions={actions}
+            desktopScale={desktopScale}
+            showSeatManager={showSeatManager}
+            onDismissSeatManager={onDismissSeatManager}
+          />
         </div>
       </div>
     </div>

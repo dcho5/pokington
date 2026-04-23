@@ -1,21 +1,15 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence } from "framer-motion";
+import React, { useEffect, useMemo } from "react";
 import { TableFeedbackProvider } from "components/Table/FeedbackCoordinator";
 import TableLayout from "components/Table/TableLayout";
-import SitDownForm from "components/Table/SitDownForm";
-import SeatManager from "components/Table/SeatManager";
 import { useGameStore } from "store/useGameStore";
-import { useIsMobileLayout } from "hooks/useIsMobileLayout";
 import { useTableActions } from "hooks/useTableActions";
 import { useTableSceneModel } from "hooks/useTableSceneModel";
 
 export default function TablePageClient({ code }: { code: string }) {
   // This component owns connection lifecycle only. No scene derivation belongs here.
 
-  const isMobileLayout = useIsMobileLayout();
-  const [selectedSeat, setSelectedSeat] = useState<number | null>(null);
   const scene = useTableSceneModel(code);
   const actions = useTableActions(code);
 
@@ -24,49 +18,15 @@ export default function TablePageClient({ code }: { code: string }) {
     return () => useGameStore.getState().disconnect();
   }, [code]);
 
-  const handleLayoutSitDown = useCallback(
-    (seatIndex: number, name?: string, buyInCents?: number) => {
-      if (name != null && buyInCents != null) {
-        actions.onSitDown(seatIndex, name, buyInCents);
-        return;
-      }
-
-      if (scene.viewingPlayer) {
-        return;
-      }
-
-      setSelectedSeat(seatIndex);
-    },
-    [actions, scene.viewingPlayer],
-  );
-
-  const handleConfirmSitDown = useCallback(
-    (name: string, buyInCents: number) => {
-      if (selectedSeat === null) return;
-      actions.onSitDown(selectedSeat, name, buyInCents);
-      setSelectedSeat(null);
-    },
-    [actions, selectedSeat],
-  );
-
-  const handleSeatManagerSubmit = useCallback(
-    (update: { leaveSeat?: boolean; moveToSeatIndex?: number | null; chipDelta?: number }) => {
-      actions.onRequestBoundaryUpdate?.(update);
-      scene.dismissSeatManager?.();
-    },
-    [actions, scene.dismissSeatManager],
-  );
-
   const tableActions = useMemo(
     () => ({
       ...actions,
-      onSitDown: handleLayoutSitDown,
       onOpenSeatManager: () => scene.openSeatManager?.(),
       onStandUp: scene.viewingPlayer ? actions.onStandUp : undefined,
       onQueueLeave: scene.viewingPlayer ? actions.onQueueLeave : undefined,
       onCancelBoundaryUpdate: scene.viewingPlayer ? actions.onCancelBoundaryUpdate : undefined,
     }),
-    [actions, handleLayoutSitDown, scene.openSeatManager, scene.viewingPlayer],
+    [actions, scene.openSeatManager, scene.viewingPlayer],
   );
 
   if (scene.tableNotFound) {
@@ -104,7 +64,12 @@ export default function TablePageClient({ code }: { code: string }) {
           </div>
         )}
 
-        <TableLayout scene={scene.layout} actions={tableActions} />
+        <TableLayout
+          scene={scene.layout}
+          actions={tableActions}
+          showSeatManager={scene.showSeatManager}
+          onDismissSeatManager={scene.dismissSeatManager}
+        />
 
         {scene.showBlockingConnectionOverlay && (
           <div className="absolute inset-0 z-[60] flex items-center justify-center overflow-hidden bg-slate-950/20 backdrop-blur-2xl">
@@ -134,35 +99,6 @@ export default function TablePageClient({ code }: { code: string }) {
             </div>
           </div>
         )}
-
-        <AnimatePresence>
-          {selectedSeat !== null && (
-            <SitDownForm
-              seatIndex={selectedSeat}
-              bigBlindCents={scene.layout.blinds.big}
-              onConfirm={handleConfirmSitDown}
-              onDismiss={() => setSelectedSeat(null)}
-              variant="dialog"
-            />
-          )}
-        </AnimatePresence>
-
-        <AnimatePresence>
-          {scene.showSeatManager && scene.viewingPlayer && (
-            <SeatManager
-              playerName={scene.viewingPlayer.name}
-              currentSeatIndex={scene.viewingPlayer.seatIndex ?? 0}
-              currentStackCents={scene.layout.viewerStack}
-              bigBlindCents={scene.layout.blinds.big}
-              applyImmediately={scene.layout.phase === "waiting" || scene.layout.phase === "showdown"}
-              pendingUpdate={scene.layout.viewerPendingBoundaryUpdate}
-              onSubmit={handleSeatManagerSubmit}
-              onCancelPending={actions.onCancelBoundaryUpdate}
-              onDismiss={scene.dismissSeatManager ?? (() => {})}
-              variant={isMobileLayout ? "sheet" : "dialog"}
-            />
-          )}
-        </AnimatePresence>
       </TableFeedbackProvider>
     </div>
   );

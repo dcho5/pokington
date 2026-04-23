@@ -113,6 +113,7 @@ lsof -ti:$FRONTEND_PORT,$BACKEND_PORT | xargs kill -9 2>/dev/null || true
 if [ "$FRESH" = true ]; then
     echo "🏗️  Building fresh binary (use --no-build to skip)..."
     rm -rf apps/web/.next .turbo
+    rm -rf .turbo/cache
     npx turbo run build --filter="$WEB_PKG_NAME"
     
     echo "📂 Injecting static assets into standalone..."

@@ -57,6 +57,7 @@ export interface TableClientUiState {
 
 export interface TableLayoutScene {
   seatSelectionLocked: boolean;
+  openSeatMode: "sit-down" | "change-seat" | "blocked";
   players: (Player | null)[];
   dealerIndex: number;
   tableName: string;
@@ -142,6 +143,7 @@ export function deriveTableScene(input: {
 
 export interface TableActions {
   onSitDown: (seatIndex: number, name?: string, buyInCents?: number) => void;
+  onChangeSeat?: (seatIndex: number) => void;
   onOpenSeatManager?: () => void;
   onRequestBoundaryUpdate?: (update: {
     leaveSeat?: boolean;
