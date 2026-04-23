@@ -129,9 +129,8 @@ export interface TableSceneModel {
   viewingPlayer: Player | null;
   layout: TableLayoutScene;
   showSeatManager?: boolean;
-  seatManagerPrefillSeat?: number | null;
   dismissSeatManager?: () => void;
-  openSeatManager?: (prefillSeat?: number | null) => void;
+  openSeatManager?: () => void;
 }
 
 export function deriveTableScene(input: {
@@ -143,7 +142,7 @@ export function deriveTableScene(input: {
 
 export interface TableActions {
   onSitDown: (seatIndex: number, name?: string, buyInCents?: number) => void;
-  onOpenSeatManager?: (seatIndex?: number | null) => void;
+  onOpenSeatManager?: () => void;
   onRequestBoundaryUpdate?: (update: {
     leaveSeat?: boolean;
     moveToSeatIndex?: number | null;

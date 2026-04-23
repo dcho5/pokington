@@ -24,9 +24,9 @@ interface HandPanelProps {
   onPeekCard?: (index: 0 | 1) => void;
   currentBet?: number;
   cardPeelPersistenceKey?: string | null;
-  onViewerCardsRevealedChange?: (revealed: boolean) => void;
   holeCardEmphasisByIndex?: CardEmphasis[];
   runItOddsPercentage?: number | null;
+  onOpenSeatManager?: () => void;
 }
 
 const HandPanel: React.FC<HandPanelProps> = ({
@@ -42,9 +42,9 @@ const HandPanel: React.FC<HandPanelProps> = ({
   onPeekCard,
   currentBet = 0,
   cardPeelPersistenceKey,
-  onViewerCardsRevealedChange,
   holeCardEmphasisByIndex = ["neutral", "neutral"],
   runItOddsPercentage = null,
+  onOpenSeatManager,
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
   const cardHeight = 100;
@@ -69,7 +69,22 @@ const HandPanel: React.FC<HandPanelProps> = ({
       <div className="flex items-stretch gap-2">
 
         {/* Left: player identity + auto-flip toggle */}
-        <div className="flex-1 min-w-0 flex flex-col justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2 py-2">
+        <div
+          className={`flex-1 min-w-0 flex flex-col justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2 py-2 ${
+            onOpenSeatManager ? "cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/90" : ""
+          }`}
+          onClick={onOpenSeatManager}
+          role={onOpenSeatManager ? "button" : undefined}
+          tabIndex={onOpenSeatManager ? 0 : undefined}
+          onKeyDown={onOpenSeatManager
+            ? (event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onOpenSeatManager();
+                }
+              }
+            : undefined}
+        >
           {/* Top: avatar + YOU + name */}
           <div className="flex items-start justify-between gap-1.5">
             <div className="flex items-center gap-1.5 min-w-0">
@@ -96,7 +111,10 @@ const HandPanel: React.FC<HandPanelProps> = ({
           {/* Bottom: auto-flip toggle */}
           <div className="flex gap-1">
             <button
-              onClick={() => setAutoPeelEnabled(!autoPeelEnabled)}
+              onClick={(event) => {
+                event.stopPropagation();
+                setAutoPeelEnabled(!autoPeelEnabled);
+              }}
               className={`flex-1 flex items-center justify-center gap-1 rounded-lg font-black uppercase tracking-wide transition-colors py-1 text-[8px] ${
                 autoPeelEnabled
                   ? "bg-red-500 text-white"
@@ -117,10 +135,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
               cards={holeCards}
               cardHeight={cardHeight}
               autoReveal={autoPeelEnabled}
-              onRevealChange={(revealed) => {
-                setBothRevealed(revealed);
-                onViewerCardsRevealedChange?.(revealed);
-              }}
+              onRevealChange={setBothRevealed}
               canRevealToOthers={canRevealToOthers}
               revealedToOthersIndices={revealedToOthersIndices}
               onRevealToOthers={onRevealToOthers}

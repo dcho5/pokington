@@ -32,8 +32,10 @@ import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
 import BombPotVotingPanel from "../BombPotVotingPanel";
 import { SevenTwoBountyChips } from "./SevenTwoBountyChips";
 import { formatCents } from "lib/formatCents";
+import { getDesktopHandIndicatorLayout } from "lib/desktopHandIndicatorLayout.mjs";
 import type { TableLayoutProps } from "../TableLayout";
 import type { Player } from "types/player";
+import type { Card as PlayingCard } from "@pokington/shared";
 import {
   getMinPlayerStack,
   getRunAnnouncementContent,
@@ -84,12 +86,14 @@ function getSelectedTabledPlayer(
 ): ResolvedSpotlightPlayer | null {
   if (!selectedPlayerId) return null;
   const selectedPlayer = players.find((player) => player?.id === selectedPlayerId);
-  if (!selectedPlayer || !isFullyTabled(selectedPlayer.holeCards)) return null;
+  const holeCards = selectedPlayer?.holeCards;
+  if (!selectedPlayer || !holeCards || !isFullyTabled(holeCards)) return null;
+  const tabledHoleCards = holeCards as [PlayingCard, PlayingCard];
   return {
     source: "selected",
     playerId: selectedPlayer.id ?? null,
     playerName: selectedPlayer.name,
-    holeCards: [selectedPlayer.holeCards[0], selectedPlayer.holeCards[1]],
+    holeCards: tabledHoleCards,
   };
 }
 
@@ -184,6 +188,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     onPeekCard,
     onProposeBombPot,
     onVoteBombPot,
+    onOpenSeatManager,
     onStandUp,
     onQueueLeave,
     onCancelQueuedLeave,
@@ -419,17 +424,18 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   ]);
 
   const runAnimationState = deriveVisibleRunState(runResults, knownCardCount, resolvedRunCount);
-  const canUseWinnerFallback = isShowdown;
   const canInteractWithSpotlight = phase != null && phase !== "waiting" && phase !== "voting";
   const selectedSpotlightPlayer = canInteractWithSpotlight
     ? getSelectedTabledPlayer(players, hoveredShowdownPlayerId)
     : null;
+  const handIndicatorLayout = getDesktopHandIndicatorLayout(handIndicators.length);
+  const activeHandIndicatorId = isRunItShowdown && handIndicators.length > 0
+    ? `run-${Math.min(runAnimationState.currentRun, handIndicators.length - 1)}`
+    : handIndicators[0]?.id ?? null;
   const defaultSpotlightPlayer = canInteractWithSpotlight
     ? resolveSpotlightPlayer({
         players,
-        winners: canUseWinnerFallback ? winners : [],
         viewerHoleCards: holeCards,
-        viewerCardsRevealed: bothRevealed,
       })
     : null;
   const bombPotBoards = [communityCards ?? [], communityCards2 ?? []];
@@ -661,6 +667,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                     >
                       <Card
                         card={card}
+                        size="desktop"
                         emphasis={spotlightBoardCardEmphasis?.[i] ?? "neutral"}
                         className="rounded-2xl shadow-2xl"
                         style={{
@@ -705,6 +712,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                         <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
                           <Card
                             card={communityCards?.[i]}
+                            size="desktop"
                             emphasis={spotlightBombPotCardEmphasis[0]?.[i] ?? "neutral"}
                             className="rounded-xl shadow-xl"
                             style={{
@@ -738,6 +746,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                         <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
                           <Card
                             card={communityCards2?.[i]}
+                            size="desktop"
                             emphasis={spotlightBombPotCardEmphasis[1]?.[i] ?? "neutral"}
                             className="rounded-xl shadow-xl"
                             style={{
@@ -909,29 +918,36 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
           </div>
 
           {/* Seats */}
-          {[...Array(TOTAL_SEATS)].map((_, i) => (
+          {[...Array(TOTAL_SEATS)].map((_, i) => {
+            const seatPlayer = players[i] ?? null;
+            const seatCanShowSpotlight = isFullyTabled(seatPlayer?.holeCards);
+            const seatIsSpotlightPlayer = seatPlayer?.id === spotlightPlayerId && seatCanShowSpotlight;
+
+            return (
             <Seat
               key={i}
               seatIndex={i}
               totalSeats={TOTAL_SEATS}
               geometry={g}
-              player={players[i] ?? null}
+              player={seatPlayer}
               playerCount={seatedPlayerCount}
-              isYou={players[i]?.isYou ?? false}
+              isYou={seatPlayer?.isYou ?? false}
               isDealer={i === dealerIndex}
               isSmallBlind={i === smallBlindIndex}
               isBigBlind={i === bigBlindIndex}
-              isCurrentActor={players[i]?.isCurrentActor ?? false}
+              isCurrentActor={seatPlayer?.isCurrentActor ?? false}
               onSitDown={onSitDown}
+              onOpenSeatManager={seatPlayer?.isYou ? onOpenSeatManager : undefined}
               seatSelectionLocked={seatSelectionLocked}
               seatSize={seatSize}
               handNumber={handNumber}
               onShowdownHoverChange={canInteractWithSpotlight ? setHoveredShowdownPlayerId : undefined}
-              showdownSpotlightSelected={players[i]?.id === spotlightPlayerId}
-              showdownCardEmphasisByIndex={players[i]?.id === spotlightPlayerId ? spotlightHoleCardEmphasis : undefined}
-              runItOddsPercentage={players[i]?.id ? (runItOddsPercentagesByPlayerId[players[i].id] ?? null) : null}
+              showdownSpotlightSelected={seatIsSpotlightPlayer}
+              showdownCardEmphasisByIndex={seatIsSpotlightPlayer ? spotlightHoleCardEmphasis : undefined}
+              runItOddsPercentage={seatPlayer?.id ? (runItOddsPercentagesByPlayerId[seatPlayer.id] ?? null) : null}
             />
-          ))}
+            );
+          })}
 
           {/* Bet chip stacks */}
           <BetChipsLayer
@@ -1072,6 +1088,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                     key={handNumber}
                     cards={holeCards}
                     cardHeight={emphasizedHoleCardHeight}
+                    cardSize="desktop"
                     className="gap-4"
                     persistenceKey={cardPeelPersistenceKey}
                     autoReveal={autoPeelEnabled}
@@ -1107,10 +1124,11 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
             <div
               className="flex flex-col items-center gap-1.5 flex-shrink-0"
-              style={{ minWidth: handIndicators.length > 1 ? 320 : 136 }}
+              style={{ minWidth: handIndicatorLayout.minWidth }}
             >
               <div className={bothRevealed ? "" : "opacity-60"}>
                 <DesktopHandIndicatorFan
+                  activeIndicatorId={activeHandIndicatorId}
                   indicators={bothRevealed ? handIndicators : []}
                 />
               </div>
@@ -1205,7 +1223,11 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                       <AnimatePresence>
                         {foldConfirm && (
                           <>
-                            <div className="absolute inset-0 z-40" onClick={() => setFoldConfirm(false)} />
+                            <div
+                              aria-hidden="true"
+                              className="fixed inset-0 z-40"
+                              onClick={() => setFoldConfirm(false)}
+                            />
                             <motion.div
                               initial={{ opacity: 0, y: 6, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}

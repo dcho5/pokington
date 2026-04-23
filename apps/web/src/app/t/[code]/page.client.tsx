@@ -32,13 +32,12 @@ export default function TablePageClient({ code }: { code: string }) {
       }
 
       if (scene.viewingPlayer) {
-        scene.openSeatManager?.(seatIndex);
         return;
       }
 
       setSelectedSeat(seatIndex);
     },
-    [actions, scene.openSeatManager, scene.viewingPlayer],
+    [actions, scene.viewingPlayer],
   );
 
   const handleConfirmSitDown = useCallback(
@@ -58,16 +57,11 @@ export default function TablePageClient({ code }: { code: string }) {
     [actions, scene.dismissSeatManager],
   );
 
-  const emptySeatIndices = useMemo(
-    () => scene.layout.players.map((player, seatIndex) => player == null ? seatIndex : -1).filter((seatIndex) => seatIndex >= 0),
-    [scene.layout.players],
-  );
-
   const tableActions = useMemo(
     () => ({
       ...actions,
       onSitDown: handleLayoutSitDown,
-      onOpenSeatManager: (seatIndex?: number | null) => scene.openSeatManager?.(seatIndex ?? scene.viewingPlayer?.seatIndex ?? null),
+      onOpenSeatManager: () => scene.openSeatManager?.(),
       onStandUp: scene.viewingPlayer ? actions.onStandUp : undefined,
       onQueueLeave: scene.viewingPlayer ? actions.onQueueLeave : undefined,
       onCancelBoundaryUpdate: scene.viewingPlayer ? actions.onCancelBoundaryUpdate : undefined,
@@ -107,22 +101,6 @@ export default function TablePageClient({ code }: { code: string }) {
                 Reconnecting
               </span>
             </div>
-          </div>
-        )}
-
-        {scene.viewingPlayer && (
-          <div className="fixed right-4 top-4 z-[55]">
-            <button
-              type="button"
-              onClick={() => scene.openSeatManager?.(scene.viewingPlayer?.seatIndex ?? null)}
-              className={`rounded-full border px-4 py-2 text-xs font-black uppercase tracking-[0.18em] backdrop-blur-xl ${
-                scene.layout.viewerHasPendingBoundaryUpdate
-                  ? "border-amber-400/35 bg-amber-500/15 text-amber-200"
-                  : "border-white/15 bg-black/30 text-white"
-              }`}
-            >
-              {scene.layout.viewerHasPendingBoundaryUpdate ? "Seat Update Queued" : "Manage Seat"}
-            </button>
           </div>
         )}
 
@@ -176,10 +154,8 @@ export default function TablePageClient({ code }: { code: string }) {
               currentSeatIndex={scene.viewingPlayer.seatIndex ?? 0}
               currentStackCents={scene.layout.viewerStack}
               bigBlindCents={scene.layout.blinds.big}
-              emptySeatIndices={emptySeatIndices}
               applyImmediately={scene.layout.phase === "waiting" || scene.layout.phase === "showdown"}
               pendingUpdate={scene.layout.viewerPendingBoundaryUpdate}
-              prefillSeatIndex={scene.seatManagerPrefillSeat ?? scene.viewingPlayer.seatIndex ?? null}
               onSubmit={handleSeatManagerSubmit}
               onCancelPending={actions.onCancelBoundaryUpdate}
               onDismiss={scene.dismissSeatManager ?? (() => {})}

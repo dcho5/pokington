@@ -1,3 +1,7 @@
+import enginePkg from "@pokington/engine";
+
+const { hasAnimatedRunout } = enginePkg;
+
 export function getCurrentBetTotal(players = {}) {
   return Object.values(players).reduce((sum, player) => sum + (player?.currentBet ?? 0), 0);
 }
@@ -72,7 +76,7 @@ export function isAnimatedShowdownReveal({
 
   return phase === "showdown" &&
     hasTimingAnchor &&
-    (knownCardCount < 5 || runCount > 1);
+    hasAnimatedRunout(knownCardCount, runCount);
 }
 
 // A run-it showdown remains "active" for the entire showdown lifecycle once

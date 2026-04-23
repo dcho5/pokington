@@ -4,6 +4,7 @@ import type {
   GamePhase,
   GameState,
 } from "./types";
+import { shouldAnnounceRunIt } from "./showdownTiming";
 
 export type GameFeedbackCue =
   | "hand_started"
@@ -335,11 +336,13 @@ export function deriveFeedbackFromTransition(
       runCount: resolvedRunCount,
     });
 
-    if (
-      !nextState.isBombPot &&
-      nextState.showdownStartedAt != null &&
-      nextState.runDealStartedAt == null
-    ) {
+    if (shouldAnnounceRunIt({
+      isBombPotHand: nextState.isBombPot,
+      knownCardCount: nextState.knownCardCountAtRunIt,
+      runCount: resolvedRunCount,
+      showdownStartedAt: nextState.showdownStartedAt,
+      runDealStartedAt: nextState.runDealStartedAt,
+    })) {
       cues.push({
         ...makeBase(
           "run_it_announced",

@@ -1,6 +1,7 @@
 "use client";
 import React, { useRef, useState, useEffect } from "react";
 import Card from "components/poker/Card";
+import type { CardDisplaySize } from "components/poker/Card";
 import {
   canStartPublicReveal,
   createInitialPeelCardState,
@@ -63,6 +64,7 @@ function PeelCard({
   onRevealToOthers,
   sevenTwoEligible,
   onPeekCard,
+  cardSize = "default",
 }: {
   card?: CardType;
   height: number;
@@ -75,6 +77,7 @@ function PeelCard({
   onRevealToOthers?: () => void;
   sevenTwoEligible?: boolean;
   onPeekCard?: () => void;
+  cardSize?: CardDisplaySize;
 }) {
   const width = Math.round((height * 5) / 7);
   const initialPeelCardState = createInitialPeelCardState({ revealed });
@@ -291,7 +294,7 @@ function PeelCard({
           className="absolute inset-0"
           style={{ transform: `scaleY(${1 - initialProgress})`, transformOrigin: "50% 100%", willChange: "transform" }}
         >
-          <Card className="w-full h-full rounded-xl" />
+          <Card size={cardSize} className="w-full h-full rounded-xl" />
         </div>
 
         {/* Front face — grows up from bottom as card is revealed */}
@@ -300,7 +303,7 @@ function PeelCard({
           className="absolute inset-0"
           style={{ transform: `scaleY(${initialProgress})`, transformOrigin: "50% 100%", willChange: "transform" }}
         >
-          <Card card={card} emphasis={emphasis} className="w-full h-full rounded-xl" />
+          <Card card={card} emphasis={emphasis} size={cardSize} className="w-full h-full rounded-xl" />
         </div>
 
         {canArmReveal && (
@@ -375,6 +378,7 @@ interface HoleCardsProps {
   /** Storage key used to restore peel progress after leaving and returning */
   persistenceKey?: string | null;
   emphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
+  cardSize?: CardDisplaySize;
 }
 
 const HoleCards: React.FC<HoleCardsProps> = ({
@@ -390,6 +394,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
   onPeekCard,
   persistenceKey,
   emphasisByIndex = ["neutral", "neutral"],
+  cardSize = "default",
 }) => {
   const resolveInitialRevealState = (): [boolean, boolean] => {
     const [card0, card1] = getInitialPrivateRevealState({ persistenceKey, autoReveal });
@@ -443,6 +448,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           onRevealToOthers={() => onRevealToOthers?.(0)}
           sevenTwoEligible={sevenTwoEligible}
           onPeekCard={() => onPeekCard?.(0)}
+          cardSize={cardSize}
         />
       </div>
       <div className="animate-card-deal-in" style={{ animationDelay: "0.1s" }}>
@@ -458,6 +464,7 @@ const HoleCards: React.FC<HoleCardsProps> = ({
           onRevealToOthers={() => onRevealToOthers?.(1)}
           sevenTwoEligible={sevenTwoEligible}
           onPeekCard={() => onPeekCard?.(1)}
+          cardSize={cardSize}
         />
       </div>
     </div>

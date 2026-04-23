@@ -28,6 +28,7 @@ import {
   readPersistedAutoPeelPreference,
   writePersistedAutoPeelPreference,
 } from "lib/holeCardReveal.mjs";
+import { deriveServerRunTiming } from "lib/runTimingFlags.mjs";
 import { isTableClearedForNextHand } from "lib/tableVisualState";
 import { deriveStreetPauseChips } from "lib/streetSweep.mjs";
 import { shouldClearHandScopedState } from "party/handScopedState.mjs";
@@ -178,33 +179,13 @@ interface GameStore {
   isFirstStateReceived: boolean;
 }
 
-const STREET_PAUSE_MS = 1200;
-const SWEEP_DURATION_MS = 450;
-
-function deriveServerRunTiming(next: PublicGameState): Pick<
+type RunTimingPatch = Pick<
   GameStore,
   "runAnnouncement" | "isRunItBoard" | "knownCardCountAtRunIt" | "runDealStartedAt" | "showdownStartedAt"
-> {
-  const isVotingReveal = next.phase === "voting";
-  const hasAnimatedShowdownReveal =
-    next.phase === "showdown" &&
-    (next.showdownStartedAt != null || next.runDealStartedAt != null) &&
-    ((next.runResults?.length ?? 0) > 1 || (next.knownCardCountAtRunIt ?? 0) < 5);
+>;
 
-  return {
-    runAnnouncement:
-      next.phase === "showdown" &&
-      !next.isBombPot &&
-      next.showdownStartedAt != null &&
-      next.runDealStartedAt == null
-        ? (next.runCount as 1 | 2 | 3)
-        : null,
-    isRunItBoard: isVotingReveal || next.isBombPot || hasAnimatedShowdownReveal,
-    knownCardCountAtRunIt: isVotingReveal ? next.communityCards.length : next.knownCardCountAtRunIt ?? 0,
-    runDealStartedAt: next.runDealStartedAt ?? null,
-    showdownStartedAt: next.showdownStartedAt ?? null,
-  };
-}
+const STREET_PAUSE_MS = 1200;
+const SWEEP_DURATION_MS = 450;
 
 // Module-level — not reactive state
 let _socket: PartySocket | null = null;
@@ -269,7 +250,7 @@ export const useGameStore = create<GameStore>((set, get) => {
   // Called on every TABLE_STATE message from the server.
   // Detects phase transitions and fires UI-layer side effects (animations, timers, announcements).
   function handleIncomingState(prev: PublicGameState | null, next: PublicGameState, isFirstReceive = false) {
-    const timingPatch = deriveServerRunTiming(next);
+    const timingPatch = deriveServerRunTiming(next) as RunTimingPatch;
     const snapshotPatch =
       next.phase === "showdown"
         ? { showdownPlayerSnapshot: prev?.phase === "showdown" ? get().showdownPlayerSnapshot : clonePublicPlayers(next.players) }

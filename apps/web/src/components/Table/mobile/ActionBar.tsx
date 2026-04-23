@@ -182,7 +182,6 @@ function FoldConfirmSheet({ onConfirm, onDismiss }: { onConfirm: () => void; onD
 
 interface ActionBarProps {
   isYourTurn?: boolean;
-  waitingFor?: string;
   callAmount?: number;
   pot?: number;
   stack?: number;
@@ -210,7 +209,6 @@ interface ActionBarProps {
 
 const ActionBar: React.FC<ActionBarProps> = ({
   isYourTurn = false,
-  waitingFor,
   callAmount = 0,
   pot = 0,
   stack = 0,
@@ -252,14 +250,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
   if (isWaiting || isShowdown) {
     return (
       <div className="w-full z-30" style={{ padding: "10px 16px" }}>
-        {isShowdown && showNextHand && (
-          <p className="text-xs text-amber-500 text-center mb-2 font-bold">
-            {showdownCountdown != null
-              ? `Next hand in ${showdownCountdown}s...`
-              : "Hand complete"}
-          </p>
-        )}
-
         {isAdmin && (isWaiting || isShowdown) && (
           <>
             {eligiblePlayerCount < 2 ? (
@@ -292,12 +282,6 @@ const ActionBar: React.FC<ActionBarProps> = ({
           paddingBottom: "10px",
         }}
       >
-        {!isYourTurn && waitingFor && (
-          <p className="text-xs text-gray-500 text-center mb-2">
-            Waiting for {waitingFor}...
-          </p>
-        )}
-
         <div className={`flex gap-2 transition-opacity duration-200 ${!isYourTurn ? "opacity-40 pointer-events-none" : ""}`}>
           <motion.button
             whileTap={{ scale: 0.96 }}

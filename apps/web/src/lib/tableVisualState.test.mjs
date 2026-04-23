@@ -121,6 +121,15 @@ test("bomb pot all-in showdowns still use shared animated showdown timing", () =
     }),
     false,
   );
+  assert.equal(
+    isAnimatedShowdownReveal({
+      phase: "showdown",
+      knownCardCount: 5,
+      runResults: [{ winners: [] }],
+      showdownStartedAt: Date.now(),
+    }),
+    false,
+  );
 });
 
 test("run-it showdown stays active during the announcement window before the board renders", () => {

@@ -107,7 +107,7 @@ test("mergeEmphasisArrays highlights hole cards used on any board and dims irrel
   );
 });
 
-test("selected fully tabled player overrides revealed-winner fallback", () => {
+test("resolveSpotlightPlayer defaults to the viewer hand", () => {
   const resolved = resolveSpotlightPlayer({
     players: [
       {
@@ -117,26 +117,35 @@ test("selected fully tabled player overrides revealed-winner fallback", () => {
         stack: 1000,
       },
       {
-        id: "winner",
-        name: "Winner",
-        stack: 1200,
-        holeCards: [card("A", "spades"), card("A", "hearts")],
-      },
-      {
-        id: "hovered",
-        name: "Hovered",
+        id: "other",
+        name: "Other",
         stack: 900,
         holeCards: [card("K", "spades"), card("Q", "spades")],
       },
     ],
-    winners: [{ playerId: "winner", amount: 200, hand: "One Pair" }],
-    selectedPlayerId: "hovered",
+    viewerHoleCards: [card("A", "spades"), card("A", "hearts")],
   });
 
   assert.deepEqual(resolved, {
-    source: "selected",
-    playerId: "hovered",
-    playerName: "Hovered",
-    holeCards: [card("K", "spades"), card("Q", "spades")],
+    source: "viewer",
+    playerId: "you",
+    playerName: "You",
+    holeCards: [card("A", "spades"), card("A", "hearts")],
   });
+});
+
+test("resolveSpotlightPlayer returns null when the viewer hand is unavailable", () => {
+  const resolved = resolveSpotlightPlayer({
+    players: [
+      {
+        id: "you",
+        name: "You",
+        isYou: true,
+        stack: 1000,
+      },
+    ],
+    viewerHoleCards: null,
+  });
+
+  assert.equal(resolved, null);
 });

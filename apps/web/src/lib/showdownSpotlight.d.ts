@@ -1,4 +1,3 @@
-import type { WinnerInfo } from "@pokington/engine";
 import type { Card } from "@pokington/shared";
 import type { Player } from "types/player";
 
@@ -9,7 +8,7 @@ export interface ShowdownSpotlightDisplayCard {
 }
 
 export interface ResolvedSpotlightPlayer {
-  source: "selected" | "winner" | "viewer";
+  source: "selected" | "viewer";
   playerId: string | null;
   playerName: string;
   holeCards: [Card, Card];
@@ -28,10 +27,7 @@ export function isFullyTabled(cards?: [Card | null, Card | null] | null): boolea
 
 export function resolveSpotlightPlayer(options?: {
   players?: Array<Player | null>;
-  winners?: WinnerInfo[] | null;
   viewerHoleCards?: [Card, Card] | null;
-  viewerCardsRevealed?: boolean;
-  selectedPlayerId?: string | null;
 }): ResolvedSpotlightPlayer | null;
 
 export function evaluateSevenCardHand(options?: {

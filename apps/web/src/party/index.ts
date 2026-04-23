@@ -1151,10 +1151,9 @@ export default class PokerRoom implements Party.Server {
   private computeWinnerRevealAt(prev: GameState, next: GameState): number | null {
     if (next.phase !== "showdown" || !next.autoRevealWinningHands) return null;
 
-    const knownCardCount = Math.max(prev.communityCards.length, prev.communityCards2.length);
+    const knownCardCount = next.knownCardCountAtRunIt;
     const runCount = Math.max(1, next.runResults.length);
-    const isAnimatedRunout = knownCardCount < 5 || runCount > 1;
-    if (!isAnimatedRunout) return Date.now();
+    if (!hasAnimatedRunout(knownCardCount, runCount)) return Date.now();
     const revealRunsConcurrently = shouldRevealRunsConcurrently(next.isBombPot, runCount);
 
     return Date.now() + getAllInShowdownRevealDelayMs(knownCardCount, runCount, { revealRunsConcurrently });

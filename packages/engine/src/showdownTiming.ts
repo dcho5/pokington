@@ -18,6 +18,25 @@ export function hasAnimatedRunout(knownCardCount: number, runCount: number): boo
   return knownCardCount < 5 || runCount > 1;
 }
 
+export function shouldAnnounceRunIt({
+  isBombPotHand = false,
+  knownCardCount = 0,
+  runCount,
+  showdownStartedAt = null,
+  runDealStartedAt = null,
+}: {
+  isBombPotHand?: boolean;
+  knownCardCount?: number;
+  runCount: number;
+  showdownStartedAt?: number | null;
+  runDealStartedAt?: number | null;
+}): boolean {
+  return !isBombPotHand &&
+    showdownStartedAt != null &&
+    runDealStartedAt == null &&
+    hasAnimatedRunout(knownCardCount, runCount);
+}
+
 export function shouldRevealRunsConcurrently(isBombPotHand: boolean, runCount: number): boolean {
   return isBombPotHand && runCount > 1;
 }

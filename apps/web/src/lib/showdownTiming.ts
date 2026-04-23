@@ -5,6 +5,7 @@ export {
   WINNER_STAGGER_BUFFER_S,
   NORMAL_LAND_MS,
   hasAnimatedRunout,
+  shouldAnnounceRunIt,
   shouldRevealRunsConcurrently,
   getRunTimings,
   getAllInShowdownRevealDelayMs,

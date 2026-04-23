@@ -34,7 +34,6 @@ export function useTableRuntimeState({
 }: UseTableRuntimeStateArgs) {
   const [showdownCountdown, setShowdownCountdown] = useState<number | null>(null);
   const [showSeatManager, setShowSeatManager] = useState(false);
-  const [seatManagerPrefillSeat, setSeatManagerPrefillSeat] = useState<number | null>(null);
   const [dismissedSeatManagerHand, setDismissedSeatManagerHand] = useState<number | null>(null);
 
   useEffect(() => {
@@ -53,16 +52,9 @@ export function useTableRuntimeState({
       !hasQueuedReload &&
       dismissedSeatManagerHand !== handNumber
     ) {
-      setSeatManagerPrefillSeat(viewingSeat);
       setShowSeatManager(true);
     }
-
-    if (showSeatManager && viewerStack > 0) {
-      setShowSeatManager(false);
-      setSeatManagerPrefillSeat(null);
-      setDismissedSeatManagerHand(null);
-    }
-  }, [phase, viewerStack, viewingPlayer, viewingSeat, settledRunCount, runCount, publicShowdownRevealComplete, showSeatManager, viewerPendingBoundaryUpdate, dismissedSeatManagerHand, handNumber]);
+  }, [phase, viewerStack, viewingPlayer, viewingSeat, settledRunCount, runCount, publicShowdownRevealComplete, viewerPendingBoundaryUpdate, dismissedSeatManagerHand, handNumber]);
 
   useEffect(() => {
     if (phase !== "showdown" || !publicShowdownRevealComplete || nextHandStartsAt == null) {
@@ -91,21 +83,18 @@ export function useTableRuntimeState({
     nextHandStartsAt,
   ]);
 
-  const openSeatManager = useCallback((prefillSeat: number | null = null) => {
-    setSeatManagerPrefillSeat(prefillSeat);
+  const openSeatManager = useCallback(() => {
     setShowSeatManager(true);
   }, []);
 
   const dismissSeatManager = useCallback(() => {
     setShowSeatManager(false);
-    setSeatManagerPrefillSeat(null);
     setDismissedSeatManagerHand(handNumber);
   }, [handNumber]);
 
   return {
     showdownCountdown,
     showSeatManager,
-    seatManagerPrefillSeat,
     openSeatManager,
     dismissSeatManager,
   };

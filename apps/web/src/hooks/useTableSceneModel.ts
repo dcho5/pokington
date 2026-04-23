@@ -120,7 +120,6 @@ export function useTableSceneModel(code: string): TableSceneModel {
     () => ({
       ...baseScene,
       showSeatManager: runtimeState.showSeatManager,
-      seatManagerPrefillSeat: runtimeState.seatManagerPrefillSeat,
       dismissSeatManager: runtimeState.dismissSeatManager,
       openSeatManager: runtimeState.openSeatManager,
       layout: {

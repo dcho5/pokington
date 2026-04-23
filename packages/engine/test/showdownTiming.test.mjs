@@ -9,6 +9,7 @@ import {
   deriveRunAnimationAt,
   getAllInShowdownRevealDelayMs,
   getRunTimings,
+  shouldAnnounceRunIt,
   shouldRevealRunsConcurrently,
 } from "../dist/index.js";
 
@@ -50,4 +51,35 @@ test("concurrent reveal timing settles both bomb-pot boards together", () => {
     getAllInShowdownRevealDelayMs(knownCardCount, runCount, { revealRunsConcurrently: true }),
     (ANNOUNCE_DELAY_S + chipStartS + CHIP_DURATION_S + WINNER_STAGGER_BUFFER_S) * 1000,
   );
+});
+
+test("run-it announcements require an actual animated showdown window", () => {
+  assert.equal(shouldAnnounceRunIt({
+    runCount: 1,
+    knownCardCount: 5,
+    showdownStartedAt: 1_000,
+    runDealStartedAt: null,
+  }), false);
+
+  assert.equal(shouldAnnounceRunIt({
+    runCount: 1,
+    knownCardCount: 3,
+    showdownStartedAt: 1_000,
+    runDealStartedAt: null,
+  }), true);
+
+  assert.equal(shouldAnnounceRunIt({
+    runCount: 2,
+    knownCardCount: 5,
+    showdownStartedAt: 1_000,
+    runDealStartedAt: null,
+  }), true);
+
+  assert.equal(shouldAnnounceRunIt({
+    isBombPotHand: true,
+    runCount: 2,
+    knownCardCount: 3,
+    showdownStartedAt: 1_000,
+    runDealStartedAt: null,
+  }), false);
 });

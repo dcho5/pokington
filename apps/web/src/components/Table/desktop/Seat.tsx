@@ -125,6 +125,7 @@ interface SeatProps {
   isBigBlind?: boolean;
   isCurrentActor: boolean;
   onSitDown: (seatIndex: number) => void;
+  onOpenSeatManager?: () => void;
   seatSelectionLocked?: boolean;
   seatSize?: number;
   handNumber?: number;
@@ -146,6 +147,7 @@ const Seat: React.FC<SeatProps> = ({
   isBigBlind = false,
   isCurrentActor,
   onSitDown,
+  onOpenSeatManager,
   seatSelectionLocked = false,
   seatSize = 100,
   handNumber = 0,
@@ -237,6 +239,7 @@ const Seat: React.FC<SeatProps> = ({
     className: string;
     borderColor?: string;
   }> = [];
+  const canOpenSeatManager = isYou && !!onOpenSeatManager;
 
   if (isYou) {
     statusBadges.push({
@@ -441,6 +444,7 @@ const Seat: React.FC<SeatProps> = ({
                   >
                     <Card
                       card={card ?? undefined}
+                      size="desktop"
                       emphasis={showdownCardEmphasisByIndex[i] ?? "neutral"}
                       className={`
                         rounded-[18px] shadow-2xl transition-opacity duration-300
@@ -513,12 +517,24 @@ const Seat: React.FC<SeatProps> = ({
 
           <div className="mt-4 flex flex-col items-center gap-2">
             <div
+              onClick={canOpenSeatManager ? onOpenSeatManager : undefined}
               className={`
                 flex flex-col items-center gap-2 rounded-[26px] border px-4 py-3 shadow-xl backdrop-blur-md
                 ${isYou
                   ? "bg-slate-950/92 border-red-400/34"
                   : "bg-slate-950/88 border-white/12"}
+                ${canOpenSeatManager ? "cursor-pointer transition-colors hover:border-red-300/55 hover:bg-slate-900/96" : ""}
               `}
+              role={canOpenSeatManager ? "button" : undefined}
+              tabIndex={canOpenSeatManager ? 0 : undefined}
+              onKeyDown={canOpenSeatManager
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpenSeatManager?.();
+                    }
+                  }
+                : undefined}
               style={{ minWidth: clusterWidth + 24, maxWidth: clusterWidth + 44 }}
             >
               <div className="flex w-full items-center gap-3">

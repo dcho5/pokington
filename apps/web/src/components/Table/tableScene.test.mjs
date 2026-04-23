@@ -60,6 +60,16 @@ test("runItVoteDeal fixtures keep the announcement active before the run-it boar
   assert.equal(after.layout.runDealStartedAt, null);
 });
 
+test("animated two-run showdowns keep both viewer hand indicators available", () => {
+  const scene = deriveTableScene(runItVoteDeal_after);
+
+  assert.deepEqual(
+    scene.layout.handIndicators.map((indicator) => indicator.id),
+    ["run-0", "run-1"],
+  );
+  assert.equal(scene.layout.handIndicators.length, 2);
+});
+
 test("animated showdown winner banner waits for the public board reveal to finish", () => {
   const hidden = deriveTableScene({
     ...runItVoteDeal_after,

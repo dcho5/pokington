@@ -104,6 +104,7 @@ test("showdown transitions emit run-it announcement and payout cues", () => {
     },
   ];
   nextState.winners = [{ playerId: "a", amount: 400, hand: "Royal Flush" }];
+  nextState.knownCardCountAtRunIt = 3;
   nextState.showdownStartedAt = 1000;
   nextState.runDealStartedAt = null;
 
@@ -135,6 +136,7 @@ test("unanimous one-run votes still emit a run-it announcement cue", () => {
     },
   ];
   nextState.winners = [{ playerId: "a", amount: 400, hand: "Royal Flush" }];
+  nextState.knownCardCountAtRunIt = 3;
   nextState.showdownStartedAt = 1000;
   nextState.runDealStartedAt = null;
 
@@ -164,8 +166,51 @@ test("direct single-run showdowns do not emit a run-it announcement cue", () => 
     },
   ];
   nextState.winners = [{ playerId: "a", amount: 400, hand: "Royal Flush" }];
+  nextState.knownCardCountAtRunIt = 4;
   nextState.showdownStartedAt = 1000;
   nextState.runDealStartedAt = 1000;
+
+  const feedback = deriveFeedbackFromTransition(
+    prevState,
+    null,
+    nextState,
+    { emittedAt: 999, source: "server" },
+  );
+
+  assert.equal(feedback.some((cue) => cue.kind === "run_it_announced"), false);
+});
+
+test("plain river showdowns do not emit run-it announcements even if no run reveal timer exists", () => {
+  const prevState = createBaseState({
+    phase: "river",
+    communityCards: [
+      card("A", "spades"),
+      card("K", "spades"),
+      card("Q", "spades"),
+      card("J", "spades"),
+      card("T", "spades"),
+    ],
+    needsToAct: [],
+  });
+  const nextState = structuredClone(prevState);
+  nextState.phase = "showdown";
+  nextState.runCount = 1;
+  nextState.runResults = [
+    {
+      board: [
+        card("A", "spades"),
+        card("K", "spades"),
+        card("Q", "spades"),
+        card("J", "spades"),
+        card("T", "spades"),
+      ],
+      winners: [{ playerId: "a", amount: 400, hand: "Royal Flush" }],
+    },
+  ];
+  nextState.winners = [{ playerId: "a", amount: 400, hand: "Royal Flush" }];
+  nextState.knownCardCountAtRunIt = 5;
+  nextState.showdownStartedAt = 1000;
+  nextState.runDealStartedAt = null;
 
   const feedback = deriveFeedbackFromTransition(
     prevState,

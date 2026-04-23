@@ -90,14 +90,25 @@ test("canAcceptPeek rejects stale or impossible player states", () => {
   assert.equal(canAcceptPeek({ gameState: makeState(), playerId: "missing", handNumber: 12 }), false);
 });
 
-test("getBroadcastPeekedCounts hides all peek state outside active hand phases", () => {
+test("getBroadcastPeekedCounts hides peek state once the hand is no longer active", () => {
   const peekedCardMasks = new Map([
     ["p1", 3],
     ["p2", 1],
   ]);
 
   assert.deepEqual(getBroadcastPeekedCounts(makeState({ phase: "waiting" }), peekedCardMasks), {});
-  assert.deepEqual(getBroadcastPeekedCounts(makeState({ phase: "showdown" }), peekedCardMasks), {});
+});
+
+test("getBroadcastPeekedCounts preserves peek state through showdown", () => {
+  const peekedCardMasks = new Map([
+    ["p1", 3],
+    ["p2", 1],
+  ]);
+
+  assert.deepEqual(getBroadcastPeekedCounts(makeState({ phase: "showdown" }), peekedCardMasks), {
+    p1: 2,
+    p2: 1,
+  });
 });
 
 test("getBroadcastPeekedCounts filters stale masks and preserves valid one-card/two-card peeks", () => {

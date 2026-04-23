@@ -113,40 +113,10 @@ export function isFullyTabled(cards) {
 
 export function resolveSpotlightPlayer({
   players = [],
-  winners = [],
   viewerHoleCards = null,
-  viewerCardsRevealed = false,
-  selectedPlayerId = null,
 } = {}) {
-  const playerById = new Map(
-    players.filter((player) => player?.id).map((player) => [player.id, player]),
-  );
-
-  if (selectedPlayerId) {
-    const selectedPlayer = playerById.get(selectedPlayerId);
-    if (selectedPlayer && hasTwoCards(selectedPlayer.holeCards)) {
-      return {
-        source: "selected",
-        playerId: selectedPlayer.id,
-        playerName: selectedPlayer.name,
-        holeCards: selectedPlayer.holeCards,
-      };
-    }
-  }
-
-  for (const winner of winners ?? []) {
-    const winnerPlayer = playerById.get(winner.playerId);
-    if (!winnerPlayer || !hasTwoCards(winnerPlayer.holeCards)) continue;
-    return {
-      source: "winner",
-      playerId: winnerPlayer.id,
-      playerName: winnerPlayer.name,
-      holeCards: winnerPlayer.holeCards,
-    };
-  }
-
   const viewer = players.find((player) => player?.isYou);
-  if (viewer && viewerCardsRevealed && hasTwoCards(viewerHoleCards)) {
+  if (viewer && hasTwoCards(viewerHoleCards)) {
     return {
       source: "viewer",
       playerId: viewer.id ?? null,

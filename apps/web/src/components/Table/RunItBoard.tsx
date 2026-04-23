@@ -136,6 +136,7 @@ export default function RunItBoard({
                     >
                       <Card
                         card={runResults[r]?.board[i]}
+                        size={compact ? "default" : "desktop"}
                         emphasis={emphasisForRun(r)?.[i] ?? "neutral"}
                         className="w-full aspect-[5/7] rounded-xl shadow-xl"
                       />
@@ -171,6 +172,7 @@ export default function RunItBoard({
                       >
                         <Card
                           card={runResults[r]?.board[i]}
+                          size={compact ? "default" : "desktop"}
                           emphasis={emphasisForRun(r)?.[i] ?? "neutral"}
                           className="w-full h-full rounded-xl shadow-xl"
                         />
@@ -179,6 +181,7 @@ export default function RunItBoard({
                       <div className="absolute inset-0">
                         <Card
                           card={undefined}
+                          size={compact ? "default" : "desktop"}
                           className="w-full h-full rounded-xl shadow-xl"
                         />
                       </div>

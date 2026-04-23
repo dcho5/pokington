@@ -100,6 +100,9 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
   const showCards = !!player.holeCards;
   const hasBothPublicCards = isFullyTabled(player.holeCards);
   const canFocusShowdownPlayer = hasBothPublicCards && !!player.id && !!onShowdownPlayerTap;
+  const handleShowdownPlayerTap = canFocusShowdownPlayer
+    ? () => onShowdownPlayerTap(player.id!)
+    : undefined;
 
   return (
     <motion.div
@@ -121,7 +124,8 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
             transform: "translate(-50%, -50%)",
             gap: 4,
           }}
-          onClick={canFocusShowdownPlayer ? () => onShowdownPlayerTap(player.id!) : undefined}
+          data-mobile-interactive={canFocusShowdownPlayer ? "true" : undefined}
+          onClick={handleShowdownPlayerTap}
         >
           {/* 7-2 eligible glow overlay */}
           {player.sevenTwoEligible && (
@@ -252,7 +256,8 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
 
           <motion.div animate={avatarBounce}>
           {runItOddsPercentage != null ? (
-            <motion.div
+            <motion.button
+              type="button"
               key={runItOddsPercentage.toFixed(1)}
               initial={{ opacity: 0, scale: 0.82, y: 6 }}
               animate={{ opacity: 1, scale: [1, 1.05, 1], y: 0 }}
@@ -261,6 +266,11 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
                 y: { type: "spring", stiffness: 320, damping: 26 },
                 scale: { duration: 0.34 },
               }}
+              className={`border-0 bg-transparent p-0 ${canFocusShowdownPlayer ? "cursor-pointer" : ""}`}
+              data-mobile-interactive={canFocusShowdownPlayer ? "true" : undefined}
+              onClick={handleShowdownPlayerTap}
+              disabled={!canFocusShowdownPlayer}
+              aria-label={canFocusShowdownPlayer ? `Select ${player.name}` : undefined}
             >
               <div
                 className={[
@@ -282,18 +292,24 @@ const PlayerBubble: React.FC<PlayerBubbleProps> = ({
                   {runItOddsPercentage.toFixed(1)}%
                 </span>
               </div>
-            </motion.div>
+            </motion.button>
           ) : (
-            <div
+            <button
+              type="button"
               className={[
-                "rounded-full flex items-center justify-center relative z-10",
+                "rounded-full flex items-center justify-center relative z-10 border-0 bg-transparent p-0",
+                canFocusShowdownPlayer ? "cursor-pointer" : "",
                 player.isCurrentActor ? "ring-2 ring-red-500" : "",
                 isFolded ? "grayscale" : "",
               ].join(" ")}
+              data-mobile-interactive={canFocusShowdownPlayer ? "true" : undefined}
+              onClick={handleShowdownPlayerTap}
+              disabled={!canFocusShowdownPlayer}
+              aria-label={canFocusShowdownPlayer ? `Select ${player.name}` : undefined}
               style={{ backgroundColor: avatarColor, width: avatarSize, height: avatarSize }}
             >
               <span className="font-black text-white text-xs select-none">{initials}</span>
-            </div>
+            </button>
           )}
           </motion.div>
 

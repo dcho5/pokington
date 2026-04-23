@@ -17,12 +17,14 @@ function isRed(suit: string): boolean {
   return suit === "hearts" || suit === "diamonds";
 }
 
+export type CardDisplaySize = "default" | "compact" | "desktop";
+
 interface CardProps {
   card?: CardType;
   className?: string;
   style?: React.CSSProperties;
   emphasis?: "neutral" | "highlighted" | "dimmed";
-  size?: "default" | "compact";
+  size?: CardDisplaySize;
 }
 
 function emphasisClassName(emphasis: CardProps["emphasis"]): string {
@@ -35,7 +37,15 @@ function emphasisClassName(emphasis: CardProps["emphasis"]): string {
   return "";
 }
 
-const CARD_SIZE_CLASSES = {
+const CARD_SIZE_CLASSES: Record<
+  CardDisplaySize,
+  {
+    facePadding: string;
+    corner: string;
+    center: string;
+    backInset: string;
+  }
+> = {
   default: {
     facePadding: "p-1.5",
     corner: "gap-0.5 text-sm",
@@ -48,7 +58,13 @@ const CARD_SIZE_CLASSES = {
     center: "text-[18px]",
     backInset: "inset-[3px] rounded-[6px]",
   },
-} as const;
+  desktop: {
+    facePadding: "p-2",
+    corner: "gap-1 text-[22px]",
+    center: "text-[48px]",
+    backInset: "inset-[4px] rounded-[8px]",
+  },
+};
 
 const Card: React.FC<CardProps> = ({
   card,
@@ -59,21 +75,19 @@ const Card: React.FC<CardProps> = ({
 }) => {
   const emphasisClasses = emphasisClassName(emphasis);
   const metrics = CARD_SIZE_CLASSES[size];
+
   if (!card) {
-    // Face-down back — white card frame with dark blue gradient inner
     return (
       <div
         className={`relative bg-white overflow-hidden transition-[opacity,filter,transform,box-shadow] duration-200 ${emphasisClasses} ${className}`}
         style={style}
       >
-        {/* Inner back area */}
         <div
           className={`absolute overflow-hidden ${metrics.backInset}`}
           style={{
             background: "linear-gradient(145deg, #1e3a5f 0%, #0f2040 50%, #1a3356 100%)",
           }}
         >
-          {/* Crosshatch grid */}
           <div
             className="absolute inset-0"
             style={{
@@ -81,7 +95,6 @@ const Card: React.FC<CardProps> = ({
                 "repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 10px), repeating-linear-gradient(90deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 10px)",
             }}
           />
-          {/* Diagonal overlay for depth */}
           <div
             className="absolute inset-0"
             style={{
@@ -103,18 +116,15 @@ const Card: React.FC<CardProps> = ({
       className={`card-face relative flex flex-col justify-between transition-[opacity,filter,transform,box-shadow] duration-200 ${metrics.facePadding} ${red ? "red" : ""} ${emphasisClasses} ${className}`}
       style={style}
     >
-      {/* Top-left: rank + suit */}
       <div className={`flex items-center leading-none font-bold ${metrics.corner}`}>
         <span>{rank}</span>
         <span>{symbol}</span>
       </div>
 
-      {/* Center suit */}
       <div className={`flex flex-1 items-center justify-center leading-none ${metrics.center}`}>
         {symbol}
       </div>
 
-      {/* Bottom-right: rotated 180° */}
       <div className={`flex items-center leading-none font-bold self-end rotate-180 ${metrics.corner}`}>
         <span>{rank}</span>
         <span>{symbol}</span>

@@ -1,11 +1,12 @@
-const ACTIVE_PEEK_PHASES = new Set(["pre-flop", "flop", "turn", "river", "voting"]);
+const ACCEPT_PEEK_PHASES = new Set(["pre-flop", "flop", "turn", "river", "voting"]);
+const BROADCAST_PEEK_PHASES = new Set(["pre-flop", "flop", "turn", "river", "voting", "showdown"]);
 
 export function peekMaskCount(mask) {
   return (mask & 1 ? 1 : 0) + (mask & 2 ? 1 : 0);
 }
 
 export function canAcceptPeek({ gameState, playerId, handNumber }) {
-  if (!ACTIVE_PEEK_PHASES.has(gameState.phase)) return false;
+  if (!ACCEPT_PEEK_PHASES.has(gameState.phase)) return false;
   if (handNumber !== gameState.handNumber) return false;
 
   const player = gameState.players[playerId];
@@ -18,7 +19,7 @@ export function canAcceptPeek({ gameState, playerId, handNumber }) {
 }
 
 export function getBroadcastPeekedCounts(gameState, peekedCardMasks) {
-  if (!ACTIVE_PEEK_PHASES.has(gameState.phase)) return {};
+  if (!BROADCAST_PEEK_PHASES.has(gameState.phase)) return {};
 
   return Object.fromEntries(
     Array.from(peekedCardMasks.entries())
