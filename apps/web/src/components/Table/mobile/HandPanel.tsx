@@ -77,6 +77,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
           onClick={onOpenSeatManager}
           role={onOpenSeatManager ? "button" : undefined}
           tabIndex={onOpenSeatManager ? 0 : undefined}
+          aria-label={onOpenSeatManager ? `Open seat manager for ${player.name}` : undefined}
           onKeyDown={onOpenSeatManager
             ? (event) => {
                 if (event.key === "Enter" || event.key === " ") {

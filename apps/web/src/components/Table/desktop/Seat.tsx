@@ -564,6 +564,7 @@ const Seat: React.FC<SeatProps> = ({
               `}
               role={canOpenSeatManager ? "button" : undefined}
               tabIndex={canOpenSeatManager ? 0 : undefined}
+              aria-label={canOpenSeatManager ? `Open seat manager for ${player.name}` : undefined}
               onKeyDown={canOpenSeatManager
                 ? (event) => {
                     if (event.key === "Enter" || event.key === " ") {

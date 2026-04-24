@@ -237,3 +237,137 @@ export const runItVoteDeal_after = {
     settledRunCount: 0,
   }),
 };
+
+export const waitingOpenSeats = reconnectOverlay_before;
+
+export const activeHand = {
+  ...reconnectOverlay_after,
+  gameState: createBaseGameState({
+    phase: "turn",
+    communityCards: [
+      { rank: "A", suit: "hearts" },
+      { rank: "Q", suit: "clubs" },
+      { rank: "9", suit: "spades" },
+      { rank: "2", suit: "diamonds" },
+    ],
+    pot: 1800,
+    roundBet: 800,
+    needsToAct: ["p1"],
+    players: {
+      p1: createPublicPlayer({
+        id: "p1",
+        name: "Alex",
+        seatIndex: 0,
+        stack: 3600,
+        currentBet: 800,
+      }),
+      p2: createPublicPlayer({
+        id: "p2",
+        name: "Blake",
+        seatIndex: 3,
+        stack: 2800,
+        currentBet: 800,
+        lastAction: "call",
+      }),
+      p3: createPublicPlayer({
+        id: "p3",
+        name: "Casey",
+        seatIndex: 6,
+        stack: 5400,
+        currentBet: 0,
+        isFolded: true,
+        hasCards: false,
+        lastAction: "fold",
+      }),
+    },
+  }),
+  timingFlags: createTimingFlags(),
+  sessionContext: createSessionContext(),
+  clientUiState: createClientUiState(),
+};
+
+export const showdownComplete = {
+  ...showdownEnd_before,
+  clientUiState: createClientUiState({
+    settledRunCount: 1,
+    publicShowdownRevealComplete: true,
+  }),
+};
+
+export const bombPotShowdown = {
+  ...runItVoteDeal_after,
+  gameState: createBaseGameState({
+    phase: "showdown",
+    isBombPot: true,
+    communityCards: [
+      { rank: "A", suit: "hearts" },
+      { rank: "Q", suit: "clubs" },
+      { rank: "9", suit: "spades" },
+      { rank: "2", suit: "diamonds" },
+      { rank: "3", suit: "clubs" },
+    ],
+    communityCards2: [
+      { rank: "K", suit: "spades" },
+      { rank: "K", suit: "clubs" },
+      { rank: "4", suit: "hearts" },
+      { rank: "7", suit: "diamonds" },
+      { rank: "T", suit: "clubs" },
+    ],
+    runCount: 2,
+    runResults: [
+      {
+        board: [
+          { rank: "A", suit: "hearts" },
+          { rank: "Q", suit: "clubs" },
+          { rank: "9", suit: "spades" },
+          { rank: "2", suit: "diamonds" },
+          { rank: "3", suit: "clubs" },
+        ],
+        winners: [{ playerId: "p1", amount: 900, hand: "Pair of Aces" }],
+      },
+      {
+        board: [
+          { rank: "K", suit: "spades" },
+          { rank: "K", suit: "clubs" },
+          { rank: "4", suit: "hearts" },
+          { rank: "7", suit: "diamonds" },
+          { rank: "T", suit: "clubs" },
+        ],
+        winners: [{ playerId: "p2", amount: 900, hand: "Pair of Kings" }],
+      },
+    ],
+    winners: [
+      { playerId: "p1", amount: 900, hand: "Pair of Aces" },
+      { playerId: "p2", amount: 900, hand: "Pair of Kings" },
+    ],
+    showdownKind: "contested",
+    players: {
+      p1: createPublicPlayer({ id: "p1", name: "Alex", seatIndex: 0, stack: 4100 }),
+      p2: createPublicPlayer({ id: "p2", name: "Blake", seatIndex: 3, stack: 3900 }),
+      p3: createPublicPlayer({ id: "p3", name: "Casey", seatIndex: 7, stack: 5000, hasCards: false, isFolded: true }),
+    },
+  }),
+  timingFlags: createTimingFlags({
+    isRunItBoard: false,
+    knownCardCountAtRunIt: 5,
+    showdownStartedAt: 100,
+  }),
+  sessionContext: createSessionContext(),
+  clientUiState: createClientUiState({
+    settledRunCount: 2,
+    publicShowdownRevealComplete: true,
+  }),
+};
+
+export const TABLE_RENDER_FIXTURES = {
+  "reconnect-overlay": reconnectOverlay_before,
+  "waiting-open-seats": waitingOpenSeats,
+  "active-hand": activeHand,
+  "showdown-complete": showdownComplete,
+  "run-it": runItVoteDeal_after,
+  "bomb-pot": bombPotShowdown,
+};
+
+export function getTableRenderFixture(name) {
+  return TABLE_RENDER_FIXTURES[name] ?? null;
+}

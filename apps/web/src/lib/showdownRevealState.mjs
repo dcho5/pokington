@@ -1,6 +1,7 @@
 import { computeRunTransitions, deriveRunAnimationAt } from "@pokington/engine";
 
 const CARD_COUNT = 5;
+const SEQUENTIAL_FINAL_REVEAL_HOLD_MS = 2400;
 
 function clampCardCount(count) {
   return Math.max(0, Math.min(CARD_COUNT, count ?? 0));
@@ -45,6 +46,21 @@ export function getTimedVisibleRunCounts({
   for (let runIndex = 0; runIndex < totalRuns; runIndex += 1) {
     if (runIndex < currentRun) counts[runIndex] = CARD_COUNT;
     else if (runIndex === currentRun) counts[runIndex] = revealedCount;
+  }
+
+  // The server broadcasts reveal steps on timer callbacks. At the exact final
+  // transition boundary of a sequential multi-run showdown, keep the later run
+  // one card short until that callback has a chance to publish the update.
+  const transitions = computeRunTransitions(clampedKnownCardCount, totalRuns);
+  const finalTransition = transitions.at(-1);
+  const elapsed = now - runDealStartedAt;
+  if (
+    totalRuns > 1 &&
+    finalTransition != null &&
+    elapsed === finalTransition &&
+    counts[totalRuns - 1] >= CARD_COUNT
+  ) {
+    counts[totalRuns - 1] = CARD_COUNT - 1;
   }
 
   return counts;
@@ -92,7 +108,28 @@ export function getNextTimedRevealAt({
  * }} [options]
  */
 export function isTimedShowdownRevealComplete(options = {}) {
-  return getTimedVisibleRunCounts(options).every((count) => count >= CARD_COUNT);
+  const {
+    knownCardCount = 0,
+    runCount = 1,
+    runDealStartedAt = null,
+    now = Date.now(),
+    revealRunsConcurrently = false,
+  } = options;
+
+  if (runDealStartedAt == null) return false;
+
+  const transitions = computeRunTransitions(
+    clampCardCount(knownCardCount),
+    Math.max(1, runCount),
+    { revealRunsConcurrently },
+  );
+  const finalTransition = transitions.at(-1);
+  if (finalTransition == null) return true;
+
+  const completionAt = runDealStartedAt + finalTransition + (
+    !revealRunsConcurrently && runCount > 1 ? SEQUENTIAL_FINAL_REVEAL_HOLD_MS : 0
+  );
+  return now >= completionAt;
 }
 
 /**

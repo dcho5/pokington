@@ -8,6 +8,7 @@ apps/web/.next/
 !README.md
 !**/README.md
 !MOBILE_LOBBY_POLISH_BACKLOG.md
+!QA_MANUAL_RELEASE_MATRIX.md
 
 # Local debug logs from launch_poker.sh
 *.log
@@ -28,6 +29,8 @@ dist/
 /lib/
 out/
 *.tsbuildinfo
+playwright-report/
+test-results/
 
 # --- Partykit ---
 .partykit/

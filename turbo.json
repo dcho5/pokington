@@ -3,9 +3,20 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "dist/**", "lib/**", "out/**"]
+      "outputs": [".next/**", ".expo/**", "dist/**", "lib/**", "out/**"]
     },
     "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "@pokington/mobile#dev": {
+      "dependsOn": [
+        "@pokington/config#build",
+        "@pokington/network#build",
+        "@pokington/ui#build",
+        "@pokington/engine#build",
+        "@pokington/shared#build"
+      ],
       "cache": false,
       "persistent": true
     },
