@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCopyCurrentUrl } from "hooks/useCopyCurrentUrl";
 import { formatCents } from "lib/formatCents";
-import { getMobileHeaderHeight, getMobileSafeAreaTop } from "lib/mobileShell.mjs";
+import { MOBILE_SHELL, getMobileHeaderHeight, getMobileSafeAreaTop } from "lib/mobileShell.mjs";
 import type { SevenTwoBountyBB } from "@pokington/engine";
 
 interface TableHeaderProps {
@@ -65,6 +65,10 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         onClick={() => router.push("/")}
         className="flex items-center gap-2 min-w-[44px] min-h-[44px] -ml-2 px-2 rounded-xl"
         aria-label="Go back"
+        style={{
+          minWidth: MOBILE_SHELL.compactControlMinSizePx,
+          minHeight: MOBILE_SHELL.compactControlMinSizePx,
+        }}
       >
         <span className="text-xl leading-none text-gray-900 dark:text-white">←</span>
         <span className="font-bold text-sm text-gray-900 dark:text-white truncate max-w-[120px]">{tableName}</span>
@@ -72,24 +76,28 @@ const TableHeader: React.FC<TableHeaderProps> = ({
       {/* Right: 7-2 badge (when active) + blinds + overflow menu */}
       <div className="flex items-center justify-end gap-1.5 min-w-0 max-w-[48%]">
         {sevenTwoBountyBB > 0 && (
-          <span className="shrink-0 px-1.5 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wide bg-red-500/20 text-red-400 border border-red-500/30">
+          <span className="shrink-0 rounded-full border border-red-500/25 bg-red-500/12 px-2 py-1 text-[8px] font-black uppercase tracking-wide text-red-400">
             7-2 {sevenTwoBountyBB}×
           </span>
         )}
-        <span className="shrink-0 font-mono text-xs text-gray-500 dark:text-gray-400">
+        <span className="shrink-0 rounded-full border border-gray-200/70 bg-white/72 px-2.5 py-1 font-mono text-[11px] text-gray-500 shadow-sm dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-400">
           {formatCents(smallBlind)} / {formatCents(bigBlind)}
         </span>
         <div className="relative shrink-0" ref={menuRef}>
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
-            className={`flex h-8 w-6 items-center justify-center transition-colors ${
+            className={`flex items-center justify-center rounded-xl border border-gray-200/70 bg-white/72 shadow-sm transition-colors dark:border-white/[0.08] dark:bg-white/[0.04] ${
               leaveQueued
                 ? "text-amber-500"
                 : "text-gray-700 dark:text-gray-200"
             }`}
             aria-label="Table menu"
             aria-expanded={menuOpen}
+            style={{
+              minWidth: MOBILE_SHELL.compactControlMinSizePx,
+              minHeight: MOBILE_SHELL.compactControlMinSizePx,
+            }}
           >
             <span className="flex h-full flex-col items-center justify-center gap-0.5">
               <span className="h-1 w-1 rounded-full bg-current" />

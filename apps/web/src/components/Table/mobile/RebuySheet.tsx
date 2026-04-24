@@ -32,9 +32,7 @@ export default function RebuySheet({ playerName, bigBlindCents, onRebuy, onLeave
             className={`flex-1 rounded-xl font-bold transition-colors ${
               selected === val
                 ? "bg-red-500/10 text-red-500 border border-red-500/30 dark:text-red-300"
-                : isDesktopDialog
-                  ? "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
-                  : "bg-gray-800 text-gray-400 border border-gray-700 active:bg-gray-700"
+                : "bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
             } ${isDesktopDialog ? "py-3 text-base" : "py-3 text-sm"}`}
           >
             {label}
@@ -89,14 +87,13 @@ export default function RebuySheet({ playerName, bigBlindCents, onRebuy, onLeave
   return (
     <MobileBottomSheet
       onDismiss={() => {}}
-      className="elevated-surface-dark border-t px-4 pt-4 max-h-[85dvh] overflow-y-auto overscroll-contain"
-      handleClassName="bg-gray-700"
+      className="elevated-surface-light border-t px-4 pt-4 max-h-[85dvh] overflow-y-auto overscroll-contain"
       draggable={false}
     >
       <div className="surface-content">
         <div className="text-center mb-6">
-          <p className="text-lg font-black text-white mb-1">Out of chips</p>
-          <p className="text-sm text-gray-400">
+          <p className="text-lg font-black text-gray-900 dark:text-white mb-1">Out of chips</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             {playerName} — buy back in to keep playing.
           </p>
         </div>
@@ -110,7 +107,7 @@ export default function RebuySheet({ playerName, bigBlindCents, onRebuy, onLeave
           <motion.button
             whileTap={{ scale: 0.96 }}
             onClick={onLeave}
-            className="flex-1 h-14 rounded-2xl bg-gray-800 border border-gray-700 text-gray-300 font-bold text-base"
+            className="flex-1 h-14 rounded-2xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-bold text-base border border-gray-200 dark:border-gray-700 transition-colors hover:bg-gray-200 dark:hover:bg-gray-700"
           >
             Leave
           </motion.button>

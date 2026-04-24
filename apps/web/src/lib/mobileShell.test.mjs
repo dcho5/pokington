@@ -27,8 +27,17 @@ test("mobile shell helpers preserve the portrait viewport cap", () => {
   );
 });
 
+test("mobile shell constants keep compact controls touch-safe", () => {
+  assert.equal(MOBILE_SHELL.compactControlMinSizePx, 44);
+  assert.equal(MOBILE_SHELL.floatingUtilityButtonSizePx, 40);
+  assert.equal(MOBILE_SHELL.actionBarInsetPx, 16);
+  assert.equal(MOBILE_SHELL.footerStatusLiftPx, 12);
+});
+
 test("mobile overlay z-index values keep sheets above floating table overlays", () => {
   assert.ok(MOBILE_OVERLAY_Z.sheet > MOBILE_OVERLAY_Z.sheetScrim);
   assert.ok(MOBILE_OVERLAY_Z.winnerBanner < MOBILE_OVERLAY_Z.runItVote);
+  assert.ok(MOBILE_OVERLAY_Z.prioritySheetScrim > MOBILE_OVERLAY_Z.bombPotVote);
   assert.ok(MOBILE_OVERLAY_Z.prioritySheet > MOBILE_OVERLAY_Z.runItVote);
+  assert.ok(MOBILE_OVERLAY_Z.prioritySheet > MOBILE_OVERLAY_Z.prioritySheetScrim);
 });

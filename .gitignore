@@ -7,6 +7,7 @@ apps/web/.next/
 **/*.md
 !README.md
 !**/README.md
+!MOBILE_LOBBY_POLISH_BACKLOG.md
 
 # Local debug logs from launch_poker.sh
 *.log

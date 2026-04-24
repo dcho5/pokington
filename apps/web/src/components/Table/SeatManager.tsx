@@ -158,8 +158,7 @@ export default function SeatManager({
     return (
       <MobileBottomSheet
         onDismiss={onDismiss}
-        className="border-t border-white/10 bg-[rgba(3,7,18,0.96)] px-4 pt-4"
-        handleClassName="bg-gray-700"
+        className="elevated-surface-light border-t px-4 pt-4"
       >
         {body}
       </MobileBottomSheet>

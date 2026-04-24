@@ -1,14 +1,9 @@
 "use client";
 import React from "react";
-import { motion } from "framer-motion";
 import { useGameStore } from "store/useGameStore";
 import { formatCents } from "lib/formatCents";
 import { deriveLedgerRows, derivePayoutInstructions } from "lib/ledger";
-import {
-  MOBILE_OVERLAY_Z,
-  MOBILE_SHELL,
-  getMobileSheetPaddingBottom,
-} from "lib/mobileShell.mjs";
+import MobileBottomSheet from "./MobileBottomSheet";
 
 interface LedgerSheetProps {
   onDismiss: () => void;
@@ -21,41 +16,18 @@ export default function LedgerSheet({ onDismiss }: LedgerSheetProps) {
   const payouts = derivePayoutInstructions(rows);
 
   return (
-    <>
-      <motion.div
-        className="overlay-scrim-strong absolute inset-0"
-        style={{ zIndex: MOBILE_OVERLAY_Z.sheetScrim }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onDismiss}
-      />
+    <MobileBottomSheet
+      onDismiss={onDismiss}
+      className="elevated-surface-dark border-t px-4 pt-4"
+      handleClassName="bg-gray-700"
+    >
+      <div className="surface-content">
+        <h2 className="text-white font-black text-base mb-3">Session Ledger</h2>
 
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 rounded-t-3xl
-          elevated-surface-dark border-t
-          px-4 pt-4"
-        style={{
-          zIndex: MOBILE_OVERLAY_Z.sheet,
-          paddingBottom: getMobileSheetPaddingBottom(),
-        }}
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-        drag="y"
-        dragConstraints={{ top: 0 }}
-        onDragEnd={(_event: unknown, info: { offset: { y: number } }) => { if (info.offset.y > MOBILE_SHELL.sheetDismissOffsetPx) onDismiss(); }}
-      >
-        <div className="surface-content">
-          <div className="w-10 h-1 bg-gray-700 rounded-full mx-auto mb-4" />
-
-          <h2 className="text-white font-black text-base mb-3">Session Ledger</h2>
-
-          {rows.length === 0 ? (
-            <p className="text-gray-500 text-sm text-center py-4">No players have sat down yet.</p>
-          ) : (
-            <>
+        {rows.length === 0 ? (
+          <p className="text-gray-500 text-sm text-center py-4">No players have sat down yet.</p>
+        ) : (
+          <>
             {/* Header row */}
             <div className="flex text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 px-1">
               <span className="flex-1">Player</span>
@@ -124,8 +96,7 @@ export default function LedgerSheet({ onDismiss }: LedgerSheetProps) {
             )}
           </>
         )}
-        </div>
-      </motion.div>
-    </>
+      </div>
+    </MobileBottomSheet>
   );
 }

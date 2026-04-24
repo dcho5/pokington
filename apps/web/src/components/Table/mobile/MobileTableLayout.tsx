@@ -57,6 +57,7 @@ import {
   getMobileSheetPaddingBottom,
   getMobileWinnerBannerBottom,
 } from "lib/mobileShell.mjs";
+import MobileBottomSheet from "./MobileBottomSheet";
 
 type MobileTableLayoutProps = TableLayoutProps & {
   totalSeats?: number;
@@ -497,7 +498,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           paddingBottom: getMobileSafeAreaBottom(),
         }}
       >
-        <div className="flex-shrink-0 pt-7">
+        <div className="flex-shrink-0 pt-5">
           <OpponentStrip
             players={players}
             playerCount={seatedPlayerCount}
@@ -515,7 +516,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           />
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-start gap-1 pt-4">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-start gap-0.5 pt-2">
           <CommunityCards
             phase={phase}
             communityCards={communityCards}
@@ -579,8 +580,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
                           transition={{ type: "spring", stiffness: 400, damping: 24 }}
                           whileTap={{ scale: 0.88 }}
                           onClick={() => setBombPotSheetOpen(true)}
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-lg shadow-xl"
+                          className="flex items-center justify-center rounded-[1rem] text-lg shadow-xl"
                           style={{
+                            width: MOBILE_SHELL.floatingUtilityButtonSizePx,
+                            height: MOBILE_SHELL.floatingUtilityButtonSizePx,
                             background: "rgba(99,102,241,0.22)",
                             border: "1px solid rgba(99,102,241,0.4)",
                             backdropFilter: "blur(8px)",
@@ -600,8 +603,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
                       animate={{ scale: 1, opacity: 1 }}
                       whileTap={{ scale: 0.88 }}
                       onClick={() => setLedgerOpen(true)}
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-sm shadow-xl"
+                      className="flex items-center justify-center rounded-[1rem] text-sm shadow-xl"
                       style={{
+                        width: MOBILE_SHELL.floatingUtilityButtonSizePx,
+                        height: MOBILE_SHELL.floatingUtilityButtonSizePx,
                         background: "rgba(255,255,255,0.08)",
                         border: "1px solid rgba(255,255,255,0.15)",
                         backdropFilter: "blur(8px)",
@@ -634,11 +639,18 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         </div>
 
         {phase !== "voting" && (
-          <div className="relative flex-shrink-0 bg-white dark:bg-[rgb(3,7,18)] border-t border-gray-200/50 dark:border-white/[0.06]">
+          <div
+            className={`relative flex-shrink-0 border-t border-gray-200/50 bg-white/95 backdrop-blur-md dark:border-white/[0.06] dark:bg-[rgba(3,7,18,0.96)] ${
+              isYourTurn
+                ? "shadow-[0_-20px_38px_rgba(239,68,68,0.12)]"
+                : "shadow-[0_-14px_30px_rgba(15,23,42,0.08)]"
+            }`}
+          >
             <AnimatePresence>
               {footerStatus && (
                 <motion.div
-                  className="pointer-events-none absolute inset-x-0 -top-3 z-10 flex justify-center px-4"
+                  className="pointer-events-none absolute inset-x-0 z-10 flex justify-center px-4"
+                  style={{ top: -MOBILE_SHELL.footerStatusLiftPx }}
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
@@ -723,60 +735,46 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
       <AnimatePresence>
         {leaveConfirm && youPlayer && onStandUp && (
-          <>
-            <motion.div
-              className="overlay-scrim-strong absolute inset-0"
-              style={{ zIndex: MOBILE_OVERLAY_Z.prioritySheetScrim }}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setLeaveConfirm(false)}
-            />
-            <motion.div
-              className="elevated-surface-light absolute bottom-0 left-0 right-0 rounded-t-2xl border-t px-4 pt-4"
-              style={{
-                zIndex: MOBILE_OVERLAY_Z.prioritySheet,
-                paddingBottom: getMobileSheetPaddingBottom(MOBILE_SHELL.raisedSheetInsetBottomPx),
-              }}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", stiffness: 400, damping: 30 }}
-            >
-              <div className="surface-content">
-                <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-4" />
-                <p className="text-sm font-black text-gray-900 dark:text-white text-center mb-1">
-                  {mustQueueLeave ? "Leave next hand?" : "Leave seat?"}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
-                  {mustQueueLeave
-                    ? "You'll leave after this hand finishes. Your chips will be cashed out."
-                    : "Your chips will be cashed out."}
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setLeaveConfirm(false)}
-                    className="flex-1 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold h-12 text-sm"
-                  >
-                    Stay
-                  </button>
-                  <button
-                    onClick={() => {
-                      setLeaveConfirm(false);
-                      if (mustQueueLeave) {
-                        onQueueLeave?.();
-                      } else {
-                        onStandUp();
-                      }
-                    }}
-                    className="flex-1 rounded-xl font-bold bg-red-500 text-white h-12 text-sm"
-                  >
-                    {mustQueueLeave ? "Leave Next Hand" : "Leave"}
-                  </button>
-                </div>
+          <MobileBottomSheet
+            onDismiss={() => setLeaveConfirm(false)}
+            className="elevated-surface-light border-t px-4 pt-4"
+            sheetZIndex={MOBILE_OVERLAY_Z.prioritySheet}
+            scrimZIndex={MOBILE_OVERLAY_Z.prioritySheetScrim}
+            bottomPaddingExtraPx={MOBILE_SHELL.raisedSheetInsetBottomPx}
+            draggable={false}
+          >
+            <div className="surface-content">
+              <p className="text-sm font-black text-gray-900 dark:text-white text-center mb-1">
+                {mustQueueLeave ? "Leave next hand?" : "Leave seat?"}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mb-4">
+                {mustQueueLeave
+                  ? "You'll leave after this hand finishes. Your chips will be cashed out."
+                  : "Your chips will be cashed out."}
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setLeaveConfirm(false)}
+                  className="flex-1 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold h-12 text-sm"
+                >
+                  Stay
+                </button>
+                <button
+                  onClick={() => {
+                    setLeaveConfirm(false);
+                    if (mustQueueLeave) {
+                      onQueueLeave?.();
+                    } else {
+                      onStandUp();
+                    }
+                  }}
+                  className="flex-1 rounded-xl font-bold bg-red-500 text-white h-12 text-sm"
+                >
+                  {mustQueueLeave ? "Leave Next Hand" : "Leave"}
+                </button>
               </div>
-            </motion.div>
-          </>
+            </div>
+          </MobileBottomSheet>
         )}
       </AnimatePresence>
 

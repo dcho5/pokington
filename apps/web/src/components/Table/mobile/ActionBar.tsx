@@ -2,12 +2,9 @@
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatCents } from "lib/formatCents";
-import {
-  MOBILE_OVERLAY_Z,
-  MOBILE_SHELL,
-  getMobileSheetPaddingBottom,
-} from "lib/mobileShell.mjs";
+import { MOBILE_OVERLAY_Z, MOBILE_SHELL } from "lib/mobileShell.mjs";
 import { useRaiseAmount } from "hooks/useRaiseAmount";
+import MobileBottomSheet from "./MobileBottomSheet";
 
 interface RaiseSheetProps {
   pot: number;
@@ -36,37 +33,11 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
   const incrementLabel = formatCents(increment);
 
   return (
-    <>
-      <motion.div
-        className="overlay-scrim-strong absolute inset-0"
-        style={{ zIndex: MOBILE_OVERLAY_Z.sheetScrim }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onDismiss}
-      />
-
-      <motion.div
-        className="absolute bottom-0 left-0 right-0 rounded-t-3xl
-          elevated-surface-light border-t
-          px-4 pt-4"
-        style={{
-          zIndex: MOBILE_OVERLAY_Z.sheet,
-          paddingBottom: getMobileSheetPaddingBottom(),
-        }}
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-        drag="y"
-        dragConstraints={{ top: 0 }}
-        onDragEnd={(_event: unknown, info: { offset: { y: number } }) => {
-          if (info.offset.y > MOBILE_SHELL.sheetDismissOffsetPx) onDismiss();
-        }}
-      >
-        <div className="surface-content">
-        <div className="w-10 h-1 bg-gray-300 dark:bg-gray-700 rounded-full mx-auto mb-4" />
-
+    <MobileBottomSheet
+      onDismiss={onDismiss}
+      className="elevated-surface-light border-t px-4 pt-4"
+    >
+      <div className="surface-content">
         <div className="flex items-start justify-center gap-3 mb-4">
           <div className="w-14 flex flex-col items-center gap-1">
             <button
@@ -142,52 +113,41 @@ const RaiseSheet: React.FC<RaiseSheetProps> = ({
         >
           {label} {formatCents(amount)}
         </button>
-        </div>
-      </motion.div>
-    </>
+      </div>
+    </MobileBottomSheet>
   );
 };
 
 function FoldConfirmSheet({ onConfirm, onDismiss }: { onConfirm: () => void; onDismiss: () => void }) {
   return (
-    <>
-      <motion.div
-        className="overlay-scrim-strong absolute inset-0"
-        style={{ zIndex: MOBILE_OVERLAY_Z.sheetScrim }}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        onClick={onDismiss}
-      />
-      <motion.div
-        className="elevated-surface-light absolute bottom-0 left-0 right-0 rounded-t-2xl border-t px-4 pt-4 pb-6"
-        style={{ zIndex: MOBILE_OVERLAY_Z.sheet }}
-        initial={{ y: "100%" }}
-        animate={{ y: 0 }}
-        exit={{ y: "100%" }}
-        transition={{ type: "spring", stiffness: 400, damping: 30 }}
-      >
-        <div className="surface-content">
-          <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-4">
-            You can check for free. Fold anyway?
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={onDismiss}
-              className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={() => { onConfirm(); onDismiss(); }}
-              className="flex-1 h-12 rounded-xl bg-red-500 text-white font-bold text-sm"
-            >
-              Fold
-            </button>
-          </div>
+    <MobileBottomSheet
+      onDismiss={onDismiss}
+      className="elevated-surface-light border-t px-4 pt-4"
+      sheetZIndex={MOBILE_OVERLAY_Z.prioritySheet}
+      scrimZIndex={MOBILE_OVERLAY_Z.prioritySheetScrim}
+      bottomPaddingExtraPx={MOBILE_SHELL.raisedSheetInsetBottomPx}
+      draggable={false}
+    >
+      <div className="surface-content">
+        <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-4">
+          You can check for free. Fold anyway?
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onDismiss}
+            className="flex-1 h-12 rounded-xl bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold text-sm"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => { onConfirm(); onDismiss(); }}
+            className="flex-1 h-12 rounded-xl bg-red-500 text-white font-bold text-sm"
+          >
+            Fold
+          </button>
         </div>
-      </motion.div>
-    </>
+      </div>
+    </MobileBottomSheet>
   );
 }
 
@@ -260,7 +220,15 @@ const ActionBar: React.FC<ActionBarProps> = ({
 
   if (isWaiting || isShowdown) {
     return (
-      <div className="w-full z-30" style={{ padding: "10px 16px" }}>
+      <div
+        className="w-full z-30"
+        style={{
+          paddingTop: MOBILE_SHELL.actionBarInsetTopPx,
+          paddingLeft: MOBILE_SHELL.actionBarInsetPx,
+          paddingRight: MOBILE_SHELL.actionBarInsetPx,
+          paddingBottom: MOBILE_SHELL.actionBarInsetBottomPx,
+        }}
+      >
         {isAdmin && (isWaiting || isShowdown) && (
           <>
             {eligiblePlayerCount < 2 ? (
@@ -285,12 +253,16 @@ const ActionBar: React.FC<ActionBarProps> = ({
   return (
     <>
       <div
-        className={`w-full z-30 transition-all duration-300 ${isYourTurn ? "animate-action-pulse rounded-t-xl" : ""}`}
+        className={`w-full z-30 transition-all duration-300 ${
+          isYourTurn
+            ? "animate-action-pulse rounded-t-[1.35rem] bg-red-500/[0.05] shadow-[0_-16px_28px_rgba(239,68,68,0.16)] dark:bg-red-500/[0.08]"
+            : ""
+        }`}
         style={{
-          paddingTop: "10px",
-          paddingLeft: "16px",
-          paddingRight: "16px",
-          paddingBottom: "10px",
+          paddingTop: MOBILE_SHELL.actionBarInsetTopPx,
+          paddingLeft: MOBILE_SHELL.actionBarInsetPx,
+          paddingRight: MOBILE_SHELL.actionBarInsetPx,
+          paddingBottom: MOBILE_SHELL.actionBarInsetBottomPx,
         }}
       >
         <div className={`flex gap-2 transition-opacity duration-200 ${!isYourTurn ? "opacity-40 pointer-events-none" : ""}`}>
