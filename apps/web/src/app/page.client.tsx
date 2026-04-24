@@ -95,7 +95,7 @@ export default function HomePage() {
             <h1 className="font-bold text-3xl sm:text-4xl text-gray-900 dark:text-white">
               Pokington
             </h1>
-            <PokerChip size={34} />
+            <PokerChip size={34} glowAngle={0}/>
           </div>
 
           <div className="text-sm sm:text-lg text-gray-700 dark:text-gray-300">

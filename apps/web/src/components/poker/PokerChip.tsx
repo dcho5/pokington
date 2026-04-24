@@ -98,15 +98,15 @@ const PokerChip: React.FC<PokerChipProps> = ({
           <stop offset="100%" stopColor="white" stopOpacity="0" />
         </radialGradient>
         <radialGradient id={pulseGradId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%"   stopColor="#be1c1c" stopOpacity="0.12" />
+          <stop offset="0%"   stopColor="#be1c1c" stopOpacity="0.25" />
           <stop offset="100%" stopColor="#be1c1c" stopOpacity="0" />
         </radialGradient>
       </defs>
 
       {/* Outer pulse glow — SVG SMIL animation (GPU-composited, no JS) */}
       <circle cx="50" cy="50" r="48" fill={`url(#${pulseGradId})`}>
-        <animate attributeName="r" values="48;54;48" dur="3s" repeatCount="indefinite" />
-        <animate attributeName="opacity" values="0.6;0.2;0.6" dur="3s" repeatCount="indefinite" />
+        <animate attributeName="r" values="48;56;48" dur="3s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.8;0.3;0.8" dur="3s" repeatCount="indefinite" />
       </circle>
 
       {/* Rim */}

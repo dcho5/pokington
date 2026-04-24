@@ -693,7 +693,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
               }}
               transition={centerStageTransition}
             >
-              <div className="-translate-x-1/2 -translate-y-1/2">
+              <div className="-translate-x-1/2 -translate-y-1/2" style={{ transform: "translateX(-50%) translateY(-50%) translateY(22.5px)" }}>
                 <motion.div
                   initial={false}
                   animate={{
@@ -703,7 +703,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                   }}
                   transition={centerStageTransition}
                 >
-                  <PokerChip size={30} glowAngle={chipGlowAngle} />
+                  <PokerChip size={45} glowAngle={chipGlowAngle} />
                 </motion.div>
               </div>
             </motion.div>
