@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BOMB_POT_VOTING_TIMEOUT_MS,
@@ -96,17 +96,6 @@ function spotlightHasActiveEmphasis(spotlight: ShowdownSpotlightModel | null) {
   return [...spotlight.holeCards, ...spotlight.boardCards].some((entry) => entry.emphasis !== "neutral");
 }
 
-const MOBILE_INTERACTIVE_SELECTOR = [
-  "button",
-  "a",
-  "input",
-  "select",
-  "textarea",
-  "label",
-  "[role='button']",
-  "[data-mobile-interactive='true']",
-].join(", ");
-
 const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   scene,
   actions,
@@ -122,6 +111,8 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     tableName = "Table",
     blinds = { small: 1, big: 2 },
     pot = 0,
+    committedPot = 0,
+    currentStreetBets = 0,
     smallBlindIndex,
     bigBlindIndex,
     communityCards,
@@ -194,12 +185,21 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   const [bombPotSheetOpen, setBombPotSheetOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
+  const [previewedOpponentSeatIndex, setPreviewedOpponentSeatIndex] = useState<number | null>(null);
   const [selectedSpotlightPlayerId, setSelectedSpotlightPlayerId] = useState<string | null>(null);
   const [viewingBombPotBoardIndex, setViewingBombPotBoardIndex] = useState(0);
   const [selectedBombPotBoardIndex, setSelectedBombPotBoardIndex] = useState<number | null>(null);
   const [viewingRunIndex, setViewingRunIndex] = useState(0);
   const [selectedRunIndex, setSelectedRunIndex] = useState<number | null>(null);
   const runItOddsPanel = useRunItOddsPanelModel(scene);
+  const previewHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearPreviewHoldTimer() {
+    if (previewHoldTimerRef.current) {
+      clearTimeout(previewHoldTimerRef.current);
+      previewHoldTimerRef.current = null;
+    }
+  }
 
   useEffect(() => {
     if (selectedEmptySeat === null) {
@@ -215,11 +215,24 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
   useEffect(() => {
     setSelectedSpotlightPlayerId(null);
+    setPreviewedOpponentSeatIndex(null);
     setViewingBombPotBoardIndex(0);
     setSelectedBombPotBoardIndex(null);
     setViewingRunIndex(0);
     setSelectedRunIndex(null);
   }, [handNumber]);
+
+  useEffect(() => {
+    if (previewedOpponentSeatIndex == null) return;
+    if (!players[previewedOpponentSeatIndex]) {
+      setPreviewedOpponentSeatIndex(null);
+      setSelectedSpotlightPlayerId(null);
+    }
+  }, [players, previewedOpponentSeatIndex]);
+
+  useEffect(() => () => {
+    clearPreviewHoldTimer();
+  }, []);
 
   useEffect(() => {
     if (!selectedSpotlightPlayerId) return;
@@ -231,12 +244,35 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
   const youPlayer = getViewerPlayer(players);
   const handleOpenSeat = (seatIndex: number) => {
+    clearPreviewHoldTimer();
+    setPreviewedOpponentSeatIndex(null);
+    setSelectedSpotlightPlayerId(null);
     if (openSeatMode === "blocked") return;
     if (openSeatMode === "change-seat") {
       onChangeSeat?.(seatIndex);
       return;
     }
     setSelectedEmptySeat(seatIndex);
+  };
+  const handleOpponentPressStart = (seatIndex: number) => {
+    clearPreviewHoldTimer();
+    previewHoldTimerRef.current = setTimeout(() => {
+      const player = players[seatIndex];
+      setPreviewedOpponentSeatIndex(seatIndex);
+      if (player?.id && isFullyTabled(player.holeCards)) {
+        setSelectedSpotlightPlayerId(player.id);
+      } else {
+        setSelectedSpotlightPlayerId(null);
+      }
+    }, 170);
+  };
+  const handleOpponentPressEnd = (seatIndex: number) => {
+    clearPreviewHoldTimer();
+    setPreviewedOpponentSeatIndex((current) => current === seatIndex ? null : current);
+    setSelectedSpotlightPlayerId((current) => {
+      const player = players[seatIndex];
+      return current != null && current === player?.id ? null : current;
+    });
   };
   const showRunItVotingPanel = useTimedPanelVisibility({
     visible: phase === "voting",
@@ -402,25 +438,10 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         ? `Waiting for ${waitingFor}...`
         : null);
   const footerStatusTone = phase === "showdown" ? "amber" : "neutral";
-  const shouldIgnoreBackgroundTap =
-    leaveConfirm ||
-    bombPotSheetOpen ||
-    ledgerOpen ||
-    showRunItVotingPanel ||
-    showBombPotVotingPanel;
-
-  function handleBackgroundTapCapture(event: React.MouseEvent<HTMLDivElement>) {
-    if (!selectedSpotlightPlayerId || shouldIgnoreBackgroundTap) return;
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (target.closest(MOBILE_INTERACTIVE_SELECTOR)) return;
-    setSelectedSpotlightPlayerId(null);
-  }
 
   return (
     <div
       className="absolute inset-0 overflow-hidden overscroll-none bg-gray-100 dark:bg-gray-950 transition-colors duration-500"
-      onClickCapture={handleBackgroundTapCapture}
     >
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute left-1/2 top-1/3 -translate-x-1/2 -translate-y-1/2 w-[80%] h-[40%] bg-red-500/5 dark:bg-red-600/10 blur-[80px] rounded-full" style={{ willChange: "auto" }} />
@@ -506,12 +527,13 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             smallBlindIndex={smallBlindIndex}
             bigBlindIndex={bigBlindIndex}
             seatSelectionLocked={seatSelectionLocked}
+            selectedDetailSeatIndex={previewedOpponentSeatIndex}
+            onPlayerPressStart={handleOpponentPressStart}
+            onPlayerPressEnd={handleOpponentPressEnd}
+            previewedSeatIndex={previewedOpponentSeatIndex}
             selectedSpotlightPlayerId={spotlightPlayerId}
             spotlightHoleCardEmphasisByIndex={spotlightHoleCardEmphasis}
             runItOddsPercentagesByPlayerId={runItOddsPercentagesByPlayerId}
-            onShowdownPlayerTap={canInteractWithSpotlight
-              ? (playerId) => setSelectedSpotlightPlayerId((current) => current === playerId ? null : playerId)
-              : undefined}
             onEmptySeatTap={handleOpenSeat}
           />
         </div>
@@ -551,10 +573,23 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-gradient-to-r from-red-500 to-red-700 shadow-lg"
+              className="flex flex-col items-center gap-1 rounded-xl bg-gradient-to-r from-red-500 to-red-700 px-3 py-1.5 shadow-lg"
             >
-              <span className="text-[8px] font-black text-red-200 uppercase tracking-widest">Pot</span>
-              <span className="text-white font-mono font-black text-xs">{formatCents(pot)}</span>
+              {currentStreetBets > 0 ? (
+                <>
+                  <div className="font-mono text-sm font-black text-white">
+                    {formatCents(committedPot)}
+                  </div>
+                  <div className="border-t border-white/15 pt-1 text-[8px] font-semibold uppercase tracking-[0.24em] text-red-100/80">
+                    Total {formatCents(pot)}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span className="text-[8px] font-black text-red-200 uppercase tracking-widest">Pot</span>
+                  <span className="text-white font-mono font-black text-xs">{formatCents(pot)}</span>
+                </>
+              )}
             </motion.div>
           </div>
         )}

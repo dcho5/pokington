@@ -24,6 +24,7 @@ import DesktopLedgerMenu from "./DesktopLedgerMenu";
 import DesktopRaisePopover from "./DesktopRaisePopover";
 import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
 import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
+import AutoPeelToggle from "../AutoPeelToggle";
 import RunItBoard from "../RunItBoard";
 
 import AnnouncementBanner from "../AnnouncementBanner";
@@ -130,6 +131,8 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     tableName,
     blinds,
     pot,
+    committedPot = 0,
+    currentStreetBets = 0,
     smallBlindIndex,
     bigBlindIndex,
     communityCards,
@@ -644,9 +647,29 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
         >
           {/* Rail */}
           <div
-            className="absolute inset-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 shadow-[0_50px_100px_-20px_rgba(0,0,0,0.3)] dark:shadow-[0_50px_100px_-20px_rgba(0,0,0,0.8)]"
-            style={{ borderRadius: desktopLayout.table.railRadius }}
-          />
+            className="absolute inset-0 overflow-hidden"
+            style={{
+              borderRadius: desktopLayout.table.railRadius,
+              background: isDark
+                ? "linear-gradient(180deg, rgba(50,36,36,0.96), rgba(26,18,18,0.99))"
+                : "linear-gradient(180deg, rgba(43,58,78,0.96), rgba(17,25,39,0.99))",
+              border: isDark
+                ? "1px solid rgba(84, 63, 63, 0.72)"
+                : "1px solid rgba(88, 103, 128, 0.62)",
+              boxShadow: isDark
+                ? "0 50px 100px -20px rgba(0,0,0,0.78)"
+                : "0 50px 100px -20px rgba(15,23,42,0.28)",
+            }}
+          >
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: isDark
+                  ? "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0) 38%)"
+                  : "linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 36%)",
+              }}
+            />
+          </div>
 
           {/* Table Surface */}
           <div
@@ -838,17 +861,32 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                 transition={centerStageTransition}
               >
                 <div className="-translate-x-1/2 -translate-y-1/2 text-center group">
-                  <div className="text-[10px] uppercase tracking-[0.28em] text-gray-400 font-black mb-1.5 opacity-80">Total Pot</div>
+                  <div className="text-[11.5px] uppercase tracking-[0.28em] text-gray-400 font-black mb-1.5 opacity-80">Pot</div>
                   <motion.div
                     initial={{ scale: 0.9, opacity: 0 }}
                     animate={{ scale: isRunItDealing ? 0.96 : 1, opacity: 1 }}
                     transition={centerStageTransition}
-                    className="min-w-[170px] px-7 py-3.5 rounded-[22px] bg-gradient-to-r from-red-500 to-red-700 shadow-lg text-white font-mono font-black text-[28px] transition-all group-hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] group-hover:-translate-y-0.5"
+                    className="min-w-[204px] px-5 py-4 rounded-[22px] bg-gradient-to-r from-red-500 to-red-700 shadow-lg text-white transition-all group-hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] group-hover:-translate-y-0.5"
                     style={{
                       boxShadow: "0 16px 32px rgba(239,68,68,0.26), 0 0 0 1px rgba(255,255,255,0.08) inset",
                     }}
                   >
-                    {formatCents(pot ?? 0)}
+                    {currentStreetBets > 0 ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="font-mono text-[34.5px] font-black leading-none text-white">
+                          {formatCents(committedPot)}
+                        </div>
+                        <div className="w-full border-t border-white/15 pt-2 text-center">
+                          <div className="text-[13.8px] font-semibold uppercase tracking-[0.24em] text-red-100/70">
+                            Total {formatCents(pot ?? 0)}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="font-mono font-black text-[32.2px] text-white">
+                        {formatCents(pot ?? 0)}
+                      </div>
+                    )}
                   </motion.div>
                 </div>
               </motion.div>
@@ -1143,20 +1181,11 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                     onPeekCard={onPeekCard}
                     emphasisByIndex={isViewerSpotlight ? spotlightHoleCardEmphasis : undefined}
                   />
-                  <button
+                  <AutoPeelToggle
+                    enabled={autoPeelEnabled}
                     onClick={() => setAutoPeelEnabled(!autoPeelEnabled)}
-                    className={`mt-3 flex items-center gap-2 rounded-full font-black uppercase tracking-wide transition-colors ${
-                      autoPeelEnabled
-                        ? "bg-red-500 text-white"
-                        : "bg-gray-100 dark:bg-white/[0.07] text-gray-400 dark:text-gray-500 hover:bg-gray-200 dark:hover:bg-white/[0.12]"
-                    }`}
-                    style={{ padding: "5px 14px", fontSize: 12 }}
-                  >
-                    <span
-                      className={`w-2 h-2 rounded-full flex-shrink-0 ${autoPeelEnabled ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`}
-                    />
-                    auto peel
-                  </button>
+                    className="mt-3"
+                  />
                 </>
               ) : (
                 <div className="text-xs text-gray-400 dark:text-gray-600 font-bold uppercase tracking-widest py-8">

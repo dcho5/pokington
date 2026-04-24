@@ -69,7 +69,7 @@ function createBaseGameState(overrides = {}) {
 function createTimingFlags(overrides = {}) {
   return {
     votingStartedAt: null,
-    streetPauseChips: null,
+    boundaryPausePlayers: null,
     streetSweeping: false,
     runAnnouncement: null,
     isRunItBoard: false,

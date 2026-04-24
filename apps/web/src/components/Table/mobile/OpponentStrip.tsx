@@ -1,11 +1,12 @@
 "use client";
 import React from "react";
+import { AnimatePresence } from "framer-motion";
 import PlayerBubble from "./PlayerBubble";
+import OpponentPreviewPopover from "./OpponentPreviewPopover";
 import type { Player } from "types/player";
 import { useColorScheme } from "hooks/useColorScheme";
 import {
   MOBILE_SEAT_STRIP_HEIGHT_PX,
-  MOBILE_SEAT_STRIP_METRICS,
   MOBILE_SEAT_STRIP_TOTAL_SEATS,
   getMobileSeatStripSlot,
 } from "lib/mobileSeatStripLayout.mjs";
@@ -18,8 +19,12 @@ interface OpponentStripProps {
   bigBlindIndex?: number;
   seatSelectionLocked?: boolean;
   onEmptySeatTap?: (seatIndex: number) => void;
+  selectedDetailSeatIndex?: number | null;
+  onPlayerTap?: (seatIndex: number) => void;
+  onPlayerPressStart?: (seatIndex: number) => void;
+  onPlayerPressEnd?: (seatIndex: number) => void;
+  previewedSeatIndex?: number | null;
   selectedSpotlightPlayerId?: string | null;
-  onShowdownPlayerTap?: (playerId: string) => void;
   spotlightHoleCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
   runItOddsPercentagesByPlayerId?: Record<string, number | null>;
 }
@@ -32,8 +37,12 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
   bigBlindIndex,
   seatSelectionLocked = false,
   onEmptySeatTap,
+  selectedDetailSeatIndex = null,
+  onPlayerTap,
+  onPlayerPressStart,
+  onPlayerPressEnd,
+  previewedSeatIndex = null,
   selectedSpotlightPlayerId = null,
-  onShowdownPlayerTap,
   spotlightHoleCardEmphasisByIndex = ["neutral", "neutral"],
   runItOddsPercentagesByPlayerId = {},
 }) => {
@@ -46,21 +55,95 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
       player: players[seatIndex] ?? null,
     };
   }).filter((seat): seat is { seatIndex: number; slot: NonNullable<ReturnType<typeof getMobileSeatStripSlot>>; player: Player | null } => seat.slot != null);
+  const previewedSeat = previewedSeatIndex != null
+    ? seats.find((seat) => seat.seatIndex === previewedSeatIndex && seat.player)
+    : null;
+  const stripInsetXPx = 4;
+  const stripBottomInsetPx = 4;
+  const feltInsetXPx = 10;
+  const feltInsetTopPx = 6;
+  const feltInsetBottomPx = 16;
+  const railInsetBottomPx = feltInsetBottomPx - feltInsetTopPx;
 
   return (
     <div className="relative w-full px-1.5" style={{ height: MOBILE_SEAT_STRIP_HEIGHT_PX }}>
-      <div className="absolute inset-x-1 top-0 bottom-4 pointer-events-none z-0">
+      <div
+        className="absolute inset-y-0 z-0"
+        style={{
+          left: stripInsetXPx,
+          right: stripInsetXPx,
+          bottom: stripBottomInsetPx,
+        }}
+      >
         <div
-          className="absolute inset-0 rounded-[34px] shadow-[0_18px_36px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_40px_rgba(2,6,23,0.24)]"
+          className="pointer-events-none absolute left-0 right-0 top-0 rounded-[34px] shadow-[0_18px_36px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_40px_rgba(2,6,23,0.24)]"
           style={{
+            bottom: railInsetBottomPx,
             background: isDark
               ? "linear-gradient(180deg, rgba(50,36,36,0.94), rgba(26,18,18,0.98))"
               : "linear-gradient(180deg, rgba(43,58,78,0.94), rgba(17,25,39,0.98))",
           }}
         />
+        {seats.map(({ seatIndex, slot, player }) => {
+          const isActive = player?.isCurrentActor === true;
+          const contentKey = player?.id
+            ? `player-${player.id}`
+            : `empty-${seatIndex}`;
+          const baseZIndex = player
+            ? (slot.row === 0 ? 24 : 16)
+            : 8;
+          const seatZIndex = isActive ? baseZIndex + 10 : baseZIndex;
+
+          return (
+            <div
+              key={`seat-slot-${seatIndex}`}
+              className="absolute"
+              style={{
+                left: `${slot.leftPct}%`,
+                top: `${slot.topPct}%`,
+                zIndex: seatZIndex,
+                transform: "translate(-50%, -50%)",
+              }}
+            >
+              <div key={contentKey}>
+                {player ? (
+                  <PlayerBubble
+                    player={player}
+                    seatSlot={slot}
+                    seatIndex={seatIndex}
+                    detailSelected={selectedDetailSeatIndex === seatIndex}
+                    previewActive={previewedSeatIndex === seatIndex}
+                    onPlayerTap={() => onPlayerTap?.(seatIndex)}
+                    onPlayerPressStart={() => onPlayerPressStart?.(seatIndex)}
+                    onPlayerPressEnd={() => onPlayerPressEnd?.(seatIndex)}
+                    playerCount={playerCount}
+                    isDealer={seatIndex === dealerIndex}
+                    isSmallBlind={seatIndex === smallBlindIndex}
+                    isBigBlind={seatIndex === bigBlindIndex}
+                    showdownSpotlightSelected={player.id === selectedSpotlightPlayerId}
+                    showdownCardEmphasisByIndex={player.id === selectedSpotlightPlayerId ? spotlightHoleCardEmphasisByIndex : undefined}
+                    runItOddsPercentage={player.id ? (runItOddsPercentagesByPlayerId[player.id] ?? null) : null}
+                  />
+                ) : (
+                  <PlayerBubble
+                    player={null}
+                    seatIndex={seatIndex}
+                    emptySeatIndex={seatIndex}
+                    seatSelectionLocked={seatSelectionLocked}
+                    onEmptyTap={seatSelectionLocked ? undefined : () => onEmptySeatTap?.(seatIndex)}
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
         <div
-          className="absolute left-[10px] right-[10px] top-[6px] bottom-[16px] overflow-hidden rounded-[28px] shadow-inner"
+          className="pointer-events-none absolute overflow-hidden rounded-[28px] shadow-inner"
           style={{
+            left: feltInsetXPx,
+            right: feltInsetXPx,
+            top: feltInsetTopPx,
+            bottom: feltInsetBottomPx,
             background: isDark
               ? "radial-gradient(ellipse at 50% 38%, #2c1f1f 0%, #1a1212 55%, #0d0808 100%)"
               : "radial-gradient(ellipse at 50% 38%, #1e2a3a 0%, #111a26 58%, #070c14 100%)",
@@ -70,57 +153,20 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
         </div>
       </div>
 
-      {seats.map(({ seatIndex, slot, player }) => {
-        const isActive = player?.isCurrentActor === true;
-        const contentKey = player?.id
-          ? `player-${player.id}`
-          : `empty-${seatIndex}`;
-        const baseZIndex = player
-          ? (slot.row === 0 ? 24 : 16)
-          : 8;
-        const seatZIndex = isActive ? baseZIndex + 10 : baseZIndex;
-        const translateY = player ? 6 : 0;
-        const anchorOffsetX = player
-          ? slot.avatarAnchorX
-          : MOBILE_SEAT_STRIP_METRICS.emptyFootprintWidthPx / 2;
-
-        return (
-          <div
-            key={`seat-slot-${seatIndex}`}
-            className="absolute"
-            style={{
-              left: `${slot.leftPct}%`,
-              top: `${slot.topPct}%`,
-              zIndex: seatZIndex,
-              transform: `translate(${-anchorOffsetX}px, calc(-50% + ${translateY}px))`,
-            }}
-          >
-            <div key={contentKey}>
-              {player ? (
-                <PlayerBubble
-                  player={player}
-                  seatSlot={slot}
-                  playerCount={playerCount}
-                  isDealer={seatIndex === dealerIndex}
-                  isSmallBlind={seatIndex === smallBlindIndex}
-                  isBigBlind={seatIndex === bigBlindIndex}
-                  showdownSpotlightSelected={player.id === selectedSpotlightPlayerId}
-                  onShowdownPlayerTap={onShowdownPlayerTap}
-                  showdownCardEmphasisByIndex={player.id === selectedSpotlightPlayerId ? spotlightHoleCardEmphasisByIndex : undefined}
-                  runItOddsPercentage={player.id ? (runItOddsPercentagesByPlayerId[player.id] ?? null) : null}
-                />
-              ) : (
-                <PlayerBubble
-                  player={null}
-                  emptySeatIndex={seatIndex}
-                  seatSelectionLocked={seatSelectionLocked}
-                  onEmptyTap={seatSelectionLocked ? undefined : () => onEmptySeatTap?.(seatIndex)}
-                />
-              )}
-            </div>
-          </div>
-        );
-      })}
+      <AnimatePresence>
+        {previewedSeat?.player && (
+          <OpponentPreviewPopover
+            key={`preview-${previewedSeat.seatIndex}-${previewedSeat.player.id ?? previewedSeat.seatIndex}`}
+            player={previewedSeat.player}
+            seatIndex={previewedSeat.seatIndex}
+            playerCount={playerCount}
+            isDealer={previewedSeat.seatIndex === dealerIndex}
+            isSmallBlind={previewedSeat.seatIndex === smallBlindIndex}
+            isBigBlind={previewedSeat.seatIndex === bigBlindIndex}
+            runItOddsPercentage={previewedSeat.player.id ? (runItOddsPercentagesByPlayerId[previewedSeat.player.id] ?? null) : null}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };

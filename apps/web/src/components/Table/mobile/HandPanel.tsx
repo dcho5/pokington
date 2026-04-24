@@ -3,6 +3,7 @@ import React, { useState } from "react";
 import HoleCards from "components/poker/HoleCards";
 import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
+import AutoPeelToggle from "../AutoPeelToggle";
 import RunItOddsBadge from "../RunItOddsBadge";
 import type { HandIndicator } from "lib/handIndicators";
 import type { Player } from "types/player";
@@ -111,20 +112,15 @@ const HandPanel: React.FC<HandPanelProps> = ({
 
           {/* Bottom: auto-flip toggle */}
           <div className="flex gap-1">
-            <button
+            <AutoPeelToggle
+              size="compact"
+              enabled={autoPeelEnabled}
               onClick={(event) => {
                 event.stopPropagation();
                 setAutoPeelEnabled(!autoPeelEnabled);
               }}
-              className={`flex-1 flex items-center justify-center gap-1 rounded-lg font-black uppercase tracking-wide transition-colors py-1.5 text-[9px] ${
-                autoPeelEnabled
-                  ? "bg-red-500 text-white"
-                  : "bg-gray-100 dark:bg-white/[0.07] text-gray-500 dark:text-gray-300"
-              }`}
-            >
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${autoPeelEnabled ? "bg-white" : "bg-gray-300 dark:bg-gray-600"}`} />
-              auto peel
-            </button>
+              className="flex-1"
+            />
           </div>
         </div>
 

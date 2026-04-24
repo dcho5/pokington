@@ -60,6 +60,67 @@ test("runItVoteDeal fixtures keep the announcement active before the run-it boar
   assert.equal(after.layout.runDealStartedAt, null);
 });
 
+test("live-hand scene exposes committed pot separately from current street bets", () => {
+  const scene = deriveTableScene({
+    ...reconnectOverlay_after,
+    gameState: {
+      ...reconnectOverlay_after.gameState,
+      pot: 1200,
+      phase: "flop",
+      players: {
+        ...reconnectOverlay_after.gameState.players,
+        p1: {
+          ...reconnectOverlay_after.gameState.players.p1,
+          currentBet: 200,
+        },
+        p2: {
+          ...reconnectOverlay_after.gameState.players.p2,
+          currentBet: 400,
+        },
+      },
+    },
+  });
+
+  assert.equal(scene.layout.committedPot, 1200);
+  assert.equal(scene.layout.currentStreetBets, 600);
+  assert.equal(scene.layout.pot, 1800);
+});
+
+test("boundary pause players preserve the closing action amount in the scene", () => {
+  const scene = deriveTableScene({
+    ...reconnectOverlay_after,
+    gameState: {
+      ...reconnectOverlay_after.gameState,
+      phase: "turn",
+      players: {
+        ...reconnectOverlay_after.gameState.players,
+        p1: {
+          ...reconnectOverlay_after.gameState.players.p1,
+          currentBet: 0,
+          lastAction: null,
+        },
+        p2: {
+          ...reconnectOverlay_after.gameState.players.p2,
+          currentBet: 0,
+          lastAction: null,
+        },
+      },
+    },
+    timingFlags: {
+      ...reconnectOverlay_after.timingFlags,
+      boundaryPausePlayers: [
+        { id: "p1", seatIndex: 0, currentBet: 400, lastAction: "raise", isAllIn: false },
+        { id: "p2", seatIndex: 3, currentBet: 400, lastAction: "call", isAllIn: false },
+      ],
+    },
+  });
+
+  assert.equal(scene.layout.players[0]?.currentBet, 400);
+  assert.equal(scene.layout.players[0]?.lastAction, "raise");
+  assert.equal(scene.layout.players[3]?.currentBet, 400);
+  assert.equal(scene.layout.players[3]?.lastAction, "call");
+});
+
 test("animated two-run showdowns keep both viewer hand indicators available", () => {
   const scene = deriveTableScene(runItVoteDeal_after);
 

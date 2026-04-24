@@ -52,6 +52,9 @@ export interface PlayerActionConfirmedFeedbackCue extends BaseGameFeedbackCueEnv
   kind: "player_action_confirmed";
   playerId: string;
   action: "fold" | "check" | "call" | "raise" | "all-in";
+  currentBet: number;
+  totalContribution: number;
+  isAllIn: boolean;
 }
 
 export interface StreetRevealedFeedbackCue extends BaseGameFeedbackCueEnvelope {
@@ -149,6 +152,64 @@ function getWinnerSummary(state: GameState): {
   return { winnerPlayerIds, totalAmount };
 }
 
+function deriveConfirmedActionState(
+  prevState: GameState,
+  event: Extract<GameEvent, { type: "PLAYER_ACTION" }>,
+): Pick<PlayerActionConfirmedFeedbackCue, "currentBet" | "totalContribution" | "isAllIn"> {
+  const player = prevState.players[event.playerId];
+  if (!player) {
+    return {
+      currentBet: 0,
+      totalContribution: 0,
+      isAllIn: false,
+    };
+  }
+
+  switch (event.action) {
+    case "fold":
+    case "check":
+      return {
+        currentBet: player.currentBet,
+        totalContribution: player.totalContribution,
+        isAllIn: player.isAllIn,
+      };
+    case "call": {
+      const callAmount = Math.min(
+        Math.max(0, prevState.roundBet - player.currentBet),
+        player.stack,
+      );
+      const remainingStack = player.stack - callAmount;
+      return {
+        currentBet: player.currentBet + callAmount,
+        totalContribution: player.totalContribution + callAmount,
+        isAllIn: remainingStack === 0,
+      };
+    }
+    case "raise": {
+      const raiseTotal = event.amount ?? (prevState.roundBet + prevState.lastLegalRaiseIncrement);
+      const raiseCost = Math.max(0, raiseTotal - player.currentBet);
+      const remainingStack = player.stack - raiseCost;
+      return {
+        currentBet: raiseTotal,
+        totalContribution: player.totalContribution + raiseCost,
+        isAllIn: remainingStack === 0,
+      };
+    }
+    case "all-in":
+      return {
+        currentBet: player.currentBet + player.stack,
+        totalContribution: player.totalContribution + player.stack,
+        isAllIn: true,
+      };
+    default:
+      return {
+        currentBet: player.currentBet,
+        totalContribution: player.totalContribution,
+        isAllIn: player.isAllIn,
+      };
+  }
+}
+
 function makeBase<K extends GameFeedbackCue>(
   kind: K,
   key: string,
@@ -189,6 +250,7 @@ export function deriveFeedbackFromTransition(
   }
 
   if (event?.type === "PLAYER_ACTION") {
+    const confirmedActionState = deriveConfirmedActionState(prevState, event);
     cues.push({
       ...makeBase(
         "player_action_confirmed",
@@ -211,6 +273,9 @@ export function deriveFeedbackFromTransition(
       ),
       playerId: event.playerId,
       action: event.action,
+      currentBet: confirmedActionState.currentBet,
+      totalContribution: confirmedActionState.totalContribution,
+      isAllIn: confirmedActionState.isAllIn,
     });
   }
 

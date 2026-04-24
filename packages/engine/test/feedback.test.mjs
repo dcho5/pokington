@@ -53,7 +53,12 @@ test("confirmed player actions emit action and turn cues", () => {
       { emittedAt: 123, source: "action" },
     );
 
-    assert.equal(feedback.some((cue) => cue.kind === "player_action_confirmed" && cue.action === action), true);
+    const actionCue = feedback.find((cue) => cue.kind === "player_action_confirmed" && cue.action === action);
+
+    assert.equal(Boolean(actionCue), true);
+    assert.equal(typeof actionCue.currentBet, "number");
+    assert.equal(typeof actionCue.totalContribution, "number");
+    assert.equal(typeof actionCue.isAllIn, "boolean");
     assert.equal(feedback.some((cue) => cue.kind === "turn_changed" && cue.actorId === "b"), true);
   }
 });

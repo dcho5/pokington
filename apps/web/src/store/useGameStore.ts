@@ -30,7 +30,7 @@ import {
 } from "lib/holeCardReveal.mjs";
 import { deriveServerRunTiming } from "lib/runTimingFlags.mjs";
 import { isTableClearedForNextHand } from "lib/tableVisualState";
-import { deriveStreetPauseChips } from "lib/streetSweep.mjs";
+import { deriveStreetPauseSnapshot } from "lib/streetSweep.mjs";
 import { shouldClearHandScopedState } from "party/handScopedState.mjs";
 
 export interface BombPotAnnouncement {
@@ -82,7 +82,13 @@ interface GameStore {
   bombPotVotingStartedAt: number | null;
 
   // Chip sweep animation
-  streetPauseChips: { id: string; seatIndex: number; amount: number }[] | null;
+  boundaryPausePlayers: {
+    id: string;
+    seatIndex: number;
+    currentBet: number;
+    lastAction: string | null;
+    isAllIn: boolean;
+  }[] | null;
   streetSweeping: boolean;
 
   runAnnouncement: 1 | 2 | 3 | null;
@@ -194,8 +200,21 @@ let _idleCleanup: (() => void) | null = null;
 let sevenTwoAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
 let bombPotAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
 let actionErrorTimer: ReturnType<typeof setTimeout> | null = null;
+let boundaryPauseSweepTimer: ReturnType<typeof setTimeout> | null = null;
+let boundaryPauseClearTimer: ReturnType<typeof setTimeout> | null = null;
 let feedbackSequence = 0;
 const feedbackListeners = new Set<(event: TableFeedbackEvent) => void>();
+
+function clearBoundaryPauseTimers() {
+  if (boundaryPauseSweepTimer) {
+    clearTimeout(boundaryPauseSweepTimer);
+    boundaryPauseSweepTimer = null;
+  }
+  if (boundaryPauseClearTimer) {
+    clearTimeout(boundaryPauseClearTimer);
+    boundaryPauseClearTimer = null;
+  }
+}
 
 export function subscribeToTableFeedback(listener: (event: TableFeedbackEvent) => void) {
   feedbackListeners.add(listener);
@@ -249,7 +268,12 @@ export const useGameStore = create<GameStore>((set, get) => {
 
   // Called on every TABLE_STATE message from the server.
   // Detects phase transitions and fires UI-layer side effects (animations, timers, announcements).
-  function handleIncomingState(prev: PublicGameState | null, next: PublicGameState, isFirstReceive = false) {
+  function handleIncomingState(
+    prev: PublicGameState | null,
+    next: PublicGameState,
+    feedback: GameFeedbackCueEnvelope[] = [],
+    isFirstReceive = false,
+  ) {
     const timingPatch = deriveServerRunTiming(next) as RunTimingPatch;
     const snapshotPatch =
       next.phase === "showdown"
@@ -279,13 +303,21 @@ export const useGameStore = create<GameStore>((set, get) => {
     const shouldClearRevealedCards = prev ? shouldClearHandScopedState(prev, next) : false;
 
     // ── Street transition: live bets cleared ──
-    const streetPauseSnapshot = prev ? deriveStreetPauseChips(prev, next) : null;
-    const streetTransitioned = streetPauseSnapshot !== null;
+    const boundaryPauseSnapshot = prev ? deriveStreetPauseSnapshot(prev, next, feedback) : null;
+    const streetTransitioned = boundaryPauseSnapshot !== null;
 
     if (streetTransitioned && prev) {
-      set({ streetPauseChips: streetPauseSnapshot, streetSweeping: false });
-      setTimeout(() => set({ streetSweeping: true }), STREET_PAUSE_MS - SWEEP_DURATION_MS);
-      setTimeout(() => set({ streetPauseChips: null, streetSweeping: false }), STREET_PAUSE_MS);
+      clearBoundaryPauseTimers();
+      set({ boundaryPausePlayers: boundaryPauseSnapshot, streetSweeping: false });
+      boundaryPauseSweepTimer = setTimeout(
+        () => set({ streetSweeping: true }),
+        STREET_PAUSE_MS - SWEEP_DURATION_MS,
+      );
+      boundaryPauseClearTimer = setTimeout(() => {
+        set({ boundaryPausePlayers: null, streetSweeping: false });
+        boundaryPauseSweepTimer = null;
+        boundaryPauseClearTimer = null;
+      }, STREET_PAUSE_MS);
     }
 
     // ── 7-2 bounty triggered ──
@@ -405,7 +437,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     viewingSeat: -1,
     votingStartedAt: null,
     bombPotVotingStartedAt: null,
-    streetPauseChips: null,
+    boundaryPausePlayers: null,
     streetSweeping: false,
 
     runAnnouncement: null,
@@ -426,6 +458,7 @@ export const useGameStore = create<GameStore>((set, get) => {
 
     connect: (tableCode) => {
       if (_socket) { _socket.close(); _socket = null; }
+      clearBoundaryPauseTimers();
       if (actionErrorTimer) {
         clearTimeout(actionErrorTimer);
         actionErrorTimer = null;
@@ -445,7 +478,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         viewingSeat: -1,
         votingStartedAt: null,
         bombPotVotingStartedAt: null,
-        streetPauseChips: null,
+        boundaryPausePlayers: null,
         streetSweeping: false,
         runAnnouncement: null,
         isRunItBoard: false,
@@ -502,7 +535,7 @@ export const useGameStore = create<GameStore>((set, get) => {
               const { gameState: prev, isFirstStateReceived } = get();
               if (get().tableNotFound) set({ tableNotFound: false });
               const isFirstReceive = !isFirstStateReceived;
-              handleIncomingState(prev, msg.state, isFirstReceive);
+              handleIncomingState(prev, msg.state, msg.feedback ?? [], isFirstReceive);
               if (!isFirstReceive && msg.feedback && msg.feedback.length > 0) {
                 emitTableFeedback({
                   kind: "feedback",
@@ -575,6 +608,7 @@ export const useGameStore = create<GameStore>((set, get) => {
               const shouldDisconnect =
                 isTableError || msg.code === "INVALID_JOIN_TOKEN" || msg.code === "PROTOCOL_VERSION_MISMATCH";
               if (shouldDisconnect) {
+                clearBoundaryPauseTimers();
                 if (actionErrorTimer) {
                   clearTimeout(actionErrorTimer);
                   actionErrorTimer = null;
@@ -604,7 +638,7 @@ export const useGameStore = create<GameStore>((set, get) => {
                   viewingSeat: -1,
                   votingStartedAt: null,
                   bombPotVotingStartedAt: null,
-                  streetPauseChips: null,
+                  boundaryPausePlayers: null,
                   streetSweeping: false,
                   runAnnouncement: null,
                   isRunItBoard: false,
@@ -676,6 +710,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     disconnect: () => {
+      clearBoundaryPauseTimers();
       if (actionErrorTimer) {
         clearTimeout(actionErrorTimer);
         actionErrorTimer = null;
@@ -704,7 +739,7 @@ export const useGameStore = create<GameStore>((set, get) => {
         viewingSeat: -1,
         votingStartedAt: null,
         bombPotVotingStartedAt: null,
-        streetPauseChips: null,
+        boundaryPausePlayers: null,
         streetSweeping: false,
         runAnnouncement: null,
         isRunItBoard: false,

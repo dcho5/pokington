@@ -11,8 +11,8 @@ const TABLE = {
   maxWidthPct: TABLE_MAX_WIDTH_PCT,
   aspectRatio: TABLE_ASPECT_RATIO,
   railRadius: 100,
-  feltInset: 3,
-  feltRadius: 97,
+  feltInset: 18,
+  feltRadius: 82,
 };
 
 const SEAT = {

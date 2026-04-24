@@ -10,29 +10,23 @@ export const MOBILE_SEAT_STRIP_TOTAL_SEATS = 10;
 
 export const MOBILE_SEAT_STRIP_METRICS = Object.freeze({
   avatarSizePx: 40,
-  railGapPx: 6,
-  railMaxWidthPx: 56,
-  occupiedFootprintWidthPx: 102,
-  occupiedFootprintHeightPx: 58,
+  occupiedFootprintWidthPx: 56,
+  occupiedFootprintHeightPx: 54,
   emptyFootprintWidthPx: 54,
-  showdownCardWidthPx: 20,
-  showdownCardHeightPx: 28,
-  showdownPeekWidthPx: 58,
-  metadataLineHeightPx: 14,
+  emptyFootprintHeightPx: 54,
+  primaryBadgeHeightPx: 14,
+  primaryBadgeMaxWidthPx: 58,
+  showdownCardWidthPx: 14,
+  showdownCardHeightPx: 14,
+  showdownPeekWidthPx: 46,
+  showdownCardOffsetYPx: 4,
+  showdownCardSpreadXPx: 7,
+  primaryBadgeOffsetYPx: 16,
+  badgeOrbitOffsetPx: -3,
+  roleBadgeInsetPx: 1,
+  peekBadgeInsetPx: 1,
+  cornerBadgeSizePx: 18,
 });
-
-const AVATAR_RADIUS_PX = MOBILE_SEAT_STRIP_METRICS.avatarSizePx / 2;
-
-/**
- * @param {number} row
- * @param {number} column
- * @returns {"left" | "right"}
- */
-function getRailDirection(row, column) {
-  if (column <= 1) return "right";
-  if (column >= 3) return "left";
-  return row === 0 ? "right" : "left";
-}
 
 export function getMobileSeatStripGridPosition(seatIndex) {
   if (!Number.isInteger(seatIndex) || seatIndex < 0 || seatIndex >= MOBILE_SEAT_STRIP_TOTAL_SEATS) {
@@ -49,65 +43,81 @@ export function getMobileSeatStripSlot(seatIndex) {
   const gridPosition = getMobileSeatStripGridPosition(seatIndex);
   if (!gridPosition) return null;
 
-  const railDirection = getRailDirection(gridPosition.row, gridPosition.column);
-  const railAlign = railDirection === "right" ? "start" : "end";
-  const avatarAnchorX = railDirection === "right"
-    ? AVATAR_RADIUS_PX
-    : MOBILE_SEAT_STRIP_METRICS.occupiedFootprintWidthPx - AVATAR_RADIUS_PX;
-
   return {
     ...gridPosition,
     leftPct: STRIP_COLUMN_LEFT_PCTS[gridPosition.column],
     topPct: STRIP_ROW_TOP_PCTS[gridPosition.row],
     viewportXFrac: VIEWPORT_COLUMN_X_FRACS[gridPosition.column],
     viewportYFrac: VIEWPORT_ROW_Y_FRACS[gridPosition.row],
-    railDirection,
-    railAlign,
-    avatarAnchorX,
-    avatarAnchorY: MOBILE_SEAT_STRIP_METRICS.occupiedFootprintHeightPx / 2,
-    railInsetPx: railDirection === "right"
-      ? MOBILE_SEAT_STRIP_METRICS.avatarSizePx + MOBILE_SEAT_STRIP_METRICS.railGapPx
-      : 0,
-    railWidthPx: MOBILE_SEAT_STRIP_METRICS.railMaxWidthPx,
     occupiedFootprintWidthPx: MOBILE_SEAT_STRIP_METRICS.occupiedFootprintWidthPx,
     occupiedFootprintHeightPx: MOBILE_SEAT_STRIP_METRICS.occupiedFootprintHeightPx,
     emptyFootprintWidthPx: MOBILE_SEAT_STRIP_METRICS.emptyFootprintWidthPx,
-    crowdedPriority: Object.freeze(["name", "betOrAction", "stack"]),
+    emptyFootprintHeightPx: MOBILE_SEAT_STRIP_METRICS.emptyFootprintHeightPx,
   };
 }
+
+export function formatMobileSeatStripAmount(cents = 0) {
+  const dollars = Math.abs(cents) / 100;
+  if (dollars >= 1000) {
+    const compact = dollars >= 10000
+      ? Math.round(dollars / 1000)
+      : Math.round(dollars / 100) / 10;
+    return `$${compact}k`;
+  }
+  if (dollars >= 10) {
+    return `$${dollars.toFixed(1)}`;
+  }
+  return `$${dollars.toFixed(2)}`;
+}
+
+const PRIMARY_ACTION_LABELS = Object.freeze({
+  fold: "FOLD",
+  check: "CHECK",
+  call: "CALL",
+  raise: "RAISE",
+  "all-in": "ALL IN",
+});
 
 /**
  * @param {{
  *   currentBet?: number;
  *   lastAction?: string | null;
+ *   isAllIn?: boolean;
+ *   stack?: number;
  *   isFolded?: boolean;
  * }} [options]
  */
-export function resolveMobileSeatStripRailContent({
+export function resolveMobileSeatStripPrimaryBadge({
   currentBet = 0,
   lastAction = null,
+  isAllIn = false,
+  stack: _stack = 0,
   isFolded = false,
 } = {}) {
   const hasLiveBet = Number(currentBet) > 0 && !isFolded;
 
   if (hasLiveBet) {
     return {
-      primary: "bet",
-      secondary: "stack",
+      kind: "bet",
+      label: formatMobileSeatStripAmount(currentBet),
+    };
+  }
+
+  if (isAllIn) {
+    return {
+      kind: "all-in",
+      label: PRIMARY_ACTION_LABELS["all-in"],
     };
   }
 
   if (lastAction) {
     return {
-      primary: "action",
-      secondary: "stack",
+      kind: "action",
+      label: PRIMARY_ACTION_LABELS[lastAction] ?? String(lastAction).toUpperCase(),
     };
   }
 
-  return {
-    primary: "stack",
-    secondary: null,
-  };
+  return null;
 }
 
 export function getMobileSeatStripViewportPoint(seatIndex, viewportWidth, viewportHeight) {

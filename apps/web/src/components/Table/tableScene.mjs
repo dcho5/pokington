@@ -104,7 +104,7 @@ function buildScenePlayers({
     showdownPlayerSnapshot = {},
   } = clientUiState;
   const { myPlayerId = null, isCreator = false } = sessionContext;
-  const streetPauseChips = timingFlags.streetPauseChips ?? null;
+  const boundaryPausePlayers = timingFlags.boundaryPausePlayers ?? null;
   const actorId = getActionableActor(gameState)?.id ?? null;
   const sourcePlayers = gameState.phase === "showdown"
     ? { ...showdownPlayerSnapshot, ...gameState.players }
@@ -112,7 +112,7 @@ function buildScenePlayers({
 
   const result = Array(TOTAL_SEATS).fill(null);
   for (const player of Object.values(sourcePlayers ?? {})) {
-    const pauseBet = streetPauseChips?.find((chip) => chip.id === player.id)?.amount;
+    const boundaryPausePlayer = boundaryPausePlayers?.find((pausedPlayer) => pausedPlayer.id === player.id) ?? null;
     result[player.seatIndex] = {
       id: player.id,
       name: player.name,
@@ -121,10 +121,10 @@ function buildScenePlayers({
       isAdmin: isCreator && player.id === myPlayerId,
       isYou: myPlayerId ? player.id === myPlayerId : player.seatIndex === viewingSeat,
       isCurrentActor: player.id === actorId,
-      currentBet: pauseBet ?? player.currentBet,
+      currentBet: boundaryPausePlayer?.currentBet ?? player.currentBet,
       isFolded: player.isFolded,
-      isAllIn: player.isAllIn,
-      lastAction: player.lastAction,
+      isAllIn: boundaryPausePlayer?.isAllIn ?? player.isAllIn,
+      lastAction: boundaryPausePlayer?.lastAction ?? player.lastAction,
       hasCards: player.hasCards && !player.isFolded,
       isSittingOut: player.sitOutUntilBB,
       peekedCount: peekedCounts[player.id] ?? 0,
@@ -239,6 +239,10 @@ function buildDisplayPot({
   }
 
   return totalPot - settledAmount;
+}
+
+function sumCurrentStreetBets(players) {
+  return Object.values(players ?? {}).reduce((sum, player) => sum + (player?.currentBet ?? 0), 0);
 }
 
 function describePendingBoundaryUpdate(update) {
@@ -407,17 +411,16 @@ export function deriveTableScene({
   const viewerPendingBoundaryUpdate = viewingPlayer?.id
     ? gameState.pendingBoundaryUpdates?.[viewingPlayer.id] ?? null
     : null;
+  const currentStreetBets = phase === "showdown" ? 0 : sumCurrentStreetBets(gameState.players);
   const displayPot = buildDisplayPot({
     phase,
-    pot: gameState.pot + Object.values(gameState.players ?? {}).reduce(
-      (sum, player) => sum + (player?.currentBet ?? 0),
-      0,
-    ),
+    pot: gameState.pot + currentStreetBets,
     winners,
     runResults,
     animatedShowdownReveal,
     settledRunCount,
   });
+  const displayCommittedPot = phase === "showdown" ? displayPot : gameState.pot;
   const showWinnerBanner = phase === "showdown" &&
     (winners?.length ?? 0) > 0 &&
     (!animatedShowdownReveal || (settledRunCount >= runCount && publicShowdownRevealComplete));
@@ -469,6 +472,8 @@ export function deriveTableScene({
       tableName: gameState.tableName,
       blinds: gameState.blinds,
       pot: displayPot,
+      committedPot: displayCommittedPot,
+      currentStreetBets,
       smallBlindIndex: gameState.smallBlindSeatIndex,
       bigBlindIndex: gameState.bigBlindSeatIndex,
       communityCards,

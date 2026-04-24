@@ -12,7 +12,13 @@ export interface HandIndicator {
 export interface TableTimingFlags {
   votingStartedAt: number | null;
   bombPotVotingStartedAt: number | null;
-  streetPauseChips: { id: string; seatIndex: number; amount: number }[] | null;
+  boundaryPausePlayers: {
+    id: string;
+    seatIndex: number;
+    currentBet: number;
+    lastAction: string | null;
+    isAllIn: boolean;
+  }[] | null;
   streetSweeping: boolean;
   runAnnouncement: 1 | 2 | 3 | null;
   isRunItBoard: boolean;
@@ -63,6 +69,8 @@ export interface TableLayoutScene {
   tableName: string;
   blinds: { small: number; big: number };
   pot: number;
+  committedPot: number;
+  currentStreetBets: number;
   smallBlindIndex: number;
   bigBlindIndex: number;
   communityCards: Card[];

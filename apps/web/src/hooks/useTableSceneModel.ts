@@ -27,7 +27,7 @@ export function useTableSceneModel(code: string): TableSceneModel {
   const timingFlags = {
     votingStartedAt: useGameStore((state) => state.votingStartedAt),
     bombPotVotingStartedAt: useGameStore((state) => state.bombPotVotingStartedAt),
-    streetPauseChips: useGameStore((state) => state.streetPauseChips),
+    boundaryPausePlayers: useGameStore((state) => state.boundaryPausePlayers),
     streetSweeping: useGameStore((state) => state.streetSweeping),
     runAnnouncement: useGameStore((state) => state.runAnnouncement),
     isRunItBoard: useGameStore((state) => state.isRunItBoard),
