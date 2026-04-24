@@ -339,36 +339,67 @@ export default function PlayerBubble({
           {player.isCurrentActor && (
             <span className="absolute inset-[-3px] rounded-full pointer-events-none z-0 animate-pulse-ring" />
           )}
+          {player.winType === "full" && (
+            <motion.span
+              className="absolute inset-[-6px] rounded-full pointer-events-none z-10"
+              animate={{ opacity: [0.38, 0.92, 0.38], scale: [1, 1.05, 1] }}
+              transition={{ duration: 1.45, repeat: Infinity, ease: "easeInOut" }}
+              style={{
+                border: "2px solid rgba(245,158,11,0.82)",
+                boxShadow: "0 0 18px rgba(245,158,11,0.72), 0 0 34px rgba(245,158,11,0.5)",
+              }}
+            />
+          )}
+          {player.winType === "partial" && (
+            <motion.span
+              className="absolute inset-[-6px] rounded-full pointer-events-none z-10"
+              animate={{ opacity: [0.34, 0.82, 0.34], scale: [1, 1.04, 1] }}
+              transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }}
+              style={{
+                border: "2px solid rgba(34,197,94,0.78)",
+                boxShadow: "0 0 16px rgba(34,197,94,0.54), 0 0 30px rgba(34,197,94,0.38)",
+              }}
+            />
+          )}
 
           <AnimatePresence>
             {player.winAnimationKey && player.winType === "full" && (
               <motion.span
                 key={`${player.winAnimationKey}-r1`}
                 className="absolute inset-[-4px] rounded-full pointer-events-none z-20"
-                initial={{ opacity: 0.95, scale: 1 }}
-                animate={{ opacity: 0, scale: 1.7 }}
-                transition={{ duration: 1.0, ease: "easeOut" }}
-                style={{ border: "2.5px solid rgba(234,179,8,0.95)" }}
+                initial={{ opacity: 1, scale: 1 }}
+                animate={{ opacity: 0, scale: 1.9 }}
+                transition={{ duration: 1.15, ease: "easeOut" }}
+                style={{
+                  border: "3px solid rgba(245,158,11,0.98)",
+                  boxShadow: "0 0 18px rgba(245,158,11,0.72), 0 0 34px rgba(245,158,11,0.5)",
+                }}
               />
             )}
             {player.winAnimationKey && player.winType === "full" && (
               <motion.span
                 key={`${player.winAnimationKey}-r2`}
                 className="absolute inset-[-4px] rounded-full pointer-events-none z-20"
-                initial={{ opacity: 0.6, scale: 1 }}
-                animate={{ opacity: 0, scale: 2.1 }}
-                transition={{ duration: 1.4, ease: "easeOut", delay: 0.2 }}
-                style={{ border: "1.5px solid rgba(234,179,8,0.5)" }}
+                initial={{ opacity: 0.72, scale: 1 }}
+                animate={{ opacity: 0, scale: 2.35 }}
+                transition={{ duration: 1.65, ease: "easeOut", delay: 0.18 }}
+                style={{
+                  border: "2px solid rgba(245,158,11,0.72)",
+                  boxShadow: "0 0 14px rgba(245,158,11,0.48), 0 0 28px rgba(245,158,11,0.32)",
+                }}
               />
             )}
             {player.winAnimationKey && player.winType === "partial" && (
               <motion.span
                 key={`${player.winAnimationKey}-r3`}
                 className="absolute inset-[-4px] rounded-full pointer-events-none z-20"
-                initial={{ opacity: 0.85, scale: 1 }}
-                animate={{ opacity: 0, scale: 1.55 }}
-                transition={{ duration: 0.85, ease: "easeOut" }}
-                style={{ border: "2px solid rgba(34,197,94,0.9)" }}
+                initial={{ opacity: 0.92, scale: 1 }}
+                animate={{ opacity: 0, scale: 1.72 }}
+                transition={{ duration: 1.0, ease: "easeOut" }}
+                style={{
+                  border: "2.5px solid rgba(34,197,94,0.96)",
+                  boxShadow: "0 0 14px rgba(34,197,94,0.44), 0 0 26px rgba(34,197,94,0.26)",
+                }}
               />
             )}
           </AnimatePresence>

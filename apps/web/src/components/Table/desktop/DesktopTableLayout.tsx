@@ -17,7 +17,6 @@ import PokerChip from "components/poker/PokerChip";
 import Card from "components/poker/Card";
 import HoleCards from "components/poker/HoleCards";
 import { BetChipsLayer } from "./BetChips";
-import { WinnerChipsAnimation } from "./WinnerChipsAnimation";
 import DesktopBombPotMenu from "./DesktopBombPotMenu";
 import DesktopHandIndicatorFan from "./DesktopHandIndicatorFan";
 import DesktopLedgerMenu from "./DesktopLedgerMenu";
@@ -324,7 +323,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
   const autoPeelEnabled = useGameStore((state) => state.autoPeelEnabled);
   const setAutoPeelEnabled = useGameStore((state) => state.setAutoPeelEnabled);
   const emitVisualFeedback = useTableVisualFeedback();
-  // Container width for winner chip animation pixel math
+  // Container width for pixel-positioned table overlays.
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   useEffect(() => {
@@ -1042,28 +1041,6 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
             potLeftPct={centerStage.potLeftPct}
             potTopPct={centerStage.potTopPct}
           />
-
-          {/* Winner chips — animate from pot to winner seat(s), per run if multi-run */}
-          <AnimatePresence>
-            {isShowdown && winners && winners.length > 0 && containerWidth > 0 && (
-              <WinnerChipsAnimation
-                key={`${handNumber}-winner-chips`}
-                winners={winners}
-                runResults={animatedShowdownReveal ? runResults : undefined}
-                knownCardCount={animatedShowdownReveal ? knownCardCount : undefined}
-                revealRunsConcurrently={revealRunsConcurrently}
-                players={players as any}
-                totalSeats={TOTAL_SEATS}
-                geometry={g}
-                containerWidth={containerWidth}
-                handNumber={handNumber}
-                tableAspectRatio={desktopLayout.table.aspectRatio}
-                potTopPct={centerStage.potTopPct}
-                potLeftPct={centerStage.potLeftPct}
-              />
-            )}
-          </AnimatePresence>
-
           {/* 7-2 Bounty chips — fly from each opponent to winner */}
           {sevenTwoBountyTrigger && containerWidth > 0 && (
             <SevenTwoBountyChips

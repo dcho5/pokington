@@ -12,19 +12,8 @@ export interface BoardCardRevealedFeedbackEvent {
   runIndex?: number;
 }
 
-export interface WinnerChipLandedFeedbackEvent {
-  kind: "winner_chip_landed";
-  key: string;
-  handNumber: number;
-  playerId: string;
-  amount: number;
-  runIndex?: number;
-  tier?: number;
-}
-
 export type TableVisualFeedbackEvent =
-  | BoardCardRevealedFeedbackEvent
-  | WinnerChipLandedFeedbackEvent;
+  | BoardCardRevealedFeedbackEvent;
 
 export type TableFeedbackPlaybackEvent =
   | GameFeedbackCueEnvelope
@@ -96,7 +85,6 @@ function isViewerFocusedEvent(event: TableFeedbackPlaybackEvent, myPlayerId: str
   if (event.kind === "pot_awarded" || event.kind === "split_pot_awarded") {
     return event.winnerPlayerIds.includes(myPlayerId);
   }
-  if (event.kind === "winner_chip_landed") return event.playerId === myPlayerId;
   if (event.kind === "player_action_confirmed") return event.playerId === myPlayerId;
   if (event.kind === "seven_two_bounty_triggered") return event.winnerId === myPlayerId;
   return false;
@@ -129,8 +117,6 @@ function getHapticPatternForEvent(
       return event.winnerPlayerIds.includes(context.myPlayerId ?? "") ? "success" : null;
     case "split_pot_awarded":
       return event.winnerPlayerIds.includes(context.myPlayerId ?? "") ? "success" : null;
-    case "winner_chip_landed":
-      return event.playerId === context.myPlayerId ? "light" : null;
     case "seven_two_bounty_triggered":
       return event.winnerId === context.myPlayerId ? "success" : null;
     default:
@@ -404,8 +390,6 @@ function getSoundRecipe(
       return triumphantRecipe({ start: 0, root: 350, strength: 1.15, long: true });
     case "board_card_revealed":
       return chipRecipe({ strength: 0.56, start: 0, bright: 1750 });
-    case "winner_chip_landed":
-      return chipRecipe({ strength: 0.72, start: 0, bright: 1600 });
     case "action_error":
       return {
         tones: [
@@ -599,7 +583,6 @@ export function createWebFeedbackPlatform(): FeedbackPlatform {
     },
     playHaptic(pattern, payload, context) {
       if (!context.isMobile || !canVibrate) return;
-      if (!isViewerFocusedEvent(payload, context.myPlayerId) && payload.kind === "winner_chip_landed") return;
       navigator.vibrate(HAPTIC_PATTERNS[pattern]);
     },
     dispose() {

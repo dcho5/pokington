@@ -18,9 +18,9 @@ This note is intentionally deferred from the current mobile-table pass. The rece
 
 ## Larger Visual Ideas To Revisit Later
 
-- Explore a stronger shared shell between lobby and table so the app feels more native when installed.
+- *** Explore a stronger shared shell between lobby and table so the app feels more native when installed.
 - Revisit typography hierarchy so headings, numeric values, and helper copy feel more intentional across both form factors.
-- Consider a more deliberate empty-state / first-run presentation for new players creating a table from mobile.
+- *** Consider a more deliberate empty-state / first-run presentation for new players creating a table from mobile.
 
 ## Non-Goals For The Current Pass
 

@@ -1,8 +1,8 @@
 export const ANNOUNCE_DELAY_MS = 3500;
 export const ANNOUNCE_DELAY_S = ANNOUNCE_DELAY_MS / 1000;
-export const CHIP_DURATION_S = 2.4;
-export const WINNER_STAGGER_BUFFER_S = 0.9;
-export const NORMAL_LAND_MS = (0.4 + CHIP_DURATION_S + WINNER_STAGGER_BUFFER_S) * 1000;
+export const POST_REVEAL_SETTLE_S = 0.5;
+export const NEXT_RUN_BUFFER_S = 0.7;
+export const NORMAL_SETTLE_MS = 400;
 
 const STREET_REVEAL_MS: { revealTo: number; absoluteMs: number }[] = [
   { revealTo: 3, absoluteMs: 400 },
@@ -42,21 +42,21 @@ export function shouldRevealRunsConcurrently(isBombPotHand: boolean, runCount: n
 }
 
 export function getRunTimings(knownCardCount: number): {
-  chipStartS: number;
+  settleDelayS: number;
   runIntervalS: number;
 };
 export function getRunTimings(knownCardCount: number, options: RunTimingOptions): {
-  chipStartS: number;
+  settleDelayS: number;
   runIntervalS: number;
 };
 export function getRunTimings(knownCardCount: number, options: RunTimingOptions = {}): {
-  chipStartS: number;
+  settleDelayS: number;
   runIntervalS: number;
 } {
   const lastCardMs = knownCardCount >= 4 ? 400 : knownCardCount >= 3 ? 2900 : 5400;
-  const chipStartS = lastCardMs / 1000 + 0.5;
-  const runIntervalS = options.revealRunsConcurrently ? 0 : chipStartS + CHIP_DURATION_S + 0.7;
-  return { chipStartS, runIntervalS };
+  const settleDelayS = lastCardMs / 1000 + POST_REVEAL_SETTLE_S;
+  const runIntervalS = options.revealRunsConcurrently ? 0 : settleDelayS + NEXT_RUN_BUFFER_S;
+  return { settleDelayS, runIntervalS };
 }
 
 export function getRevealSteps(knownCardCount: number): { revealTo: number; delayMs: number }[] {
@@ -175,12 +175,10 @@ export function getAllInShowdownRevealDelayMs(
   runCount: number,
   options: RunTimingOptions = {},
 ): number {
-  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount, options);
+  const { settleDelayS, runIntervalS } = getRunTimings(knownCardCount, options);
   return (
     ANNOUNCE_DELAY_S +
     Math.max(0, runCount - 1) * runIntervalS +
-    chipStartS +
-    CHIP_DURATION_S +
-    WINNER_STAGGER_BUFFER_S
+    settleDelayS
   ) * 1000;
 }

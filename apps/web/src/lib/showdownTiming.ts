@@ -1,9 +1,9 @@
 export {
   ANNOUNCE_DELAY_MS,
   ANNOUNCE_DELAY_S,
-  CHIP_DURATION_S,
-  WINNER_STAGGER_BUFFER_S,
-  NORMAL_LAND_MS,
+  POST_REVEAL_SETTLE_S,
+  NEXT_RUN_BUFFER_S,
+  NORMAL_SETTLE_MS,
   hasAnimatedRunout,
   shouldAnnounceRunIt,
   shouldRevealRunsConcurrently,

@@ -1,4 +1,4 @@
-import { ANNOUNCE_DELAY_S, getRunTimings } from "@pokington/engine";
+import { getAllInShowdownRevealDelayMs } from "@pokington/engine";
 
 /**
  * @param {{
@@ -39,10 +39,8 @@ export function getShowdownCountdownDelayMs({
 } = {}) {
   if (phase !== "showdown" || !publicShowdownRevealComplete) return null;
 
-  const { chipStartS, runIntervalS } = getRunTimings(knownCardCount, { revealRunsConcurrently });
-  const chipDurationS = 2.4;
   const animDoneMs = animatedShowdownReveal
-    ? (ANNOUNCE_DELAY_S + (runCount - 1) * runIntervalS + chipStartS + chipDurationS + 1.5) * 1000
+    ? getAllInShowdownRevealDelayMs(knownCardCount, runCount, { revealRunsConcurrently })
     : 0;
   const elapsed = showdownStartedAt == null ? 0 : Math.max(0, now - showdownStartedAt);
   return Math.max(0, animDoneMs - elapsed);

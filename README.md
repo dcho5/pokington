@@ -307,7 +307,6 @@ Deterministic layouts for table seats, bet chips, and badges.
 Framer Motion drives all transitions.
 
 **Components:**
-- Chip animations (fly to winner)
 - Card animations (flip, slide, reveal)
 - UI transitions (modal fades, button states)
 - Timer progress bars

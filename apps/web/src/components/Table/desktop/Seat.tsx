@@ -13,6 +13,8 @@ import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
 import PlayerPositionMarkers from "../PlayerPositionMarkers";
 import RunItOddsBadge from "../RunItOddsBadge";
 
+const DESKTOP_SEAT_CONTENT_SCALE = 1.15;
+
 function PeekEye({ count, size = 14 }: { count: number; size?: number }) {
   const bgClass =
     count === 0 ? "bg-gray-700/80 border-gray-500/40" :
@@ -93,9 +95,9 @@ function SeatPulseOutlines({
             scale: scaleKeyframes,
             opacity: opacityKeyframes,
             boxShadow: [
-              `0 0 0 1px ${color}, 0 0 10px ${color}`,
-              `0 0 0 2px ${color}, 0 0 26px ${color}`,
-              `0 0 0 1px ${color}, 0 0 10px ${color}`,
+              `0 0 0 1px ${color}, 0 0 16px ${color}, 0 0 28px ${color}`,
+              `0 0 0 2px ${color}, 0 0 34px ${color}, 0 0 54px ${color}`,
+              `0 0 0 1px ${color}, 0 0 16px ${color}, 0 0 28px ${color}`,
             ],
           }}
           transition={{ duration, repeat, delay, ease: "easeInOut" }}
@@ -184,35 +186,42 @@ const Seat: React.FC<SeatProps> = ({
         style={pos}
         initial={false}
       >
-        <motion.button
-          key="empty"
-          type="button"
-          disabled={seatSelectionLocked}
-          whileHover={seatSelectionLocked ? undefined : { scale: 1.05, backgroundColor: "rgba(239, 68, 68, 0.1)" }}
-          whileTap={seatSelectionLocked ? undefined : { scale: 0.95 }}
-          onClick={seatSelectionLocked ? undefined : () => onSitDown(seatIndex)}
-          aria-disabled={seatSelectionLocked}
-          aria-label={seatSelectionLocked ? `Seat ${seatIndex + 1} unavailable after the game starts` : `Seat ${seatIndex + 1}, click to sit`}
-          className={`
-            group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-200
-            ${seatSelectionLocked
-              ? "cursor-default border-gray-300/50 dark:border-gray-700/50 bg-gray-200/20 dark:bg-gray-900/30 opacity-60"
-              : "cursor-pointer border-gray-300 dark:border-gray-700 bg-transparent"}
-          `}
-          style={{ width: seatSize, height: seatSize }}
+        <div
+          style={{
+            transform: `scale(${DESKTOP_SEAT_CONTENT_SCALE})`,
+            transformOrigin: "center center",
+          }}
         >
-          <span
+          <motion.button
+            key="empty"
+            type="button"
+            disabled={seatSelectionLocked}
+            whileHover={seatSelectionLocked ? undefined : { scale: 1.05, backgroundColor: "rgba(239, 68, 68, 0.1)" }}
+            whileTap={seatSelectionLocked ? undefined : { scale: 0.95 }}
+            onClick={seatSelectionLocked ? undefined : () => onSitDown(seatIndex)}
+            aria-disabled={seatSelectionLocked}
+            aria-label={seatSelectionLocked ? `Seat ${seatIndex + 1} unavailable after the game starts` : `Seat ${seatIndex + 1}, click to sit`}
             className={`
-              flex flex-col items-center leading-none transition-colors
+              group flex flex-col items-center justify-center rounded-2xl border-2 border-dashed transition-all duration-200
               ${seatSelectionLocked
-                ? "text-gray-400/80 dark:text-gray-500/80"
-                : "text-gray-400 dark:text-gray-500 group-hover:text-red-500"}
+                ? "cursor-default border-gray-300/50 dark:border-gray-700/50 bg-gray-200/20 dark:bg-gray-900/30 opacity-60"
+                : "cursor-pointer border-gray-300 dark:border-gray-700 bg-transparent"}
             `}
+            style={{ width: seatSize, height: seatSize }}
           >
-            <span className="text-xs font-bold uppercase tracking-widest">Seat</span>
-            <span className="mt-1 text-[10px] font-mono">{seatIndex + 1}</span>
-          </span>
-        </motion.button>
+            <span
+              className={`
+                flex flex-col items-center leading-none transition-colors
+                ${seatSelectionLocked
+                  ? "text-gray-400/80 dark:text-gray-500/80"
+                  : "text-gray-400 dark:text-gray-500 group-hover:text-red-500"}
+              `}
+            >
+              <span className="text-xs font-bold uppercase tracking-widest">Seat</span>
+              <span className="mt-1 text-[10px] font-mono">{seatIndex + 1}</span>
+            </span>
+          </motion.button>
+        </div>
       </motion.div>
     );
   }
@@ -298,6 +307,12 @@ const Seat: React.FC<SeatProps> = ({
           style={{ width: outerWidth, opacity: seatOpacity }}
         >
           <div
+            style={{
+              transform: `scale(${DESKTOP_SEAT_CONTENT_SCALE})`,
+              transformOrigin: "center center",
+            }}
+          >
+          <div
             className="relative mx-auto"
             style={{ width: clusterWidth, height: clusterHeight }}
           >
@@ -311,64 +326,86 @@ const Seat: React.FC<SeatProps> = ({
             />
 
             <AnimatePresence>
+              {player.winType === "full" && (
+                <SeatPulseOutlines
+                  color="rgba(245,158,11,0.78)"
+                  cardWidth={cardWidth}
+                  cardHeight={cardHeight}
+                  clusterWidth={clusterWidth}
+                  duration={1.45}
+                  opacityKeyframes={[0.34, 0.82, 0.34]}
+                  scaleKeyframes={[1, 1.03, 1]}
+                />
+              )}
+              {player.winType === "partial" && (
+                <SeatPulseOutlines
+                  color="rgba(34,197,94,0.74)"
+                  cardWidth={cardWidth}
+                  cardHeight={cardHeight}
+                  clusterWidth={clusterWidth}
+                  duration={1.35}
+                  opacityKeyframes={[0.3, 0.72, 0.3]}
+                  scaleKeyframes={[1, 1.025, 1]}
+                />
+              )}
               {player.winAnimationKey && player.winType === "full" && (
                 <motion.div
                   key={`${player.winAnimationKey}-r1`}
-                  initial={{ opacity: 0.9, scale: 1 }}
-                  animate={{ opacity: 0, scale: 1.42 }}
-                  transition={{ duration: 1.1, ease: "easeOut" }}
+                  initial={{ opacity: 1, scale: 1 }}
+                  animate={{ opacity: 0, scale: 1.58 }}
+                  transition={{ duration: 1.25, ease: "easeOut" }}
                   className="absolute inset-0 pointer-events-none"
                 >
                   <SeatPulseOutlines
-                    color="rgba(234,179,8,0.95)"
+                    color="rgba(245,158,11,1)"
                     cardWidth={cardWidth}
                     cardHeight={cardHeight}
                     clusterWidth={clusterWidth}
                     repeat={0}
-                    duration={1.1}
-                    scaleKeyframes={[1, 1.04, 1.12]}
-                    opacityKeyframes={[0.68, 0.88, 0]}
+                    duration={1.25}
+                    scaleKeyframes={[1, 1.06, 1.16]}
+                    opacityKeyframes={[0.78, 1, 0]}
                   />
                 </motion.div>
               )}
               {player.winAnimationKey && player.winType === "full" && (
                 <motion.div
                   key={`${player.winAnimationKey}-r2`}
-                  initial={{ opacity: 0.55, scale: 1 }}
-                  animate={{ opacity: 0, scale: 1.72 }}
-                  transition={{ duration: 1.45, ease: "easeOut", delay: 0.16 }}
+                  initial={{ opacity: 0.72, scale: 1 }}
+                  animate={{ opacity: 0, scale: 1.94 }}
+                  transition={{ duration: 1.7, ease: "easeOut", delay: 0.18 }}
                   className="absolute inset-0 pointer-events-none"
                 >
                   <SeatPulseOutlines
-                    color="rgba(234,179,8,0.62)"
+                    color="rgba(245,158,11,0.76)"
                     cardWidth={cardWidth}
                     cardHeight={cardHeight}
                     clusterWidth={clusterWidth}
                     repeat={0}
-                    duration={1.45}
-                    delay={0.16}
-                    scaleKeyframes={[1, 1.07, 1.18]}
-                    opacityKeyframes={[0.45, 0.62, 0]}
+                    duration={1.7}
+                    delay={0.18}
+                    scaleKeyframes={[1, 1.08, 1.22]}
+                    opacityKeyframes={[0.56, 0.84, 0]}
                   />
                 </motion.div>
               )}
               {player.winAnimationKey && player.winType === "partial" && (
                 <motion.div
                   key={`${player.winAnimationKey}-partial`}
-                  initial={{ opacity: 0.85, scale: 1 }}
-                  animate={{ opacity: 0, scale: 1.35 }}
-                  transition={{ duration: 0.95, ease: "easeOut" }}
+                  initial={{ opacity: 0.92, scale: 1 }}
+                  animate={{ opacity: 0, scale: 1.5 }}
+                  transition={{ duration: 1.1, ease: "easeOut" }}
                   className="absolute inset-0 pointer-events-none"
                 >
                   <SeatPulseOutlines
-                    color="rgba(34,197,94,0.9)"
+                    color="rgba(34,197,94,0.96)"
                     cardWidth={cardWidth}
                     cardHeight={cardHeight}
                     clusterWidth={clusterWidth}
                     repeat={0}
-                    duration={0.95}
-                    scaleKeyframes={[1, 1.04, 1.12]}
-                    opacityKeyframes={[0.62, 0.8, 0]}
+                    duration={1.1}
+                    scaleKeyframes={[1, 1.05, 1.15]}
+                    opacityKeyframes={[0.7, 0.92, 0]}
                   />
                 </motion.div>
               )}
@@ -560,6 +597,7 @@ const Seat: React.FC<SeatProps> = ({
                 </span>
               </div>
             </div>
+          </div>
           </div>
         </motion.div>
       </AnimatePresence>

@@ -21,16 +21,20 @@ test("mobile seat strip exposes fixed grid slots for all 10 seats", () => {
   assert.deepEqual(
     slots.map((slot) => [slot.row, slot.column]),
     [
-      [0, 0], [0, 1], [0, 2], [0, 3], [0, 4],
-      [1, 0], [1, 1], [1, 2], [1, 3], [1, 4],
+      [0, 2], [0, 3], [0, 4], [1, 4], [1, 3],
+      [1, 2], [1, 1], [1, 0], [0, 0], [0, 1],
     ],
   );
 });
 
-test("mobile seat strip keeps seat 8 in the bottom-center slot", () => {
+test("mobile seat strip keeps seat 1 in the top-center slot and wraps clockwise", () => {
+  assert.deepEqual(getMobileSeatStripGridPosition(0), {
+    row: 0,
+    column: 2,
+  });
   assert.deepEqual(getMobileSeatStripGridPosition(7), {
     row: 1,
-    column: 2,
+    column: 0,
   });
 });
 
@@ -46,7 +50,7 @@ test("mobile seat strip uses the compact mobile height budget", () => {
 test("mobile seat strip viewport points stay deterministic", () => {
   assert.deepEqual(
     getMobileSeatStripViewportPoint(9, 400, 800),
-    { x: 360, y: 164 },
+    { x: 120, y: 104 },
   );
 });
 

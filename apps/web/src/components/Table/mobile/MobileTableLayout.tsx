@@ -24,7 +24,6 @@ import {
 } from "lib/tableVisualState";
 import { deriveVisibleRunState } from "lib/runAnimation";
 import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
-import { MobileWinnerChips } from "./MobileWinnerChips";
 import { MobileSevenTwoBountyChips } from "./MobileSevenTwoBountyChips";
 import AnnouncementBanner from "../AnnouncementBanner";
 import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
@@ -472,19 +471,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           </>
         )}
       </div>
-
-      {phase === "showdown" && winners && winners.length > 0 && (
-        <MobileWinnerChips
-          key={`${handNumber}-mobile-chips`}
-          winners={winners}
-          runResults={animatedShowdownReveal ? runResults : undefined}
-          knownCardCount={animatedShowdownReveal ? knownCardCount : undefined}
-          revealRunsConcurrently={revealRunsConcurrently}
-          players={players.map((p, i) => p ? { id: p.id, seatIndex: i, isYou: p.isYou } : null)}
-          handNumber={handNumber}
-        />
-      )}
-
       {sevenTwoBountyTrigger && (
         <MobileSevenTwoBountyChips
           winnerId={sevenTwoBountyTrigger.winnerId}

@@ -8,6 +8,19 @@ const VIEWPORT_ROW_Y_FRACS = [0.13, 0.205];
 
 export const MOBILE_SEAT_STRIP_TOTAL_SEATS = 10;
 
+const CLOCKWISE_GRID_POSITIONS = Object.freeze([
+  { row: 0, column: 2 },
+  { row: 0, column: 3 },
+  { row: 0, column: 4 },
+  { row: 1, column: 4 },
+  { row: 1, column: 3 },
+  { row: 1, column: 2 },
+  { row: 1, column: 1 },
+  { row: 1, column: 0 },
+  { row: 0, column: 0 },
+  { row: 0, column: 1 },
+]);
+
 export const MOBILE_SEAT_STRIP_METRICS = Object.freeze({
   avatarSizePx: 40,
   occupiedFootprintWidthPx: 56,
@@ -33,10 +46,7 @@ export function getMobileSeatStripGridPosition(seatIndex) {
     return null;
   }
 
-  return {
-    row: Math.floor(seatIndex / 5),
-    column: seatIndex % 5,
-  };
+  return CLOCKWISE_GRID_POSITIONS[seatIndex] ?? null;
 }
 
 export function getMobileSeatStripSlot(seatIndex) {
