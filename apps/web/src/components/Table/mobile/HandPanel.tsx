@@ -4,7 +4,6 @@ import HoleCards from "components/poker/HoleCards";
 import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "lib/formatCents";
 import AutoPeelToggle from "../AutoPeelToggle";
-import RunItOddsBadge from "../RunItOddsBadge";
 import type { HandIndicator } from "lib/handIndicators";
 import type { Player } from "types/player";
 import type { Card as CardType } from "@pokington/shared";
@@ -26,7 +25,6 @@ interface HandPanelProps {
   currentBet?: number;
   cardPeelPersistenceKey?: string | null;
   holeCardEmphasisByIndex?: CardEmphasis[];
-  runItOddsPercentage?: number | null;
   onOpenSeatManager?: () => void;
 }
 
@@ -44,7 +42,6 @@ const HandPanel: React.FC<HandPanelProps> = ({
   currentBet = 0,
   cardPeelPersistenceKey,
   holeCardEmphasisByIndex = ["neutral", "neutral"],
-  runItOddsPercentage = null,
   onOpenSeatManager,
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
@@ -87,13 +84,10 @@ const HandPanel: React.FC<HandPanelProps> = ({
               }
             : undefined}
         >
-          <div className="flex items-start justify-between gap-2">
-            <span className="inline-flex w-fit self-center text-[9px] bg-red-100 dark:bg-red-900/30 text-red-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wide">
+          <div className="flex justify-center">
+            <span className="inline-flex w-fit text-[9px] bg-red-100 dark:bg-red-900/30 text-red-600 px-1.5 py-0.5 rounded font-black uppercase tracking-wide">
               You
             </span>
-            {runItOddsPercentage != null && (
-              <RunItOddsBadge percentage={runItOddsPercentage} compact className="flex-shrink-0" />
-            )}
           </div>
 
           <div className="flex items-center justify-center min-w-0 flex-1 pt-1">

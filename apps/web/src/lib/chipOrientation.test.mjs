@@ -4,11 +4,16 @@ import assert from "node:assert/strict";
 import {
   computeAngleBetweenPoints,
   computeDesktopChipAngle,
+  computeMobileChipAngle,
   getDesktopChipPoint,
   getDesktopSeatPoint,
+  getMobileSeatPoint,
   DEFAULT_CHIP_ANGLE,
+  MOBILE_CHIP_POINT,
+  MOBILE_SELF_POINT,
 } from "./chipOrientation.mjs";
 import { getDesktopCenterStageVariant, getDesktopTableLayoutProfile } from "./desktopTableLayout.mjs";
+import { getMobileSeatStripSlot } from "./mobileSeatStripLayout.mjs";
 
 function assertAngleClose(actual, expected, epsilon = 0.0001) {
   assert.ok(
@@ -73,13 +78,13 @@ test("desktop chip orientation follows the chip location across center-stage lay
   variants.forEach((variant, index) => {
     const expected =
       computeAngleBetweenPoints(
-      getDesktopChipPoint({
-        chipLeftPct: variant.chipLeftPct,
-        chipTopPct: variant.chipTopPct,
-        tableWidth,
-        tableHeight,
-      }),
-      targetPoint,
+        getDesktopChipPoint({
+          chipLeftPct: variant.chipLeftPct,
+          chipTopPct: variant.chipTopPct,
+          tableWidth,
+          tableHeight,
+        }),
+        targetPoint,
       ) - (-90 - DEFAULT_CHIP_ANGLE);
 
     assertFacingAngleClose(angles[index], expected);
@@ -101,4 +106,47 @@ test("desktop chip orientation follows the chip location across center-stage lay
     Math.abs(angles[0] - angles[2]) > 40,
     "moving the chip into the three-run layout should materially change the aim angle",
   );
+});
+
+test("mobile chip orientation follows the fixed seat strip slot instead of compacting around the viewer", () => {
+  const viewerSeatIndex = 0;
+  const actorSeatIndex = 1;
+  const actorSlot = getMobileSeatStripSlot(actorSeatIndex);
+  assert.ok(actorSlot);
+
+  const actorPoint = getMobileSeatPoint({
+    seatIndex: actorSeatIndex,
+    viewerSeatIndex,
+    totalSeats: 10,
+  });
+  assert.deepEqual(actorPoint, {
+    x: actorSlot.viewportXFrac,
+    y: actorSlot.viewportYFrac,
+  });
+
+  const angle = computeMobileChipAngle({
+    actorSeatIndex,
+    viewerSeatIndex,
+    totalSeats: 10,
+  });
+  const expected =
+    computeAngleBetweenPoints(MOBILE_CHIP_POINT, actorPoint) - (-90 - DEFAULT_CHIP_ANGLE);
+
+  assertFacingAngleClose(angle, expected);
+});
+
+test("mobile chip orientation aims toward the local hand controls when the viewer is acting", () => {
+  const angle = computeMobileChipAngle({
+    actorSeatIndex: 4,
+    viewerSeatIndex: 4,
+    totalSeats: 10,
+  });
+  const expected =
+    computeAngleBetweenPoints(MOBILE_CHIP_POINT, MOBILE_SELF_POINT) - (-90 - DEFAULT_CHIP_ANGLE);
+
+  assert.deepEqual(
+    getMobileSeatPoint({ seatIndex: 4, viewerSeatIndex: 4, totalSeats: 10 }),
+    MOBILE_SELF_POINT,
+  );
+  assertFacingAngleClose(angle, expected);
 });

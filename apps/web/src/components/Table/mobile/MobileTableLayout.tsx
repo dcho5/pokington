@@ -654,7 +654,6 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             currentBet={youPlayer?.currentBet ?? 0}
             cardPeelPersistenceKey={cardPeelPersistenceKey}
             holeCardEmphasisByIndex={isViewerSpotlight ? spotlightHoleCardEmphasis : undefined}
-            runItOddsPercentage={youPlayer?.id ? (runItOddsPercentagesByPlayerId[youPlayer.id] ?? null) : null}
             onOpenSeatManager={onOpenSeatManager}
           />
         </div>

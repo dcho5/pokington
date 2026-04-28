@@ -1,3 +1,5 @@
+import { getMobileSeatStripSlot } from "./mobileSeatStripLayout.mjs";
+
 const DEG_PER_RAD = 180 / Math.PI;
 const CHIP_HIGHLIGHT_BASE_ANGLE = Math.atan2(35 - 50, 62 - 50) * DEG_PER_RAD;
 
@@ -120,29 +122,12 @@ export function getMobileSeatPoint({
     return MOBILE_SELF_POINT;
   }
 
-  const visibleSeats = Array.from({ length: totalSeats }, (_, index) => index).filter(
-    (index) => index !== viewerSeatIndex,
-  );
-  const slotIndex = visibleSeats.indexOf(seatIndex);
-
-  if (slotIndex === -1) {
-    return null;
-  }
-
-  if (slotIndex < 5) {
-    return {
-      x: MOBILE_COLUMN_X[slotIndex],
-      y: MOBILE_ROW_Y.top,
-    };
-  }
-
-  const lowerIndex = slotIndex - 5;
-  const bottomSeats = visibleSeats.slice(5);
-  const leftCount = Math.ceil(bottomSeats.length / 2);
+  const slot = getMobileSeatStripSlot(seatIndex);
+  if (!slot) return null;
 
   return {
-    x: MOBILE_COLUMN_X[lowerIndex < leftCount ? lowerIndex : 3 + (lowerIndex - leftCount)],
-    y: MOBILE_ROW_Y.bottom,
+    x: slot.viewportXFrac,
+    y: slot.viewportYFrac,
   };
 }
 
