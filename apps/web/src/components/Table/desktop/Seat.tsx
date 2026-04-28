@@ -431,7 +431,7 @@ const Seat: React.FC<SeatProps> = ({
               />
             )}
 
-            {(player.hasCards ?? true) && !player.isFolded && !isYou && !hasBothPublicCards && (
+            {(player.hasCards ?? true) && !player.isFolded && !hasBothPublicCards && (
               <div className="absolute left-1/2 top-[38%] z-20 -translate-x-1/2 -translate-y-1/2">
                 <PeekEye count={player.peekedCount ?? 0} size={peekEyeSize} />
               </div>

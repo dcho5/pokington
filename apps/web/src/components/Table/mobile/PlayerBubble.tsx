@@ -431,9 +431,9 @@ export default function PlayerBubble({
                   player.isCurrentActor ? "ring-2 ring-red-500" : "",
                   isFolded ? "grayscale" : "",
                 ].join(" ")}
-                style={{ backgroundColor: avatarColor }}
+                style={{ backgroundColor: player.isYou ? 'black' : avatarColor }}
               >
-                <span className="font-black text-white text-xs select-none">{initials}</span>
+                <span className="font-black text-white text-xs select-none">{player.isYou ? "YOU" : initials}</span>
               </div>
             )}
           </motion.div>

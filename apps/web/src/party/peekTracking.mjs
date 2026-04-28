@@ -1,4 +1,4 @@
-const ACCEPT_PEEK_PHASES = new Set(["pre-flop", "flop", "turn", "river", "voting"]);
+const ACCEPT_PEEK_PHASES = new Set(["pre-flop", "flop", "turn", "river", "voting", "showdown"]);
 const BROADCAST_PEEK_PHASES = new Set(["pre-flop", "flop", "turn", "river", "voting", "showdown"]);
 
 export function peekMaskCount(mask) {

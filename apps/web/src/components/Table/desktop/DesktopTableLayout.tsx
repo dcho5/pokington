@@ -1278,29 +1278,29 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                               onClick={() => setFoldConfirm(false)}
                             />
                             <motion.div
-                              initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                              initial={{ opacity: 0, y: 12, scale: 0.95 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                              exit={{ opacity: 0, y: 12, scale: 0.95 }}
                               transition={{ type: "spring", stiffness: 500, damping: 30 }}
-                              className="absolute bottom-full left-0 mb-2 z-50 w-52 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl p-3"
+                              className="absolute bottom-full left-0 mb-4 z-50 w-[360px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-2xl p-6"
                             >
-                              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                                You can check for free. Fold anyway?
-                              </p>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => setFoldConfirm(false)}
-                                  className="flex-1 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => { setFoldConfirm(false); onFold?.(); }}
-                                  className="flex-1 py-1.5 rounded-lg bg-red-500 text-xs font-bold text-white hover:bg-red-600 transition-colors"
-                                >
-                                  Fold
-                                </button>
-                              </div>
+                               <p className="text-[1.3125rem] text-gray-600 dark:text-gray-400 mb-4">
+                                 You can check for free. Fold anyway?
+                               </p>
+                               <div className="flex gap-4">
+                                 <button
+                                   onClick={() => setFoldConfirm(false)}
+                                   className="flex-1 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-[1.3125rem] font-bold text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                 >
+                                   Cancel
+                                 </button>
+                                 <button
+                                   onClick={() => { setFoldConfirm(false); onFold?.(); }}
+                                   className="flex-1 py-3 rounded-xl bg-red-500 text-[1.3125rem] font-bold text-white hover:bg-red-600 transition-colors"
+                                 >
+                                   Fold
+                                 </button>
+                               </div>
                             </motion.div>
                           </>
                         )}

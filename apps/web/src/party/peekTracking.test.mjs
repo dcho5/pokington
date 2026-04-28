@@ -56,7 +56,7 @@ test("canAcceptPeek accepts only a live peek from the current hand", () => {
   assert.equal(canAcceptPeek({ gameState, playerId: "p1", handNumber: 12 }), true);
   assert.equal(canAcceptPeek({ gameState, playerId: "p1", handNumber: 11 }), false);
   assert.equal(canAcceptPeek({ gameState: makeState({ phase: "waiting" }), playerId: "p1", handNumber: 12 }), false);
-  assert.equal(canAcceptPeek({ gameState: makeState({ phase: "showdown" }), playerId: "p1", handNumber: 12 }), false);
+  assert.equal(canAcceptPeek({ gameState: makeState({ phase: "showdown" }), playerId: "p1", handNumber: 12 }), true);
 });
 
 test("canAcceptPeek rejects stale or impossible player states", () => {

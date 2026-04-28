@@ -11,7 +11,7 @@ interface WinnerEntry {
 
 interface WinnerBannerProps {
   winners: WinnerEntry[];
-  players: Array<{ id?: string; name: string } | null>;
+  players: Array<{ id?: string; name: string; isYou?: boolean } | null>;
   /** "desktop" = ornate shimmer banner, "mobile" = compact inline pill */
   variant?: "desktop" | "mobile";
 }
@@ -39,14 +39,17 @@ export default function WinnerBanner({ winners, players, variant = "desktop" }: 
   const total = winners.reduce((sum, winner) => sum + winner.amount, 0);
   const text = formatWinnerText(winners, players);
   const singleWinner = winners.length === 1 ? winners[0] : null;
-  const singleWinnerName = singleWinner ? getPlayerName(singleWinner.playerId, players) : null;
+  const singleWinnerPlayer = singleWinner ? players.find((p) => p?.id === singleWinner.playerId) ?? null : null;
+  const isYou = singleWinnerPlayer?.isYou ?? false;
 
   return (
     <AnnouncementBanner
       eyebrow={winners.length === 1 ? "Pot Awarded" : "Split Pot"}
-      title={
+  title={
         singleWinner
-          ? `${singleWinnerName} wins ${formatCents(singleWinner.amount)}`
+          ? isYou
+            ? `You win ${formatCents(singleWinner.amount)}`
+            : `${singleWinnerPlayer?.name ?? "?"} wins ${formatCents(singleWinner.amount)}`
           : `${winners.length} players split ${formatCents(total)}`
       }
       detail={singleWinner ? (singleWinner.hand ?? undefined) : text}
