@@ -34,6 +34,10 @@ interface RunItBoardProps {
 const MOBILE_CARD = "flex-1";
 const MOBILE_GAP = "gap-[2%]";
 
+function BoardSlotPlaceholder({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return <div aria-hidden="true" className={`pointer-events-none opacity-0 ${className}`} style={style} />;
+}
+
 export default function RunItBoard({
   runResults,
   knownCardCount,
@@ -153,22 +157,12 @@ export default function RunItBoard({
                   <div
                     key={i}
                     className={`${compact ? MOBILE_CARD : ""} relative aspect-[5/7]`}
-                    style={{
-                      perspective: 600,
-                      ...desktopCardStyle,
-                    }}
+                    style={desktopCardStyle}
                   >
                     {isRevealed ? (
-                      <motion.div
-                        className="absolute inset-0"
-                        initial={{ rotateY: 90, opacity: 0 }}
-                        animate={{ rotateY: 0, opacity: 1 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 25,
-                          delay: newCardIdx * 0.08,
-                        }}
+                      <div
+                        className="absolute inset-0 animate-card-deal-in"
+                        style={{ animationDelay: `${newCardIdx * 0.08}s` }}
                       >
                         <Card
                           card={runResults[r]?.board[i]}
@@ -176,15 +170,9 @@ export default function RunItBoard({
                           emphasis={emphasisForRun(r)?.[i] ?? "neutral"}
                           className="w-full h-full rounded-xl shadow-xl"
                         />
-                      </motion.div>
-                    ) : (
-                      <div className="absolute inset-0">
-                        <Card
-                          card={undefined}
-                          size={compact ? "default" : "desktop"}
-                          className="w-full h-full rounded-xl shadow-xl"
-                        />
                       </div>
+                    ) : (
+                      <BoardSlotPlaceholder className="absolute inset-0 rounded-xl" />
                     )}
                   </div>
                 );

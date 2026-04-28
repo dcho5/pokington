@@ -7,6 +7,10 @@ import type { RunResult } from "@pokington/engine";
 
 const CARD_COUNT = 5;
 
+function BoardSlotPlaceholder({ className = "" }: { className?: string }) {
+  return <div aria-hidden="true" className={`pointer-events-none opacity-0 ${className}`} />;
+}
+
 interface RunItMobileTabsProps {
   runResults: RunResult[];
   knownCardCount: number;
@@ -174,7 +178,7 @@ export default function RunItMobileTabs({
                 if (!isRevealed) {
                   return (
                     <div key={i} className="flex-1 aspect-[5/7]">
-                    <Card card={undefined} className="w-full h-full rounded-xl shadow-xl" />
+                      <BoardSlotPlaceholder className="w-full h-full rounded-xl" />
                     </div>
                   );
                 }

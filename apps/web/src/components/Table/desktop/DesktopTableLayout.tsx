@@ -80,6 +80,16 @@ const collectBoardRevealEventsTyped = collectBoardRevealEvents as (options: {
   mode: "single" | "bombPot" | "runIt";
 }) => TableVisualFeedbackEvent[];
 
+function BoardSlotPlaceholder({
+  className = "",
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  return <div aria-hidden="true" className={`pointer-events-none opacity-0 ${className}`} style={style} />;
+}
+
 const TOTAL_SEATS = 10;
 type CardEmphasis = "neutral" | "highlighted" | "dimmed";
 
@@ -725,24 +735,33 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                     ? undefined
                     : communityCards?.[i];
                   const isRevealed = card != null;
-                  const cardKey = `${handNumber}-card-${i}-${isRevealed ? "shown" : "hidden"}`;
                   const dealDelay = isRevealed ? `${(i % 3) * 0.08}s` : "0s";
                   return (
                     <div
-                      key={cardKey}
+                      key={`${handNumber}-card-${i}`}
                       className={`transition-transform hover:-translate-y-1${isRevealed ? " animate-card-deal-in" : ""}`}
                       style={{ animationDelay: dealDelay }}
                     >
-                      <Card
-                        card={card}
-                        size="desktop"
-                        emphasis={spotlightBoardCardEmphasis?.[i] ?? "neutral"}
-                        className="rounded-2xl shadow-2xl"
-                        style={{
-                          width: standardCenterStage?.cardWidth,
-                          height: standardCenterStage?.cardHeight,
-                        }}
-                      />
+                      {isRevealed ? (
+                        <Card
+                          card={card}
+                          size="desktop"
+                          emphasis={spotlightBoardCardEmphasis?.[i] ?? "neutral"}
+                          className="rounded-2xl shadow-2xl"
+                          style={{
+                            width: standardCenterStage?.cardWidth,
+                            height: standardCenterStage?.cardHeight,
+                          }}
+                        />
+                      ) : (
+                        <BoardSlotPlaceholder
+                          className="rounded-2xl"
+                          style={{
+                            width: standardCenterStage?.cardWidth,
+                            height: standardCenterStage?.cardHeight,
+                          }}
+                        />
+                      )}
                     </div>
                   );
                 })}
@@ -774,20 +793,30 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                   </div>
                   <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
                     {Array.from({ length: CARD_COUNT }, (_, i) => {
-                      const isRevealed = communityCards?.[i] != null;
-                      const cardKey = `${handNumber}-b1-card-${i}-${isRevealed ? "shown" : "hidden"}`;
+                      const card = communityCards?.[i];
+                      const isRevealed = card != null;
                       return (
-                        <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
-                          <Card
-                            card={communityCards?.[i]}
-                            size="desktop"
-                            emphasis={spotlightBombPotCardEmphasis[0]?.[i] ?? "neutral"}
-                            className="rounded-xl shadow-xl"
-                            style={{
-                              width: bombPotCenterStage?.cardWidth,
-                              height: bombPotCenterStage?.cardHeight,
-                            }}
-                          />
+                        <div key={`${handNumber}-b1-card-${i}`} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
+                          {isRevealed ? (
+                            <Card
+                              card={card}
+                              size="desktop"
+                              emphasis={spotlightBombPotCardEmphasis[0]?.[i] ?? "neutral"}
+                              className="rounded-xl shadow-xl"
+                              style={{
+                                width: bombPotCenterStage?.cardWidth,
+                                height: bombPotCenterStage?.cardHeight,
+                              }}
+                            />
+                          ) : (
+                            <BoardSlotPlaceholder
+                              className="rounded-xl"
+                              style={{
+                                width: bombPotCenterStage?.cardWidth,
+                                height: bombPotCenterStage?.cardHeight,
+                              }}
+                            />
+                          )}
                         </div>
                       );
                     })}
@@ -808,20 +837,30 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                   </div>
                   <div className="flex" style={{ gap: bombPotCenterStage?.gap ?? 14 }}>
                     {Array.from({ length: CARD_COUNT }, (_, i) => {
-                      const isRevealed = communityCards2?.[i] != null;
-                      const cardKey = `${handNumber}-b2-card-${i}-${isRevealed ? "shown" : "hidden"}`;
+                      const card = communityCards2?.[i];
+                      const isRevealed = card != null;
                       return (
-                        <div key={cardKey} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
-                          <Card
-                            card={communityCards2?.[i]}
-                            size="desktop"
-                            emphasis={spotlightBombPotCardEmphasis[1]?.[i] ?? "neutral"}
-                            className="rounded-xl shadow-xl"
-                            style={{
-                              width: bombPotCenterStage?.cardWidth,
-                              height: bombPotCenterStage?.cardHeight,
-                            }}
-                          />
+                        <div key={`${handNumber}-b2-card-${i}`} className={isRevealed ? "animate-card-deal-in" : ""} style={{ animationDelay: isRevealed ? `${i * 0.08}s` : "0s" }}>
+                          {isRevealed ? (
+                            <Card
+                              card={card}
+                              size="desktop"
+                              emphasis={spotlightBombPotCardEmphasis[1]?.[i] ?? "neutral"}
+                              className="rounded-xl shadow-xl"
+                              style={{
+                                width: bombPotCenterStage?.cardWidth,
+                                height: bombPotCenterStage?.cardHeight,
+                              }}
+                            />
+                          ) : (
+                            <BoardSlotPlaceholder
+                              className="rounded-xl"
+                              style={{
+                                width: bombPotCenterStage?.cardWidth,
+                                height: bombPotCenterStage?.cardHeight,
+                              }}
+                            />
+                          )}
                         </div>
                       );
                     })}

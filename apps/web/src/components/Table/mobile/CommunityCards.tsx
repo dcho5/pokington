@@ -44,6 +44,10 @@ interface CommunityCardsProps {
   runCardEmphasisByRun?: Array<Array<"neutral" | "highlighted" | "dimmed"> | null> | null;
 }
 
+function BoardSlotPlaceholder({ className = "" }: { className?: string }) {
+  return <div aria-hidden="true" className={`pointer-events-none opacity-0 ${className}`} />;
+}
+
 function BombPotBoards({
   communityCards,
   communityCards2,
@@ -123,19 +127,27 @@ function BombPotBoards({
         )}
 
         <div className="relative flex gap-[2%] w-full" style={{ zIndex: 1, filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.55))" }}>
-          {Array.from({ length: CARD_COUNT }, (_, i) => (
-            <div
-              key={`${handNumber}-bomb-b${activeBoard}-${i}`}
-              className="flex-1 aspect-[5/7] animate-card-deal-in"
-              style={{ animationDelay: `${i * 0.08}s` }}
-            >
-              <Card
-                card={boards[activeBoard]?.[i]}
-                emphasis={boardEmphasis[activeBoard]?.[i] ?? "neutral"}
-                className="w-full h-full rounded-xl shadow-xl"
-              />
-            </div>
-          ))}
+          {Array.from({ length: CARD_COUNT }, (_, i) => {
+            const card = boards[activeBoard]?.[i];
+            const isRevealed = card != null;
+            return (
+              <div
+                key={`${handNumber}-bomb-b${activeBoard}-${i}`}
+                className={`flex-1 aspect-[5/7]${isRevealed ? " animate-card-deal-in" : ""}`}
+                style={isRevealed ? { animationDelay: `${i * 0.08}s` } : undefined}
+              >
+                {isRevealed ? (
+                  <Card
+                    card={card}
+                    emphasis={boardEmphasis[activeBoard]?.[i] ?? "neutral"}
+                    className="w-full h-full rounded-xl shadow-xl"
+                  />
+                ) : (
+                  <BoardSlotPlaceholder className="w-full h-full rounded-xl" />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -253,17 +265,22 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({
             const card = isRunItAnnouncing && i >= knownCardCount
               ? undefined
               : communityCards?.[i];
+            const isRevealed = card != null;
             return (
               <div
-                key={card ? `${handNumber}-card-${i}-shown` : `${handNumber}-card-${i}`}
-                className="flex-1 animate-card-deal-in"
-                style={{ animationDelay: `${i * 0.08}s` }}
+                key={`${handNumber}-card-${i}`}
+                className={`flex-1${isRevealed ? " animate-card-deal-in" : ""}`}
+                style={isRevealed ? { animationDelay: `${i * 0.08}s` } : undefined}
               >
-                <Card
-                  card={card}
-                  emphasis={cardEmphasis?.[i] ?? "neutral"}
-                  className="w-full aspect-[5/7] rounded-xl shadow-2xl"
-                />
+                {isRevealed ? (
+                  <Card
+                    card={card}
+                    emphasis={cardEmphasis?.[i] ?? "neutral"}
+                    className="w-full aspect-[5/7] rounded-xl shadow-2xl"
+                  />
+                ) : (
+                  <BoardSlotPlaceholder className="w-full aspect-[5/7] rounded-xl" />
+                )}
               </div>
             );
           })}
