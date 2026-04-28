@@ -192,6 +192,33 @@ test("waiting-room seat changes move the player without changing stack or identi
   assert.equal(state.players.b.seatIndex, 1);
 });
 
+test("admin shuffle randomizes all occupied seats before the first hand", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1300 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 900 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "c", name: "C", seatIndex: 2, buyIn: 700 });
+
+  const next = gameReducer(state, { type: "SHUFFLE_SEATS" });
+  const players = Object.values(next.players);
+  const seats = players.map((player) => player.seatIndex);
+
+  assert.deepEqual(players.map((player) => player.id).sort(), ["a", "b", "c"]);
+  assert.deepEqual(players.map((player) => player.stack).sort((a, b) => a - b), [700, 900, 1300]);
+  assert.equal(new Set(seats).size, seats.length);
+  assert.ok(seats.every((seatIndex) => Number.isInteger(seatIndex) && seatIndex >= 0 && seatIndex < 10));
+});
+
+test("seat shuffle is rejected after the first hand starts", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
+  state = gameReducer(state, { type: "START_HAND" });
+
+  const next = gameReducer(state, { type: "SHUFFLE_SEATS" });
+
+  assert.equal(next, state);
+});
+
 test("seat changes are rejected once a hand has started", () => {
   let state = createInitialState("table", { small: 25, big: 50 });
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });

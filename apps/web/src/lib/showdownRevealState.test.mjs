@@ -48,6 +48,18 @@ test("timed reveal counts progress flop, turn, river in order", () => {
   );
 });
 
+test("timed reveal counts show the final card at the exact final transition", () => {
+  assert.deepEqual(
+    getTimedVisibleRunCounts({
+      knownCardCount: 3,
+      runCount: 3,
+      runDealStartedAt: 1_000,
+      now: 1_000 + 2 * 4_100 + 2_900,
+    }),
+    [5, 5, 5],
+  );
+});
+
 test("next timed reveal skips past already-fired steps without dropping the final reveal", () => {
   assert.equal(
     getNextTimedRevealAt({

@@ -455,6 +455,11 @@ export function deriveTableScene({
       : `Joining ${code.toUpperCase()} and syncing the current table state...`;
   const cardPeelPersistenceKey =
     myUserId && myHoleCards ? `${code.toUpperCase()}:${myUserId}:hand:${gameState.handNumber}` : null;
+  const canShuffleSeats =
+    isCreator &&
+    phase === "waiting" &&
+    gameState.handNumber === 0 &&
+    Object.keys(gameState.players ?? {}).length > 1;
 
   return {
     code,
@@ -493,6 +498,7 @@ export function deriveTableScene({
       viewerStack: displayViewingPlayer?.stack ?? 0,
       viewerCurrentBet: displayViewingPlayer?.currentBet ?? 0,
       isAdmin: isCreator,
+      canShuffleSeats,
       streetSweeping,
       runItVotes: gameState.runItVotes ?? {},
       runResults,

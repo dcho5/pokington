@@ -111,4 +111,37 @@ test.describe("mobile layout baselines", () => {
       timeout: 15_000,
     });
   });
+
+  test("big blind controls stay anchored from preflop to flop", async ({ page }) => {
+    async function readAnchorMetrics(path: string) {
+      await openFixture(page, path, "Fixture Table");
+      return page.evaluate(() => {
+        const dock = document.querySelector('[data-testid="mobile-action-dock"]');
+        const handPanel = document.querySelector('[data-testid="mobile-hand-panel"]');
+        const actionSlot = document.querySelector('[data-testid="mobile-action-bar-slot"]');
+        if (!dock || !handPanel || !actionSlot) {
+          throw new Error("Missing mobile anchor elements");
+        }
+
+        const dockRect = dock.getBoundingClientRect();
+        const handRect = handPanel.getBoundingClientRect();
+        const actionRect = actionSlot.getBoundingClientRect();
+        return {
+          dockTop: dockRect.top,
+          dockBottom: dockRect.bottom,
+          handTop: handRect.top,
+          handBottom: handRect.bottom,
+          actionTop: actionRect.top,
+          actionBottom: actionRect.bottom,
+        };
+      });
+    }
+
+    const preflop = await readAnchorMetrics("/qa-fixtures/table/mobile-big-blind-preflop");
+    const flop = await readAnchorMetrics("/qa-fixtures/table/mobile-big-blind-flop");
+
+    for (const key of Object.keys(preflop) as Array<keyof typeof preflop>) {
+      expect(Math.abs(preflop[key] - flop[key]), key).toBeLessThanOrEqual(0.5);
+    }
+  });
 });

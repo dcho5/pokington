@@ -92,11 +92,20 @@ test("public showdown state exposes only the server-revealed cards for the activ
 test("public showdown state keeps later runs hidden until the server reaches them", () => {
   const publicState = buildPublicGameState(
     createAnimatedShowdownState({ runDealStartedAt: 1000 }),
-    8000,
+    7999,
   );
 
   assert.deepEqual(publicState.communityCards2, []);
   assert.deepEqual(publicState.runResults.map((run) => run.board.length), [5, 4]);
+});
+
+test("public showdown state exposes the last card at the exact final reveal boundary", () => {
+  const publicState = buildPublicGameState(
+    createAnimatedShowdownState({ runDealStartedAt: 1000 }),
+    8000,
+  );
+
+  assert.deepEqual(publicState.runResults.map((run) => run.board.length), [5, 5]);
 });
 
 test("public bomb-pot showdown state redacts both boards until the server reveals them", () => {

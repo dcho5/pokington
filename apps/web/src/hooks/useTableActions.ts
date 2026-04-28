@@ -46,6 +46,7 @@ export function useTableActions(_code: string): TableActions {
     onCall: () => useGameStore.getState().call(),
     onRaise,
     onAllIn: () => useGameStore.getState().allIn(),
+    onShuffleSeats: () => useGameStore.getState().shuffleSeats(),
     onStartHand: () => useGameStore.getState().startHand(),
     onVoteRun: (count) => useGameStore.getState().voteRun(count),
     onRevealCard: (cardIndex) => useGameStore.getState().revealCard(cardIndex),

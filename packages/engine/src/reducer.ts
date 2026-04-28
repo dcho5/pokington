@@ -650,6 +650,21 @@ export function gameReducer(
       return state;
     }
 
+    case "SHUFFLE_SEATS": {
+      if (state.phase !== "waiting" || state.handNumber > 0) return prevState;
+
+      const seatedPlayers = Object.values(state.players)
+        .sort((a, b) => a.seatIndex - b.seatIndex);
+      if (seatedPlayers.length < 2) return prevState;
+
+      const shuffledSeats = shuffle(Array.from({ length: MAX_SEATS }, (_, seatIndex) => seatIndex))
+        .slice(0, seatedPlayers.length);
+      seatedPlayers.forEach((player, index) => {
+        player.seatIndex = shuffledSeats[index];
+      });
+      return state;
+    }
+
     // ────── STAND UP ──────
     case "STAND_UP": {
       const player = state.players[event.playerId];

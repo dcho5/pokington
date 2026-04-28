@@ -17,6 +17,7 @@ interface MobileBottomSheetProps {
   handleClassName?: string;
   sheetZIndex?: number;
   scrimZIndex?: number;
+  scrimClassName?: string;
   bottomPaddingExtraPx?: number;
   draggable?: boolean;
   style?: React.CSSProperties;
@@ -29,6 +30,7 @@ export default function MobileBottomSheet({
   handleClassName = "bg-gray-300 dark:bg-gray-700",
   sheetZIndex = MOBILE_OVERLAY_Z.sheet,
   scrimZIndex = MOBILE_OVERLAY_Z.sheetScrim,
+  scrimClassName = "overlay-scrim-strong absolute inset-0",
   bottomPaddingExtraPx,
   draggable = true,
   style,
@@ -36,7 +38,7 @@ export default function MobileBottomSheet({
   return (
     <>
       <motion.div
-        className="overlay-scrim-strong absolute inset-0"
+        className={scrimClassName}
         style={{ zIndex: scrimZIndex }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

@@ -286,6 +286,73 @@ export const activeHand = {
   clientUiState: createClientUiState(),
 };
 
+export const mobileBigBlindPreflop = {
+  gameState: createBaseGameState({
+    phase: "pre-flop",
+    pot: 300,
+    roundBet: 200,
+    dealerSeatIndex: 3,
+    smallBlindSeatIndex: 3,
+    bigBlindSeatIndex: 0,
+    needsToAct: ["p1"],
+    players: {
+      p1: createPublicPlayer({
+        id: "p1",
+        name: "Alex",
+        seatIndex: 0,
+        stack: 4800,
+        currentBet: 200,
+      }),
+      p2: createPublicPlayer({
+        id: "p2",
+        name: "Blake",
+        seatIndex: 3,
+        stack: 4900,
+        currentBet: 100,
+      }),
+    },
+  }),
+  timingFlags: createTimingFlags(),
+  sessionContext: createSessionContext(),
+  clientUiState: createClientUiState(),
+};
+
+export const mobileBigBlindFlop = {
+  gameState: createBaseGameState({
+    phase: "flop",
+    communityCards: [
+      { rank: "A", suit: "hearts" },
+      { rank: "Q", suit: "clubs" },
+      { rank: "9", suit: "spades" },
+    ],
+    pot: 400,
+    roundBet: 0,
+    dealerSeatIndex: 3,
+    smallBlindSeatIndex: 3,
+    bigBlindSeatIndex: 0,
+    needsToAct: ["p1"],
+    players: {
+      p1: createPublicPlayer({
+        id: "p1",
+        name: "Alex",
+        seatIndex: 0,
+        stack: 4800,
+        currentBet: 0,
+      }),
+      p2: createPublicPlayer({
+        id: "p2",
+        name: "Blake",
+        seatIndex: 3,
+        stack: 4900,
+        currentBet: 0,
+      }),
+    },
+  }),
+  timingFlags: createTimingFlags(),
+  sessionContext: createSessionContext(),
+  clientUiState: createClientUiState(),
+};
+
 export const showdownComplete = {
   ...showdownEnd_before,
   clientUiState: createClientUiState({
@@ -363,6 +430,8 @@ export const TABLE_RENDER_FIXTURES = {
   "reconnect-overlay": reconnectOverlay_before,
   "waiting-open-seats": waitingOpenSeats,
   "active-hand": activeHand,
+  "mobile-big-blind-preflop": mobileBigBlindPreflop,
+  "mobile-big-blind-flop": mobileBigBlindFlop,
   "showdown-complete": showdownComplete,
   "run-it": runItVoteDeal_after,
   "bomb-pot": bombPotShowdown,

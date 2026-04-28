@@ -8,6 +8,7 @@ import {
   getMobileSafeAreaBottom,
   getMobileSafeAreaTop,
   getMobileSheetPaddingBottom,
+  getMobileTableContentBottomInset,
   getMobileViewportMaxWidth,
   getMobileWinnerBannerBottom,
 } from "./mobileShell.mjs";
@@ -17,6 +18,7 @@ test("mobile shell helpers return the shared safe-area expressions", () => {
   assert.equal(getMobileSafeAreaTop(12), "calc(env(safe-area-inset-top) + 12px)");
   assert.equal(getMobileSafeAreaBottom(16), "calc(env(safe-area-inset-bottom) + 16px)");
   assert.equal(getMobileSheetPaddingBottom(), "calc(env(safe-area-inset-bottom) + 16px)");
+  assert.equal(getMobileTableContentBottomInset(), "calc(env(safe-area-inset-bottom) + 258px)");
   assert.equal(getMobileWinnerBannerBottom(), "calc(env(safe-area-inset-bottom) + 180px)");
 });
 
@@ -30,6 +32,11 @@ test("mobile shell helpers preserve the portrait viewport cap", () => {
 test("mobile shell constants keep compact controls touch-safe", () => {
   assert.equal(MOBILE_SHELL.compactControlMinSizePx, 44);
   assert.equal(MOBILE_SHELL.floatingUtilityButtonSizePx, 40);
+  assert.equal(MOBILE_SHELL.bottomUtilityRailHeightPx, 48);
+  assert.equal(MOBILE_SHELL.handPanelCardHeightPx, 126);
+  assert.equal(MOBILE_SHELL.handPanelHeightPx, 134);
+  assert.equal(MOBILE_SHELL.actionBarSlotHeightPx, 76);
+  assert.equal(MOBILE_SHELL.bottomDockHeightPx, 258);
   assert.equal(MOBILE_SHELL.actionBarInsetPx, 16);
   assert.equal(MOBILE_SHELL.footerStatusLiftPx, 12);
 });

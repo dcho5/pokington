@@ -8,6 +8,7 @@ import type { HandIndicator } from "lib/handIndicators";
 import type { Player } from "types/player";
 import type { Card as CardType } from "@pokington/shared";
 import { useGameStore } from "store/useGameStore";
+import { MOBILE_SHELL } from "lib/mobileShell.mjs";
 
 type CardEmphasis = "neutral" | "highlighted" | "dimmed";
 
@@ -45,7 +46,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
   onOpenSeatManager,
 }) => {
   const [bothRevealed, setBothRevealed] = useState(false);
-  const cardHeight = 115;
+  const cardHeight = MOBILE_SHELL.handPanelCardHeightPx;
   const autoPeelEnabled = useGameStore((state) => state.autoPeelEnabled);
   const setAutoPeelEnabled = useGameStore((state) => state.setAutoPeelEnabled);
 
@@ -59,16 +60,20 @@ const HandPanel: React.FC<HandPanelProps> = ({
     null;
 
   return (
-    <div className="pb-1 px-3">
+    <div
+      className="px-3"
+      data-testid="mobile-hand-panel"
+      style={{ height: MOBILE_SHELL.handPanelHeightPx }}
+    >
       {/*
         Three-column row: [player info] [hole cards] [hand/stack]
         items-stretch makes the side panels fill the cards' height automatically.
       */}
-      <div className="flex items-stretch gap-2">
+      <div className="flex items-stretch gap-2" style={{ height: MOBILE_SHELL.handPanelHeightPx }}>
 
         {/* Left: player identity + auto-flip toggle */}
         <div
-          className={`flex-1 min-w-0 flex flex-col justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2.5 py-2.5 ${
+          className={`flex-1 min-w-0 flex flex-col justify-between bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2.5 py-3 ${
             onOpenSeatManager ? "cursor-pointer transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/90" : ""
           }`}
           onClick={onOpenSeatManager}
@@ -90,7 +95,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center justify-center min-w-0 flex-1 pt-1">
+          <div className="flex items-center justify-center min-w-0 flex-1 py-1">
             <div
               className="rounded-full flex items-center justify-center flex-shrink-0 w-9 h-9"
               style={{ backgroundColor: avatarColor }}
@@ -99,14 +104,14 @@ const HandPanel: React.FC<HandPanelProps> = ({
             </div>
           </div>
 
-          <div className="min-w-0 pb-1 text-center">
+          <div className="min-w-0 pb-1.5 text-center">
             <div className="text-[12px] font-bold text-gray-900 dark:text-white truncate leading-tight">
               {player.name}
             </div>
           </div>
 
           {/* Bottom: auto-flip toggle */}
-          <div className="flex gap-1">
+          <div className="flex gap-1 pb-0.5">
             <AutoPeelToggle
               size="compact"
               enabled={autoPeelEnabled}
@@ -120,7 +125,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
         </div>
 
         {/* Center: hole cards — taller than the side panels; gated before deal */}
-        <div className="flex-shrink-0 flex items-center">
+        <div className="flex h-full flex-shrink-0 items-center">
           {holeCards ? (
             <HoleCards
               key={handNumber}
@@ -146,7 +151,7 @@ const HandPanel: React.FC<HandPanelProps> = ({
         </div>
 
         {/* Right: hand strength + bet + stack */}
-        <div className="flex-1 min-w-0 flex flex-col items-center justify-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2.5 py-3 gap-2">
+        <div className={`flex-1 min-w-0 flex flex-col items-center bg-white dark:bg-gray-900 rounded-2xl border border-gray-200/50 dark:border-white/[0.08] shadow-lg px-2.5 ${currentBet > 0 ? "justify-between py-3 gap-1.5" : "justify-center py-3.5 gap-2"}`}>
           {holeCards && (
             <div className="text-center max-w-full">
               <div className="text-[10px] uppercase tracking-widest text-gray-400 dark:text-gray-500 font-black">

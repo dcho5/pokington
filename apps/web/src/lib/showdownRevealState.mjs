@@ -48,21 +48,6 @@ export function getTimedVisibleRunCounts({
     else if (runIndex === currentRun) counts[runIndex] = revealedCount;
   }
 
-  // The server broadcasts reveal steps on timer callbacks. At the exact final
-  // transition boundary of a sequential multi-run showdown, keep the later run
-  // one card short until that callback has a chance to publish the update.
-  const transitions = computeRunTransitions(clampedKnownCardCount, totalRuns);
-  const finalTransition = transitions.at(-1);
-  const elapsed = now - runDealStartedAt;
-  if (
-    totalRuns > 1 &&
-    finalTransition != null &&
-    elapsed === finalTransition &&
-    counts[totalRuns - 1] >= CARD_COUNT
-  ) {
-    counts[totalRuns - 1] = CARD_COUNT - 1;
-  }
-
   return counts;
 }
 

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   BOMB_POT_VOTING_TIMEOUT_MS,
@@ -10,6 +10,7 @@ import OpponentStrip from "./OpponentStrip";
 import CommunityCards from "./CommunityCards";
 import HandPanel from "./HandPanel";
 import ActionBar from "./ActionBar";
+import OpponentDetailSheet from "./OpponentDetailSheet";
 import SitDownForm from "../SitDownForm";
 import SeatManager from "../SeatManager";
 import BombPotVotingPanel from "../BombPotVotingPanel";
@@ -53,7 +54,7 @@ import {
   MOBILE_SHELL,
   getMobileHeaderHeight,
   getMobileSafeAreaBottom,
-  getMobileSheetPaddingBottom,
+  getMobileTableContentBottomInset,
   getMobileWinnerBannerBottom,
 } from "lib/mobileShell.mjs";
 import MobileBottomSheet from "./MobileBottomSheet";
@@ -130,12 +131,13 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     handNumber = 0,
     showdownCountdown = null,
     isAdmin = false,
+    canShuffleSeats = false,
     runItVotes = {},
     runAnnouncement = null,
     votingStartedAt = null,
     bombPotVotingStartedAt = null,
     viewerCanVote = false,
-    showNextHand = true,
+    showNextHand = false,
     isRunItBoard = false,
     animatedShowdownReveal = false,
     publicShowdownRevealComplete = false,
@@ -168,6 +170,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     onCheck,
     onCall,
     onRaise,
+    onShuffleSeats,
     onStartHand,
     onAllIn,
     onOpenSeatManager,
@@ -184,21 +187,13 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   const [bombPotSheetOpen, setBombPotSheetOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [leaveConfirm, setLeaveConfirm] = useState(false);
-  const [previewedOpponentSeatIndex, setPreviewedOpponentSeatIndex] = useState<number | null>(null);
+  const [selectedOpponentSeatIndex, setSelectedOpponentSeatIndex] = useState<number | null>(null);
   const [selectedSpotlightPlayerId, setSelectedSpotlightPlayerId] = useState<string | null>(null);
   const [viewingBombPotBoardIndex, setViewingBombPotBoardIndex] = useState(0);
   const [selectedBombPotBoardIndex, setSelectedBombPotBoardIndex] = useState<number | null>(null);
   const [viewingRunIndex, setViewingRunIndex] = useState(0);
   const [selectedRunIndex, setSelectedRunIndex] = useState<number | null>(null);
   const runItOddsPanel = useRunItOddsPanelModel(scene);
-  const previewHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  function clearPreviewHoldTimer() {
-    if (previewHoldTimerRef.current) {
-      clearTimeout(previewHoldTimerRef.current);
-      previewHoldTimerRef.current = null;
-    }
-  }
 
   useEffect(() => {
     if (selectedEmptySeat === null) {
@@ -214,7 +209,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
   useEffect(() => {
     setSelectedSpotlightPlayerId(null);
-    setPreviewedOpponentSeatIndex(null);
+    setSelectedOpponentSeatIndex(null);
     setViewingBombPotBoardIndex(0);
     setSelectedBombPotBoardIndex(null);
     setViewingRunIndex(0);
@@ -222,16 +217,12 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
   }, [handNumber]);
 
   useEffect(() => {
-    if (previewedOpponentSeatIndex == null) return;
-    if (!players[previewedOpponentSeatIndex]) {
-      setPreviewedOpponentSeatIndex(null);
+    if (selectedOpponentSeatIndex == null) return;
+    if (!players[selectedOpponentSeatIndex]) {
+      setSelectedOpponentSeatIndex(null);
       setSelectedSpotlightPlayerId(null);
     }
-  }, [players, previewedOpponentSeatIndex]);
-
-  useEffect(() => () => {
-    clearPreviewHoldTimer();
-  }, []);
+  }, [players, selectedOpponentSeatIndex]);
 
   useEffect(() => {
     if (!selectedSpotlightPlayerId) return;
@@ -243,8 +234,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
 
   const youPlayer = getViewerPlayer(players);
   const handleOpenSeat = (seatIndex: number) => {
-    clearPreviewHoldTimer();
-    setPreviewedOpponentSeatIndex(null);
+    setSelectedOpponentSeatIndex(null);
     setSelectedSpotlightPlayerId(null);
     if (openSeatMode === "blocked") return;
     if (openSeatMode === "change-seat") {
@@ -253,25 +243,19 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
     }
     setSelectedEmptySeat(seatIndex);
   };
-  const handleOpponentPressStart = (seatIndex: number) => {
-    clearPreviewHoldTimer();
-    previewHoldTimerRef.current = setTimeout(() => {
-      const player = players[seatIndex];
-      setPreviewedOpponentSeatIndex(seatIndex);
-      if (player?.id && isFullyTabled(player.holeCards)) {
-        setSelectedSpotlightPlayerId(player.id);
-      } else {
-        setSelectedSpotlightPlayerId(null);
-      }
-    }, 170);
+  const handleOpponentTap = (seatIndex: number) => {
+    const player = players[seatIndex];
+    if (!player) return;
+    setSelectedOpponentSeatIndex(seatIndex);
+    if (player.id && isFullyTabled(player.holeCards)) {
+      setSelectedSpotlightPlayerId(player.id);
+      return;
+    }
+    setSelectedSpotlightPlayerId(null);
   };
-  const handleOpponentPressEnd = (seatIndex: number) => {
-    clearPreviewHoldTimer();
-    setPreviewedOpponentSeatIndex((current) => current === seatIndex ? null : current);
-    setSelectedSpotlightPlayerId((current) => {
-      const player = players[seatIndex];
-      return current != null && current === player?.id ? null : current;
-    });
+  const handleOpponentDetailDismiss = () => {
+    setSelectedOpponentSeatIndex(null);
+    setSelectedSpotlightPlayerId(null);
   };
   const showRunItVotingPanel = useTimedPanelVisibility({
     visible: phase === "voting",
@@ -426,6 +410,9 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
       .filter((row) => row.currentPercentage != null)
       .map((row) => [row.playerId, row.currentPercentage]),
   ) as Record<string, number | null>;
+  const selectedOpponentPlayer = selectedOpponentSeatIndex != null
+    ? players[selectedOpponentSeatIndex] ?? null
+    : null;
   const activeHandIndicatorId = animatedRunIt && runResults.length > 0
     ? `run-${viewingRunIndex}`
     : isBombPotHand
@@ -502,7 +489,7 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         className="absolute inset-0 flex flex-col min-h-0"
         style={{
           paddingTop: getMobileHeaderHeight(),
-          paddingBottom: getMobileSafeAreaBottom(),
+          paddingBottom: getMobileTableContentBottomInset(),
         }}
       >
         <div className="flex-shrink-0 pt-5">
@@ -513,10 +500,8 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             smallBlindIndex={smallBlindIndex}
             bigBlindIndex={bigBlindIndex}
             seatSelectionLocked={seatSelectionLocked}
-            selectedDetailSeatIndex={previewedOpponentSeatIndex}
-            onPlayerPressStart={handleOpponentPressStart}
-            onPlayerPressEnd={handleOpponentPressEnd}
-            previewedSeatIndex={previewedOpponentSeatIndex}
+            selectedDetailSeatIndex={selectedOpponentSeatIndex}
+            onPlayerTap={handleOpponentTap}
             selectedSpotlightPlayerId={spotlightPlayerId}
             spotlightHoleCardEmphasisByIndex={spotlightHoleCardEmphasis}
             runItOddsPercentagesByPlayerId={runItOddsPercentagesByPlayerId}
@@ -580,149 +565,164 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
           </div>
         )}
 
-        <div className="flex-shrink-0">
-          <div className="flex min-h-[44px] items-center justify-center pb-1">
-            <AnimatePresence>
-              {!isRunItDealing && (
-                <motion.div
-                  className="flex items-center justify-center gap-4"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.4 }}
-                >
-                  <div className="w-10 flex justify-end">
-                    <AnimatePresence>
-                      {!bombPotVote && !_bombPotNextHand && youPlayer?.id && !bombPotCooldown.includes(youPlayer.id) && (
-                        <motion.button
-                          initial={{ scale: 0, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0, opacity: 0 }}
-                          transition={{ type: "spring", stiffness: 400, damping: 24 }}
-                          whileTap={{ scale: 0.88 }}
-                          onClick={() => setBombPotSheetOpen(true)}
-                          className="flex items-center justify-center rounded-[1rem] text-lg shadow-xl"
-                          style={{
-                            width: MOBILE_SHELL.floatingUtilityButtonSizePx,
-                            height: MOBILE_SHELL.floatingUtilityButtonSizePx,
-                            background: "rgba(99,102,241,0.22)",
-                            border: "1px solid rgba(99,102,241,0.4)",
-                            backdropFilter: "blur(8px)",
-                          }}
-                        >
-                          💣
-                        </motion.button>
-                      )}
-                    </AnimatePresence>
-                  </div>
+      </div>
 
-                  <PokerChip size={38} glowAngle={chipGlowAngle} />
-
-                  <div className="w-10 flex justify-start">
-                    <motion.button
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      whileTap={{ scale: 0.88 }}
-                      onClick={() => setLedgerOpen(true)}
-                      className="flex items-center justify-center rounded-[1rem] text-sm shadow-xl"
-                      style={{
-                        width: MOBILE_SHELL.floatingUtilityButtonSizePx,
-                        height: MOBILE_SHELL.floatingUtilityButtonSizePx,
-                        background: "rgba(255,255,255,0.08)",
-                        border: "1px solid rgba(255,255,255,0.15)",
-                        backdropFilter: "blur(8px)",
-                      }}
-                    >
-                      💰
-                    </motion.button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          <HandPanel
-            player={youPlayer}
-            holeCards={holeCards}
-            handIndicators={handIndicators}
-            activeHandIndicatorId={activeHandIndicatorId}
-            handNumber={handNumber}
-            canRevealToOthers={canShowCards}
-            revealedToOthersIndices={myRevealedCardIndices}
-            onRevealToOthers={onRevealCard}
-            sevenTwoEligible={sevenTwoEligible}
-            onPeekCard={onPeekCard}
-            currentBet={youPlayer?.currentBet ?? 0}
-            cardPeelPersistenceKey={cardPeelPersistenceKey}
-            holeCardEmphasisByIndex={isViewerSpotlight ? spotlightHoleCardEmphasis : undefined}
-            onOpenSeatManager={onOpenSeatManager}
-          />
-        </div>
-
-        {phase !== "voting" && (
-          <div
-            className={`relative flex-shrink-0 border-t border-gray-200/50 bg-white/95 backdrop-blur-md dark:border-white/[0.06] dark:bg-[rgba(3,7,18,0.96)] ${
-              isYourTurn
-                ? "shadow-[0_-20px_38px_rgba(239,68,68,0.12)]"
-                : "shadow-[0_-14px_30px_rgba(15,23,42,0.08)]"
-            }`}
-          >
-            <AnimatePresence>
-              {footerStatus && (
-                <motion.div
-                  className="pointer-events-none absolute inset-x-0 z-10 flex justify-center px-4"
-                  style={{ top: -MOBILE_SHELL.footerStatusLiftPx }}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 6 }}
-                  transition={{ duration: 0.18 }}
-                >
-                  <div
-                    className={`max-w-full truncate rounded-full border px-3 py-1 text-[11px] font-semibold shadow-lg backdrop-blur-md ${
-                      footerStatusTone === "amber"
-                        ? "border-amber-300/70 bg-amber-50/96 text-amber-700 dark:border-amber-400/30 dark:bg-[rgba(69,26,3,0.92)] dark:text-amber-200"
-                        : "border-gray-200/80 bg-white/96 text-gray-500 dark:border-white/[0.08] dark:bg-[rgba(3,7,18,0.94)] dark:text-gray-300"
-                    }`}
-                  >
-                    {footerStatusTone === "amber" ? (
-                      <span className="font-black">{footerStatus}</span>
-                    ) : (
-                      <>
-                        Waiting for <span className="font-black text-gray-700 dark:text-white">{waitingFor}</span>
-                        ...
-                      </>
+      <div
+        className="absolute inset-x-0 bottom-0 flex flex-col justify-end"
+        data-testid="mobile-action-dock"
+        style={{
+          height: getMobileTableContentBottomInset(),
+          paddingBottom: getMobileSafeAreaBottom(),
+        }}
+      >
+        <div
+          className="flex items-center justify-center pb-1"
+          style={{ height: MOBILE_SHELL.bottomUtilityRailHeightPx }}
+        >
+          <AnimatePresence>
+            {!isRunItDealing && (
+              <motion.div
+                className="flex items-center justify-center gap-4"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.4 }}
+              >
+                <div className="w-10 flex justify-end">
+                  <AnimatePresence>
+                    {!bombPotVote && !_bombPotNextHand && youPlayer?.id && !bombPotCooldown.includes(youPlayer.id) && (
+                      <motion.button
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ type: "spring", stiffness: 400, damping: 24 }}
+                        whileTap={{ scale: 0.88 }}
+                        onClick={() => setBombPotSheetOpen(true)}
+                        className="flex items-center justify-center rounded-[1rem] text-lg shadow-xl"
+                        style={{
+                          width: MOBILE_SHELL.floatingUtilityButtonSizePx,
+                          height: MOBILE_SHELL.floatingUtilityButtonSizePx,
+                          background: "rgba(99,102,241,0.22)",
+                          border: "1px solid rgba(99,102,241,0.4)",
+                          backdropFilter: "blur(8px)",
+                        }}
+                      >
+                        💣
+                      </motion.button>
                     )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <ActionBar
-              isYourTurn={isYourTurn}
-              callAmount={callAmount}
-              pot={pot}
-              stack={youPlayer?.stack ?? 0}
-              currentBet={youPlayer?.currentBet ?? 0}
-              minRaise={minRaise}
-              bigBlind={blinds?.big ?? 25}
-              canCheck={canCheck}
-              canRaise={canRaise}
-              canAllIn={canAllIn}
-              onAllIn={onAllIn}
-              phase={phase}
-              isFirstBet={isFirstBet}
-              isAdmin={isAdmin}
-              onFold={onFold}
-              onCall={onCall}
-              onCheck={onCheck}
-              onRaise={onRaise}
-              onStartHand={onStartHand}
-              showdownCountdown={showdownCountdown}
-              showNextHand={showNextHand}
-              players={players}
-              handNumber={handNumber}
-              isBombPotHand={isBombPotHand}
-            />
-          </div>
-        )}
+                  </AnimatePresence>
+                </div>
+
+                <PokerChip size={38} glowAngle={chipGlowAngle} />
+
+                <div className="w-10 flex justify-start">
+                  <motion.button
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    whileTap={{ scale: 0.88 }}
+                    onClick={() => setLedgerOpen(true)}
+                    className="flex items-center justify-center rounded-[1rem] text-sm shadow-xl"
+                    style={{
+                      width: MOBILE_SHELL.floatingUtilityButtonSizePx,
+                      height: MOBILE_SHELL.floatingUtilityButtonSizePx,
+                      background: "rgba(255,255,255,0.08)",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    💰
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+        <HandPanel
+          player={youPlayer}
+          holeCards={holeCards}
+          handIndicators={handIndicators}
+          activeHandIndicatorId={activeHandIndicatorId}
+          handNumber={handNumber}
+          canRevealToOthers={canShowCards}
+          revealedToOthersIndices={myRevealedCardIndices}
+          onRevealToOthers={onRevealCard}
+          sevenTwoEligible={sevenTwoEligible}
+          onPeekCard={onPeekCard}
+          currentBet={youPlayer?.currentBet ?? 0}
+          cardPeelPersistenceKey={cardPeelPersistenceKey}
+          holeCardEmphasisByIndex={isViewerSpotlight ? spotlightHoleCardEmphasis : undefined}
+          onOpenSeatManager={onOpenSeatManager}
+        />
+
+        <div data-testid="mobile-action-bar-slot" style={{ height: MOBILE_SHELL.actionBarSlotHeightPx }}>
+          {phase !== "voting" && (
+            <div
+              className={`relative h-full border-t border-gray-200/50 bg-white/95 backdrop-blur-md dark:border-white/[0.06] dark:bg-[rgba(3,7,18,0.96)] ${
+                isYourTurn
+                  ? "shadow-[0_-20px_38px_rgba(239,68,68,0.12)]"
+                  : "shadow-[0_-14px_30px_rgba(15,23,42,0.08)]"
+              }`}
+            >
+              <AnimatePresence>
+                {footerStatus && (
+                  <motion.div
+                    className="pointer-events-none absolute inset-x-0 z-10 flex justify-center px-4"
+                    style={{ top: -MOBILE_SHELL.footerStatusLiftPx }}
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.18 }}
+                  >
+                    <div
+                      className={`max-w-full truncate rounded-full border px-3 py-1 text-[11px] font-semibold shadow-lg backdrop-blur-md ${
+                        footerStatusTone === "amber"
+                          ? "border-amber-300/70 bg-amber-50/96 text-amber-700 dark:border-amber-400/30 dark:bg-[rgba(69,26,3,0.92)] dark:text-amber-200"
+                          : "border-gray-200/80 bg-white/96 text-gray-500 dark:border-white/[0.08] dark:bg-[rgba(3,7,18,0.94)] dark:text-gray-300"
+                      }`}
+                    >
+                      {footerStatusTone === "amber" ? (
+                        <span className="font-black">{footerStatus}</span>
+                      ) : (
+                        <>
+                          Waiting for <span className="font-black text-gray-700 dark:text-white">{waitingFor}</span>
+                          ...
+                        </>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+              <ActionBar
+                isYourTurn={isYourTurn}
+                callAmount={callAmount}
+                pot={pot}
+                stack={youPlayer?.stack ?? 0}
+                currentBet={youPlayer?.currentBet ?? 0}
+                minRaise={minRaise}
+                bigBlind={blinds?.big ?? 25}
+                canCheck={canCheck}
+                canRaise={canRaise}
+                canAllIn={canAllIn}
+                onAllIn={onAllIn}
+                phase={phase}
+                isFirstBet={isFirstBet}
+                isAdmin={isAdmin}
+                canShuffleSeats={canShuffleSeats}
+                onFold={onFold}
+                onCall={onCall}
+                onCheck={onCheck}
+                onRaise={onRaise}
+                onShuffleSeats={onShuffleSeats}
+                onStartHand={onStartHand}
+                showdownCountdown={showdownCountdown}
+                showNextHand={showNextHand}
+                players={players}
+                handNumber={handNumber}
+                isBombPotHand={isBombPotHand}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <AnimatePresence>
@@ -920,6 +920,32 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             minPlayerStack={getMinPlayerStack(players)}
             onConfirm={(anteBB) => { onProposeBombPot?.(anteBB); setBombPotSheetOpen(false); }}
             onDismiss={() => setBombPotSheetOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedOpponentSeatIndex != null && selectedOpponentPlayer && (
+          <OpponentDetailSheet
+            key={`opponent-detail-${selectedOpponentSeatIndex}-${selectedOpponentPlayer.id ?? selectedOpponentSeatIndex}`}
+            player={selectedOpponentPlayer}
+            seatIndex={selectedOpponentSeatIndex}
+            playerCount={seatedPlayerCount}
+            isDealer={selectedOpponentSeatIndex === dealerIndex}
+            isSmallBlind={selectedOpponentSeatIndex === smallBlindIndex}
+            isBigBlind={selectedOpponentSeatIndex === bigBlindIndex}
+            runItOddsPercentage={selectedOpponentPlayer.id ? (runItOddsPercentagesByPlayerId[selectedOpponentPlayer.id] ?? null) : null}
+            spotlightSelected={selectedSpotlightPlayerId === selectedOpponentPlayer.id}
+            onToggleSpotlight={
+              canInteractWithSpotlight && selectedOpponentPlayer.id && isFullyTabled(selectedOpponentPlayer.holeCards)
+                ? () => {
+                    setSelectedSpotlightPlayerId((current) =>
+                      current === selectedOpponentPlayer.id ? null : selectedOpponentPlayer.id ?? null,
+                    );
+                  }
+                : undefined
+            }
+            onDismiss={handleOpponentDetailDismiss}
           />
         )}
       </AnimatePresence>

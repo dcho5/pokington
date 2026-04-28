@@ -92,6 +92,7 @@ export interface TableLayoutScene {
   showdownCountdown?: number | null;
   showNextHand?: boolean;
   isAdmin: boolean;
+  canShuffleSeats: boolean;
   streetSweeping: boolean;
   runItVotes: Record<string, 1 | 2 | 3>;
   runResults: RunResult[];
@@ -167,6 +168,7 @@ export interface TableActions {
   onCall: () => void;
   onRaise: (amount: number) => void;
   onAllIn: () => void;
+  onShuffleSeats?: () => void;
   onStartHand: () => void;
   onVoteRun?: (count: 1 | 2 | 3) => void;
   onRevealCard?: (cardIndex: 0 | 1) => void;

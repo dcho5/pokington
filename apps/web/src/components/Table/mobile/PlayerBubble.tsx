@@ -29,10 +29,7 @@ interface PlayerBubbleProps {
   seatSelectionLocked?: boolean;
   onEmptyTap?: () => void;
   onPlayerTap?: () => void;
-  onPlayerPressStart?: () => void;
-  onPlayerPressEnd?: () => void;
   detailSelected?: boolean;
-  previewActive?: boolean;
   showdownSpotlightSelected?: boolean;
   showdownCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
   runItOddsPercentage?: number | null;
@@ -86,10 +83,7 @@ export default function PlayerBubble({
   seatSelectionLocked = false,
   onEmptyTap,
   onPlayerTap,
-  onPlayerPressStart,
-  onPlayerPressEnd,
   detailSelected = false,
-  previewActive = false,
   showdownCardEmphasisByIndex = ["neutral", "neutral"],
   runItOddsPercentage = null,
 }: PlayerBubbleProps) {
@@ -318,14 +312,10 @@ export default function PlayerBubble({
           width: avatarSize,
           height: avatarSize,
         }}
-        animate={{ scale: previewActive ? 0.94 : 1 }}
+        animate={{ scale: 1 }}
         transition={{ duration: 0.14 }}
         whileTap={{ scale: 0.94 }}
         onClick={onPlayerTap}
-        onPointerDown={onPlayerPressStart}
-        onPointerUp={onPlayerPressEnd}
-        onPointerLeave={onPlayerPressEnd}
-        onPointerCancel={onPlayerPressEnd}
         aria-label={`${player.name}, stack ${formatCents(player.stack)}`}
         aria-pressed={detailSelected}
       >
@@ -449,7 +439,7 @@ export default function PlayerBubble({
             width: avatarSize,
           }}
           initial={false}
-          animate={{ opacity: previewActive ? 0 : 1, y: previewActive ? -2 : 0 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.14 }}
         >
           <span

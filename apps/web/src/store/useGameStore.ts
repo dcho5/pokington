@@ -117,6 +117,7 @@ interface GameStore {
   cancelQueuedLeave: () => void;
   leaveQueued: boolean;
   changeSeat: (newSeatIndex: number) => void;
+  shuffleSeats: () => void;
   startHand: () => void;
   fold: () => void;
   check: () => void;
@@ -814,6 +815,10 @@ export const useGameStore = create<GameStore>((set, get) => {
     changeSeat: (newSeatIndex: number) => {
       get().requestBoundaryUpdate({ moveToSeatIndex: newSeatIndex });
       set({ viewingSeat: newSeatIndex, leaveQueued: false });
+    },
+
+    shuffleSeats: () => {
+      get().sendEvent({ type: "SHUFFLE_SEATS" });
     },
 
     startHand: () => {

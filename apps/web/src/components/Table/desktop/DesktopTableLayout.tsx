@@ -151,7 +151,9 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     viewerStack = 0,
     viewerCurrentBet = 0,
     showdownCountdown = null,
+    showNextHand = false,
     isAdmin = false,
+    canShuffleSeats = false,
     streetSweeping = false,
     runItVotes = {},
     runResults = [],
@@ -191,6 +193,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
     onCall,
     onRaise,
     onAllIn,
+    onShuffleSeats,
     onStartHand,
     onVoteRun,
     onRevealCard,
@@ -1192,7 +1195,7 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
 
             {/* Action buttons */}
             <div className="flex flex-col gap-2 flex-shrink-0 relative">
-              {(isWaiting || isShowdown) && isAdmin && (() => {
+              {((isWaiting || (isShowdown && showNextHand)) && isAdmin) && (() => {
                 const eligibleCount = players.filter((p) => p != null && (p.stack ?? 0) > 0).length;
                 return (
                 <>
@@ -1201,8 +1204,20 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
                       Next hand in {showdownCountdown}s...
                     </p>
                   )}
-                  {(isWaiting || isShowdown) && (
+                  {(isWaiting || (isShowdown && showNextHand)) && (
                     <>
+                      {canShuffleSeats && (
+                        <button
+                          onClick={onShuffleSeats}
+                          className="px-12 rounded-xl border border-gray-300 bg-white text-gray-700 font-black shadow-sm transition-colors hover:border-red-300 hover:bg-red-50 hover:text-red-700 dark:border-white/10 dark:bg-white/10 dark:text-white dark:hover:border-red-400/50 dark:hover:bg-red-500/10"
+                          style={{
+                            height: emphasizedButtonHeight,
+                            fontSize: emphasizedSecondaryButtonFontSize,
+                          }}
+                        >
+                          Shuffle Seats
+                        </button>
+                      )}
                       {eligibleCount < 2 ? (
                         <div
                           className="px-12 rounded-xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 font-semibold"

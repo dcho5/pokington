@@ -1,8 +1,6 @@
 "use client";
 import React from "react";
-import { AnimatePresence } from "framer-motion";
 import PlayerBubble from "./PlayerBubble";
-import OpponentPreviewPopover from "./OpponentPreviewPopover";
 import type { Player } from "types/player";
 import { useColorScheme } from "hooks/useColorScheme";
 import {
@@ -21,9 +19,6 @@ interface OpponentStripProps {
   onEmptySeatTap?: (seatIndex: number) => void;
   selectedDetailSeatIndex?: number | null;
   onPlayerTap?: (seatIndex: number) => void;
-  onPlayerPressStart?: (seatIndex: number) => void;
-  onPlayerPressEnd?: (seatIndex: number) => void;
-  previewedSeatIndex?: number | null;
   selectedSpotlightPlayerId?: string | null;
   spotlightHoleCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
   runItOddsPercentagesByPlayerId?: Record<string, number | null>;
@@ -39,9 +34,6 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
   onEmptySeatTap,
   selectedDetailSeatIndex = null,
   onPlayerTap,
-  onPlayerPressStart,
-  onPlayerPressEnd,
-  previewedSeatIndex = null,
   selectedSpotlightPlayerId = null,
   spotlightHoleCardEmphasisByIndex = ["neutral", "neutral"],
   runItOddsPercentagesByPlayerId = {},
@@ -55,9 +47,6 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
       player: players[seatIndex] ?? null,
     };
   }).filter((seat): seat is { seatIndex: number; slot: NonNullable<ReturnType<typeof getMobileSeatStripSlot>>; player: Player | null } => seat.slot != null);
-  const previewedSeat = previewedSeatIndex != null
-    ? seats.find((seat) => seat.seatIndex === previewedSeatIndex && seat.player)
-    : null;
   const stripInsetXPx = 4;
   const stripBottomInsetPx = 4;
   const feltInsetXPx = 10;
@@ -112,10 +101,7 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
                     seatSlot={slot}
                     seatIndex={seatIndex}
                     detailSelected={selectedDetailSeatIndex === seatIndex}
-                    previewActive={previewedSeatIndex === seatIndex}
                     onPlayerTap={() => onPlayerTap?.(seatIndex)}
-                    onPlayerPressStart={() => onPlayerPressStart?.(seatIndex)}
-                    onPlayerPressEnd={() => onPlayerPressEnd?.(seatIndex)}
                     playerCount={playerCount}
                     isDealer={seatIndex === dealerIndex}
                     isSmallBlind={seatIndex === smallBlindIndex}
@@ -152,21 +138,6 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0)_34%)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0)_36%)]" />
         </div>
       </div>
-
-      <AnimatePresence>
-        {previewedSeat?.player && (
-          <OpponentPreviewPopover
-            key={`preview-${previewedSeat.seatIndex}-${previewedSeat.player.id ?? previewedSeat.seatIndex}`}
-            player={previewedSeat.player}
-            seatIndex={previewedSeat.seatIndex}
-            playerCount={playerCount}
-            isDealer={previewedSeat.seatIndex === dealerIndex}
-            isSmallBlind={previewedSeat.seatIndex === smallBlindIndex}
-            isBigBlind={previewedSeat.seatIndex === bigBlindIndex}
-            runItOddsPercentage={previewedSeat.player.id ? (runItOddsPercentagesByPlayerId[previewedSeat.player.id] ?? null) : null}
-          />
-        )}
-      </AnimatePresence>
     </div>
   );
 };

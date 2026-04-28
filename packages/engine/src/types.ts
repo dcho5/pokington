@@ -149,6 +149,7 @@ export type GameEvent =
   | { type: "SIT_DOWN"; playerId: string; name: string; seatIndex: number; buyIn: number }
   | { type: "TAKE_SEAT"; playerId: string; name: string; seatIndex: number; buyIn: number }
   | { type: "CHANGE_SEAT"; playerId: string; seatIndex: number }
+  | { type: "SHUFFLE_SEATS" }
   | { type: "STAND_UP"; playerId: string }
   | {
       type: "REQUEST_BOUNDARY_UPDATE";

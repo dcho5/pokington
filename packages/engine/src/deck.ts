@@ -34,7 +34,7 @@ export function createDeck(): Card[] {
 }
 
 /** Fisher-Yates shuffle using CSPRNG (in-place, returns same array). */
-export function shuffle(deck: Card[]): Card[] {
+export function shuffle<T>(deck: T[]): T[] {
   for (let i = deck.length - 1; i > 0; i--) {
     const j = cryptoRandomInt(i + 1);
     [deck[i], deck[j]] = [deck[j], deck[i]];

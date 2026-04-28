@@ -20,6 +20,20 @@ test("derives waiting table scene with unlocked seat selection before a player s
   assert.equal(scene.layout.seatSelectionLocked, false);
   assert.equal(scene.layout.players[0]?.isYou, true);
   assert.equal(scene.layout.isAdmin, true);
+  assert.equal(scene.layout.canShuffleSeats, false);
+});
+
+test("enables seat shuffle for the creator before the first hand", () => {
+  const scene = deriveTableScene({
+    ...reconnectOverlay_before,
+    gameState: {
+      ...reconnectOverlay_before.gameState,
+      handNumber: 0,
+    },
+  });
+
+  assert.equal(scene.layout.phase, "waiting");
+  assert.equal(scene.layout.canShuffleSeats, true);
 });
 
 test("reconnectOverlay fixtures transition from blocking overlay to active table", () => {

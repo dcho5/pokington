@@ -4,6 +4,11 @@ export const MOBILE_SHELL = Object.freeze({
   maxViewportAspectHeight: 16,
   compactControlMinSizePx: 44,
   floatingUtilityButtonSizePx: 40,
+  bottomUtilityRailHeightPx: 48,
+  handPanelCardHeightPx: 126,
+  handPanelHeightPx: 134,
+  actionBarSlotHeightPx: 76,
+  bottomDockHeightPx: 258,
   actionBarInsetPx: 16,
   actionBarInsetTopPx: 10,
   actionBarInsetBottomPx: 10,
@@ -46,6 +51,10 @@ export function getMobileSafeAreaTop(extraPx = 0) {
  */
 export function getMobileSafeAreaBottom(extraPx = 0) {
   return `calc(env(safe-area-inset-bottom) + ${extraPx}px)`;
+}
+
+export function getMobileTableContentBottomInset(extraPx = 0) {
+  return getMobileSafeAreaBottom(MOBILE_SHELL.bottomDockHeightPx + extraPx);
 }
 
 /**

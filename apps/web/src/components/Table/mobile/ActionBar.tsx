@@ -166,10 +166,12 @@ interface ActionBarProps {
   phase?: string;
   isFirstBet?: boolean;
   isAdmin?: boolean;
+  canShuffleSeats?: boolean;
   onFold?: () => void;
   onCall?: () => void;
   onCheck?: () => void;
   onRaise?: (amount: number) => void;
+  onShuffleSeats?: () => void;
   onStartHand?: () => void;
   showdownCountdown?: number | null;
   showNextHand?: boolean;
@@ -193,7 +195,8 @@ const ActionBar: React.FC<ActionBarProps> = ({
   phase,
   isFirstBet = false,
   isAdmin = false,
-  showNextHand = true,
+  canShuffleSeats = false,
+  showNextHand = false,
   players = [],
   handNumber = 0,
   isBombPotHand: _isBombPotHand = false,
@@ -201,6 +204,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
   onCall,
   onCheck,
   onRaise,
+  onShuffleSeats,
   onStartHand,
   showdownCountdown,
 }) => {
@@ -215,6 +219,7 @@ const ActionBar: React.FC<ActionBarProps> = ({
 
   const isWaiting = !phase || phase === "waiting";
   const isShowdown = phase === "showdown";
+  const showBoundaryControls = isWaiting || (isShowdown && showNextHand);
   const betOrRaiseLabel = isFirstBet ? "Bet" : "Raise";
   const eligiblePlayerCount = players.filter((p) => p != null && (p.stack ?? 1) > 0).length;
 
@@ -229,20 +234,31 @@ const ActionBar: React.FC<ActionBarProps> = ({
           paddingBottom: MOBILE_SHELL.actionBarInsetBottomPx,
         }}
       >
-        {isAdmin && (isWaiting || isShowdown) && (
+        {isAdmin && showBoundaryControls && (
           <>
             {eligiblePlayerCount < 2 ? (
               <div className="w-full h-[52px] xs:h-[56px] rounded-2xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 text-sm font-semibold">
                 Waiting for more players…
               </div>
             ) : (
-              <motion.button
-                whileTap={{ scale: 0.96 }}
-                onClick={onStartHand}
-                className="w-full h-[52px] xs:h-[56px] rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-lg shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
-              >
-                {isShowdown ? "Next Hand" : "Start Game"}
-              </motion.button>
+              <div className="flex w-full gap-2">
+                {canShuffleSeats && (
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={onShuffleSeats}
+                    className="h-[52px] xs:h-[56px] flex-1 rounded-2xl border border-gray-300 bg-white text-sm font-black text-gray-700 shadow-sm transition-colors dark:border-white/10 dark:bg-white/10 dark:text-white"
+                  >
+                    Shuffle Seats
+                  </motion.button>
+                )}
+                <motion.button
+                  whileTap={{ scale: 0.96 }}
+                  onClick={onStartHand}
+                  className="h-[52px] xs:h-[56px] flex-1 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-lg shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                >
+                  {isShowdown ? "Next Hand" : "Start Game"}
+                </motion.button>
+              </div>
             )}
           </>
         )}
