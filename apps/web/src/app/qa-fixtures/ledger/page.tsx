@@ -1,6 +1,6 @@
 "use client";
 
-import DesktopLedgerPanel from "components/Table/desktop/DesktopLedgerPanel";
+import DesktopLedgerPanel from "@pokington/ui/web/DesktopLedgerPanel";
 
 const rows = [
   {

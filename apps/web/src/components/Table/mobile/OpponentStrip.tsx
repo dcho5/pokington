@@ -2,7 +2,7 @@
 import React from "react";
 import PlayerBubble from "./PlayerBubble";
 import type { Player } from "types/player";
-import { useColorScheme } from "hooks/useColorScheme";
+import { useColorScheme } from "@pokington/ui/web/useColorScheme";
 import {
   MOBILE_SEAT_STRIP_HEIGHT_PX,
   MOBILE_SEAT_STRIP_TOTAL_SEATS,

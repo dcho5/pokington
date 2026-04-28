@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef } from "react";
-import { useIsMobileLayout } from "hooks/useIsMobileLayout";
+import { useIsMobileLayout } from "@pokington/ui/web/useIsMobileLayout";
 import {
   createWebFeedbackPlatform,
   getFeedbackHapticPattern,

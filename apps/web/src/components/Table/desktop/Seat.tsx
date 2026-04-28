@@ -4,14 +4,14 @@ import React, { useEffect } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { computeSeatPosition, type TableGeometry } from "lib/seatLayout";
 import { getDesktopSeatBadgeMetrics } from "lib/desktopSeatBadgeLayout.mjs";
-import { formatCents } from "lib/formatCents";
+import { formatCents } from "@pokington/shared";
 import { ACTION_COLORS_DESKTOP as ACTION_COLORS } from "lib/actionColors";
 import { isFullyTabled } from "lib/showdownSpotlight";
 import type { Player } from "types/player";
-import Card from "components/poker/Card";
-import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
-import PlayerPositionMarkers from "../PlayerPositionMarkers";
-import RunItOddsBadge from "../RunItOddsBadge";
+import Card from "@pokington/ui/web/Card";
+import { PeekEyeIcon } from "@pokington/ui/web/PeekEyeIcon";
+import PlayerPositionMarkers from "@pokington/ui/web/PlayerPositionMarkers";
+import RunItOddsBadge from "@pokington/ui/web/RunItOddsBadge";
 
 const DESKTOP_SEAT_CONTENT_SCALE = 1.15;
 

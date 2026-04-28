@@ -2,7 +2,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { computeSeatCoords, type TableGeometry } from "lib/seatLayout";
-import { formatCents } from "lib/formatCents";
+import { formatCents } from "@pokington/shared";
 
 const CHIP_DURATION_S = 1.8;
 // Table aspect ratio (height / width)

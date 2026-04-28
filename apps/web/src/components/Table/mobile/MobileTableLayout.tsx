@@ -9,16 +9,16 @@ import TableHeader from "./TableHeader";
 import OpponentStrip from "./OpponentStrip";
 import CommunityCards from "./CommunityCards";
 import HandPanel from "./HandPanel";
-import ActionBar from "./ActionBar";
+import ActionBar from "@pokington/ui/web/ActionBar";
 import OpponentDetailSheet from "./OpponentDetailSheet";
-import SitDownForm from "../SitDownForm";
-import SeatManager from "../SeatManager";
-import BombPotVotingPanel from "../BombPotVotingPanel";
-import VotingPanel from "../VotingPanel";
-import BombPotSheet from "./BombPotSheet";
+import SitDownForm from "@pokington/ui/web/SitDownForm";
+import SeatManager from "@pokington/ui/web/SeatManager";
+import BombPotVotingPanel from "@pokington/ui/web/BombPotVotingPanel";
+import VotingPanel from "@pokington/ui/web/VotingPanel";
+import BombPotSheet from "@pokington/ui/web/BombPotSheet";
 import LedgerSheet from "./LedgerSheet";
-import PokerChip from "components/poker/PokerChip";
-import { formatCents } from "lib/formatCents";
+import PokerChip from "@pokington/ui/web/PokerChip";
+import { formatCents } from "@pokington/shared";
 import {
   isAnimatedRunItShowdown,
   shouldRenderRunItBoard,
@@ -26,14 +26,14 @@ import {
 import { deriveVisibleRunState } from "lib/runAnimation";
 import { shouldRevealRunsConcurrently } from "lib/showdownTiming";
 import { MobileSevenTwoBountyChips } from "./MobileSevenTwoBountyChips";
-import AnnouncementBanner from "../AnnouncementBanner";
-import SevenTwoAnnouncement from "../SevenTwoAnnouncement";
-import WinnerBanner from "../WinnerBanner";
+import AnnouncementBanner from "@pokington/ui/web/AnnouncementBanner";
+import SevenTwoAnnouncement from "@pokington/ui/web/SevenTwoAnnouncement";
+import WinnerBanner from "@pokington/ui/web/WinnerBanner";
 import type { TableLayoutProps } from "../TableLayout";
 import type { Player } from "types/player";
 import type { Card as PlayingCard } from "@pokington/shared";
 import { computeMobileChipAngle } from "lib/chipOrientation";
-import { useTimedPanelVisibility } from "hooks/useTimedPanelVisibility";
+import { useTimedPanelVisibility } from "@pokington/ui/web/useTimedPanelVisibility";
 import { useRunItOddsPanelModel } from "hooks/useRunItOddsPanelModel";
 import {
   buildShowdownSpotlight,
@@ -57,7 +57,7 @@ import {
   getMobileTableContentBottomInset,
   getMobileWinnerBannerBottom,
 } from "lib/mobileShell.mjs";
-import MobileBottomSheet from "./MobileBottomSheet";
+import MobileBottomSheet from "@pokington/ui/web/MobileBottomSheet";
 
 type MobileTableLayoutProps = TableLayoutProps & {
   totalSeats?: number;

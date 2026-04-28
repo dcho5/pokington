@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useLayoutEffect, useRef, useState } from "react";
-import { useIsMobileLayout } from "hooks/useIsMobileLayout";
+import { useIsMobileLayout } from "@pokington/ui/web/useIsMobileLayout";
 import { getMobileViewportMaxWidth } from "lib/mobileShell.mjs";
 import type { TableActions, TableSceneModel } from "./tableScene";
 import MobileTableLayout from "./mobile/MobileTableLayout";

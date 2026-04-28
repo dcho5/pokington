@@ -4,6 +4,8 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+packageExtensionsChecksum: sha256-g8kBgUCFjovGjeaS1xqqT4VwS+dWroMD4dY2QXQ2Nn4=
+
 importers:
 
   .:
@@ -93,6 +95,9 @@ importers:
       '@pokington/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@pokington/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       framer-motion:
         specifier: ^10.0.0
         version: 10.18.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -156,7 +161,23 @@ importers:
   packages/shared: {}
 
   packages/ui:
+    dependencies:
+      '@pokington/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@pokington/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
+      '@types/react':
+        specifier: ^18.2.0
+        version: 18.2.0
+      framer-motion:
+        specifier: ^10.0.0
+        version: 10.18.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      react:
+        specifier: 18.3.1
+        version: 18.3.1
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -7204,6 +7225,8 @@ snapshots:
     dependencies:
       '@next/env': 14.2.29
       '@swc/helpers': 0.5.5
+      '@types/react': 18.2.0
+      '@types/react-dom': 18.2.0
       busboy: 1.6.0
       caniuse-lite: 1.0.30001791
       graceful-fs: 4.2.11

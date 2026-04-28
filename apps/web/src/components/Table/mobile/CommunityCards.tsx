@@ -1,10 +1,10 @@
 "use client";
 import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import Card from "components/poker/Card";
+import Card from "@pokington/ui/web/Card";
 import { useTableVisualFeedback } from "components/Table/FeedbackCoordinator";
 import type { TableVisualFeedbackEvent } from "lib/feedbackPlatform";
-import RunItMobileTabs from "./RunItMobileTabs";
+import RunItMobileTabs from "@pokington/ui/web/RunItMobileTabs";
 import { collectBoardRevealEvents } from "lib/tableFeedback.mjs";
 import { getCenterBoardMode, isRunItAnnouncementPhase } from "lib/tableVisualState";
 import type { Card as CardType } from "@pokington/shared";

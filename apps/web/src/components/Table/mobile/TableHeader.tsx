@@ -1,8 +1,8 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCopyCurrentUrl } from "hooks/useCopyCurrentUrl";
-import { formatCents } from "lib/formatCents";
+import { useCopyCurrentUrl } from "@pokington/ui/web/useCopyCurrentUrl";
+import { formatCents } from "@pokington/shared";
 import { MOBILE_SHELL, getMobileHeaderHeight, getMobileSafeAreaTop } from "lib/mobileShell.mjs";
 import type { SevenTwoBountyBB } from "@pokington/engine";
 

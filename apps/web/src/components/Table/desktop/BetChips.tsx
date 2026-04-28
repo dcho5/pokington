@@ -3,7 +3,7 @@
 import React from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { TableGeometry } from "lib/seatLayout";
-import { formatCents } from "lib/formatCents";
+import { formatCents } from "@pokington/shared";
 import { computeDesktopBetBeaconLayout } from "lib/desktopBetLayout";
 
 type BetBeaconPlayer = {

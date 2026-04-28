@@ -45,7 +45,7 @@ test.describe("live browser smoke", () => {
     await sitDown(hostPage, 1, "Alice");
 
     await guestPage.goto("/");
-    await guestPage.getByPlaceholder("Table code").fill(tableCode);
+    await guestPage.getByPlaceholder("Enter table code").fill(tableCode);
     await guestPage.getByRole("button", { name: "Join" }).click();
     await guestPage.waitForURL(new RegExp(`/t/${tableCode}$`));
     await sitDown(guestPage, 4, "Bob");

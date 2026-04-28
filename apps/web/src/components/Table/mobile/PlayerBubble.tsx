@@ -2,14 +2,14 @@
 import React, { useEffect } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 import { getAvatarColor, getInitials } from "lib/avatarColor";
-import { formatCents } from "lib/formatCents";
+import { formatCents } from "@pokington/shared";
 import {
   MOBILE_SEAT_STRIP_METRICS,
   resolveMobileSeatStripPrimaryBadge,
 } from "lib/mobileSeatStripLayout.mjs";
 import { isFullyTabled } from "lib/showdownSpotlight";
 import { getPlayerPositionMarkers } from "lib/playerPositionMarkers.mjs";
-import { PeekEyeIcon } from "components/poker/PeekEyeIcon";
+import { PeekEyeIcon } from "@pokington/ui/web/PeekEyeIcon";
 import type { Player } from "types/player";
 
 type SeatSlotLayout = {

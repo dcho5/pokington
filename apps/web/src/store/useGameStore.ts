@@ -27,7 +27,7 @@ import { createJoinToken, getOrCreateClientId, getPartyKitHost } from "lib/party
 import {
   readPersistedAutoPeelPreference,
   writePersistedAutoPeelPreference,
-} from "lib/holeCardReveal.mjs";
+} from "@pokington/ui/web/holeCardReveal";
 import { deriveServerRunTiming } from "lib/runTimingFlags.mjs";
 import { isTableClearedForNextHand } from "lib/tableVisualState";
 import { deriveStreetPauseSnapshot } from "lib/streetSweep.mjs";

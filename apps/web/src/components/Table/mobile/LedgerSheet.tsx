@@ -1,9 +1,9 @@
 "use client";
 import React from "react";
 import { useGameStore } from "store/useGameStore";
-import { formatCents } from "lib/formatCents";
+import { formatCents } from "@pokington/shared";
 import { deriveLedgerRows, derivePayoutInstructions } from "lib/ledger";
-import MobileBottomSheet from "./MobileBottomSheet";
+import MobileBottomSheet from "@pokington/ui/web/MobileBottomSheet";
 
 interface LedgerSheetProps {
   onDismiss: () => void;

@@ -1,9 +1,9 @@
 "use client";
 import React from "react";
-import Card from "components/poker/Card";
-import { formatCents } from "lib/formatCents";
+import Card from "@pokington/ui/web/Card";
+import { formatCents } from "@pokington/shared";
 import { getPlayerPositionMarkers } from "lib/playerPositionMarkers.mjs";
-import MobileBottomSheet from "./MobileBottomSheet";
+import MobileBottomSheet from "@pokington/ui/web/MobileBottomSheet";
 import type { Player } from "types/player";
 
 interface OpponentDetailSheetProps {

@@ -1,7 +1,7 @@
 "use client";
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { formatCents } from "lib/formatCents";
+import { formatCents } from "@pokington/shared";
 import { getMobileSeatStripViewportPoint } from "lib/mobileSeatStripLayout.mjs";
 
 const CHIP_DURATION_S = 1.8;

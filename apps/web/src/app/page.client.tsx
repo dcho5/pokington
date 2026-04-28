@@ -1,9 +1,9 @@
 "use client";
 import { useState, useCallback, type CSSProperties } from "react";
-import PokerChip from "components/poker/PokerChip";
-import CreateTableCard from "components/home/CreateTableCard";
-import JoinTableCard from "components/home/JoinTableCard";
-import { BLIND_OPTIONS, BLIND_CENTS, BOUNTY_OPTIONS, BOUNTY_VALUES } from "constants/game";
+import PokerChip from "@pokington/ui/web/PokerChip";
+import CreateTableCard from "@pokington/ui/web/CreateTableCard";
+import JoinTableCard from "@pokington/ui/web/JoinTableCard";
+import { BLIND_OPTIONS, BLIND_CENTS, BOUNTY_OPTIONS, BOUNTY_VALUES } from "@pokington/shared";
 import { createTable, getOrCreateClientId, getTable } from "lib/party";
 import {
   getMobileHeaderHeight,

@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useGameStore } from "store/useGameStore";
-import DesktopLedgerPanel from "./DesktopLedgerPanel";
+import DesktopLedgerPanel from "@pokington/ui/web/DesktopLedgerPanel";
 
 const DesktopLedgerMenu: React.FC<{ prominent?: boolean }> = ({ prominent = false }) => {
   const [open, setOpen] = useState(false);

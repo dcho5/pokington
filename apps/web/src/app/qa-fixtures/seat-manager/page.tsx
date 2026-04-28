@@ -1,6 +1,6 @@
 "use client";
 
-import SeatManager from "components/Table/SeatManager";
+import SeatManager from "@pokington/ui/web/SeatManager";
 
 export default function SeatManagerFixturePage() {
   return (
