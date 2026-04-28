@@ -15,12 +15,13 @@ export default function OptionSelector({
   onChange,
   variant,
 }: OptionSelectorProps) {
-  const isCompact = variant === "pills";
+  const isPillStyle = variant === "pills";
 
   return (
     <div
       className="
-        flex flex-wrap gap-2 overflow-visible py-1
+        -mx-2 flex gap-2 overflow-x-auto scrollbar-none
+        px-2 py-2.5 sm:gap-2.5
       "
     >
       {options.map((opt, i) => {
@@ -31,24 +32,29 @@ export default function OptionSelector({
             key={i}
             onClick={() => onChange(i)}
             className={`
-              min-w-0 flex-1 basis-[calc(50%-0.25rem)] whitespace-nowrap rounded-full border
-              text-center font-bold transition-colors duration-150
-              focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400
-              focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-950
+              group relative flex-shrink-0 overflow-hidden whitespace-nowrap
+              rounded-full border
+              font-black tracking-[0.01em]
+              transition-all duration-200 ease-out
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400/75
+              focus-visible:ring-offset-2 focus-visible:ring-offset-white
+              dark:focus-visible:ring-offset-gray-950
               active:scale-[0.97]
-              sm:flex-none sm:basis-auto
-              ${isCompact
-                ? "min-h-[34px] px-4 py-2 text-xs"
-                : "min-h-[36px] px-4 py-2 text-xs sm:px-5 sm:text-sm"
+              ${isPillStyle
+                ? "min-h-[34px] px-4 py-2 text-xs sm:min-h-[38px] sm:px-5 sm:text-sm"
+                : "min-h-[36px] px-4 py-2 text-xs sm:min-h-[40px] sm:px-5 sm:text-sm"
               }
 
               ${active
-                ? "border-red-500 bg-red-500 text-white"
-                : "border-gray-200 bg-gray-100 text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-gray-400 dark:hover:bg-white/[0.1] dark:hover:text-gray-200"
+                ? "border-red-400/80 bg-gradient-to-b from-red-400 to-red-600 text-white shadow-[0_10px_22px_rgba(239,68,68,0.28),inset_0_1px_0_rgba(255,255,255,0.34)]"
+                : "border-gray-200/75 bg-gray-100/85 text-gray-600 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] hover:-translate-y-0.5 hover:border-gray-300 hover:bg-white hover:text-gray-800 hover:shadow-[0_8px_18px_rgba(15,23,42,0.08),inset_0_1px_0_rgba(255,255,255,0.95)] dark:border-white/[0.07] dark:bg-white/[0.06] dark:text-gray-400 dark:shadow-none dark:hover:border-white/[0.14] dark:hover:bg-white/[0.1] dark:hover:text-gray-200"
               }
             `}
           >
-            {String(opt)}
+            {active ? (
+              <span className="pointer-events-none absolute inset-x-3 top-0 h-px bg-white/55" />
+            ) : null}
+            <span className="relative z-10">{String(opt)}</span>
           </button>
         );
       })}
