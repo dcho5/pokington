@@ -1,10 +1,22 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, type CSSProperties } from "react";
 import PokerChip from "components/poker/PokerChip";
 import CreateTableCard from "components/home/CreateTableCard";
 import JoinTableCard from "components/home/JoinTableCard";
 import { BLIND_OPTIONS, BLIND_CENTS, BOUNTY_OPTIONS, BOUNTY_VALUES } from "constants/game";
 import { createTable, getOrCreateClientId, getTable } from "lib/party";
+import {
+  getMobileHeaderHeight,
+  getMobileSafeAreaBottom,
+  getMobileSafeAreaTop,
+  getMobileViewportMaxWidth,
+} from "lib/mobileShell.mjs";
+
+type HomeShellStyle = CSSProperties & {
+  "--mobile-header-height": string;
+  "--mobile-shell-max-width": string;
+  "--mobile-safe-bottom": string;
+};
 
 export default function HomePage() {
   const [blindIdx, setBlindIdx] = useState(0);
@@ -72,45 +84,69 @@ export default function HomePage() {
     }
   }, [navigateToTable, tableCode]);
 
+  const homeShellStyle: HomeShellStyle = {
+    "--mobile-header-height": getMobileHeaderHeight(),
+    "--mobile-shell-max-width": getMobileViewportMaxWidth(),
+    "--mobile-safe-bottom": getMobileSafeAreaBottom(24),
+  };
+
   return (
-    <div className="relative w-full min-h-screen overflow-x-hidden
-      bg-gradient-to-b from-gray-100 to-gray-200
-      dark:from-gray-950 dark:to-black"
+    <div
+      className="relative min-h-[100dvh] w-full overflow-x-hidden
+        bg-gray-100
+        transition-colors duration-500
+        dark:bg-gray-950"
+      style={homeShellStyle}
     >
+      <div
+        className="fixed left-0 right-0 top-0 z-30 flex items-end justify-center
+          border-b border-gray-200/60 bg-white/85 backdrop-blur-md
+          dark:border-white/[0.06] dark:bg-[rgba(3,7,18,0.85)]
+          md:hidden"
+        style={{
+          height: getMobileHeaderHeight(),
+          paddingTop: getMobileSafeAreaTop(),
+        }}
+      >
+        <div className="flex h-[52px] w-full max-w-[var(--mobile-shell-max-width)] items-center justify-center px-4">
+          <div className="flex min-w-0 items-center justify-center gap-2">
+            <h1 className="truncate text-xl font-black tracking-tight text-gray-900 dark:text-white">
+              Pokington
+            </h1>
+            <PokerChip size={28} glowAngle={0} />
+          </div>
+        </div>
+      </div>
+
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute left-1/2 top-1/3 -translate-x-1/2
-          w-[140vw] max-w-[800px] aspect-square
-          bg-red-500/10 blur-[140px] rounded-full
-          dark:bg-red-600/20"
+        <div
+          className="absolute left-1/2 top-[18%] h-[46rem] w-[46rem] -translate-x-1/2 rounded-full
+            bg-red-500/[0.07] blur-[130px] dark:bg-red-600/[0.12]"
+        />
+        <div
+          className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-white/50 to-transparent
+            dark:from-black/40"
         />
       </div>
 
-      <div className="relative z-10 px-4 pt-14 pb-6">
-        <div className="flex flex-col items-center text-center mb-8">
-          <span className="text-base tracking-widest text-gray-500 mb-2 select-none">
-            ♠ ♥ ♦ ♣
-          </span>
+      <div
+        className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[var(--mobile-shell-max-width)] flex-col justify-center
+          px-4 pb-[var(--mobile-safe-bottom)] pt-[calc(var(--mobile-header-height)+18px)]
+          md:max-w-[640px] md:px-6 md:py-12"
+      >
+        <div
+          className="elevated-surface-light rounded-[28px] border p-4 sm:p-5 md:p-6"
+        >
+          <div className="surface-content">
+            <div className="mb-5 hidden items-center justify-center md:flex">
+              <div className="flex min-w-0 items-center justify-center gap-3">
+                <h1 className="truncate text-4xl font-black tracking-tight text-gray-900 dark:text-white">
+                  Pokington
+                </h1>
+                <PokerChip size={36} glowAngle={0} />
+              </div>
+            </div>
 
-          <div className="flex items-center gap-1.5 mb-2">
-            <h1 className="font-bold text-3xl sm:text-4xl text-gray-900 dark:text-white">
-              Pokington
-            </h1>
-            <PokerChip size={34} glowAngle={0}/>
-          </div>
-
-          <div className="text-sm sm:text-lg text-gray-700 dark:text-gray-300">
-            Real-time multiplayer Texas Hold&#39;em
-          </div>
-        </div>
-
-        <div className="
-          flex flex-col md:flex-row
-          gap-4 sm:gap-6 md:gap-8
-          max-w-5xl mx-auto
-          items-center md:items-start
-          justify-center
-        ">
-          <div className="w-full max-w-md mx-auto">
             <CreateTableCard
               blindOptions={BLIND_OPTIONS}
               blindIdx={blindIdx}
@@ -124,9 +160,9 @@ export default function HomePage() {
               status={createError}
               isCreating={isCreating}
             />
-          </div>
 
-          <div className="w-full max-w-md mx-auto">
+            <div className="my-5 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-white/[0.08]" />
+
             <JoinTableCard
               tableCode={tableCode}
               setTableCode={(code) => {
@@ -139,10 +175,6 @@ export default function HomePage() {
             />
           </div>
         </div>
-
-        <footer className="mt-10 mb-3 text-xs text-center text-gray-500 opacity-80">
-          Pokington © 2026. Texas Hold&#39;em for web and mobile.
-        </footer>
       </div>
     </div>
   );

@@ -13,13 +13,14 @@ export default function OptionSelector({
   options,
   value,
   onChange,
+  variant,
 }: OptionSelectorProps) {
+  const isCompact = variant === "pills";
+
   return (
     <div
       className="
-        flex gap-1.5 sm:gap-2
-        overflow-x-auto no-scrollbar
-        pb-1
+        flex flex-wrap gap-2 overflow-visible py-1
       "
     >
       {options.map((opt, i) => {
@@ -30,36 +31,24 @@ export default function OptionSelector({
             key={i}
             onClick={() => onChange(i)}
             className={`
-              relative whitespace-nowrap
-              text-[11px] sm:text-xs font-semibold
-              px-2.5 sm:px-3
-              py-1.5 sm:py-2
-              min-h-[32px] sm:min-h-[36px]
-              rounded-full
-              transition-all duration-200
-              flex-shrink-0
-
-              ${active
-                ? "text-white"
-                : "text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-white/[0.06]"
+              min-w-0 flex-1 basis-[calc(50%-0.25rem)] whitespace-nowrap rounded-full border
+              text-center font-bold transition-colors duration-150
+              focus:outline-none focus-visible:ring-2 focus-visible:ring-red-400
+              focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-gray-950
+              active:scale-[0.97]
+              sm:flex-none sm:basis-auto
+              ${isCompact
+                ? "min-h-[34px] px-4 py-2 text-xs"
+                : "min-h-[36px] px-4 py-2 text-xs sm:px-5 sm:text-sm"
               }
 
-              active:scale-[0.96]
+              ${active
+                ? "border-red-500 bg-red-500 text-white"
+                : "border-gray-200 bg-gray-100 text-gray-600 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-800 dark:border-white/[0.08] dark:bg-white/[0.06] dark:text-gray-400 dark:hover:bg-white/[0.1] dark:hover:text-gray-200"
+              }
             `}
           >
-            {/* Animated background */}
-            <span
-              className={`
-                absolute inset-0 rounded-full
-                transition-all duration-200
-                ${active
-                  ? "bg-red-500 shadow-[0_0_12px_rgba(239,68,68,0.6)]"
-                  : "bg-transparent"
-                }
-              `}
-            />
-
-            <span className="relative z-10">{String(opt)}</span>
+            {String(opt)}
           </button>
         );
       })}

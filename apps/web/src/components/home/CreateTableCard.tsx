@@ -29,31 +29,27 @@ const CreateTableCard = ({
   status,
   isCreating = false,
 }: CreateTableCardProps) => (
-  <div
-    className="
-      animate-slide-up rounded-2xl
-      p-5 sm:p-7
-      flex flex-col gap-5 sm:gap-6
-      w-full min-w-0 max-w-lg
-      border bg-white/90 border-gray-200 backdrop-blur
-      shadow-lg sm:shadow-xl
-      dark:bg-gray-900 dark:border-gray-800
-    "
-  >
-    <h2 className="font-semibold text-lg sm:text-xl text-gray-900 dark:text-gray-100">
-      Create Table
-    </h2>
+  <section className="flex min-w-0 flex-col gap-4">
+    <div className="min-w-0">
+      <h2 className="text-xl font-black tracking-tight text-gray-900 dark:text-white">
+        Create
+      </h2>
+      <p className="mt-1 text-xs font-semibold text-gray-500 dark:text-gray-400">
+        Set stakes, create, share link.
+      </p>
+    </div>
 
     <input
       className="
-        w-full min-h-[44px]
-        px-3 py-2.5 sm:p-3
-        rounded-lg border transition
-        border-gray-300 bg-gray-50 text-gray-900
+        w-full min-h-[48px]
+        px-3.5 py-3
+        rounded-2xl border transition
+        border-gray-200/80 bg-white/72 text-gray-900 shadow-sm
+        placeholder:text-gray-400
         focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-red-400
-        dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100
+        dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-100
       "
-      placeholder="Table name (optional)"
+      placeholder="Table name"
       value={tableName}
       onChange={(e) => setTableName(e.target.value)}
       onKeyDown={(e) => {
@@ -61,8 +57,8 @@ const CreateTableCard = ({
       }}
     />
 
-    <div className="space-y-1">
-      <label className="block text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
+    <div className="space-y-1.5">
+      <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
         Blinds
       </label>
       <OptionSelector
@@ -73,9 +69,9 @@ const CreateTableCard = ({
       />
     </div>
 
-    <div className="space-y-1">
-      <label className="block text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
-        7-2 Offsuit Bounty
+    <div className="space-y-1.5">
+      <label className="block text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 dark:text-gray-400">
+        Bounty
       </label>
       <OptionSelector
         options={bountyOptions}
@@ -90,28 +86,29 @@ const CreateTableCard = ({
       disabled={isCreating}
       className="
         group relative w-full
-        min-h-[48px]
-        py-3.5 sm:py-3
-        rounded-lg font-semibold text-white
+        min-h-[52px]
+        py-3.5
+        rounded-2xl font-black text-white
         bg-gradient-to-r from-red-500 to-red-700
-        shadow-md hover:shadow-[0_0_20px_rgba(239,68,68,0.5)]
-        active:scale-[0.97]
+        shadow-[0_16px_32px_rgba(239,68,68,0.26)]
+        active:scale-[0.98]
         transition-all duration-200
         focus:outline-none focus:ring-2 focus:ring-red-400
         overflow-hidden
-        disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:shadow-md
+        disabled:cursor-not-allowed disabled:opacity-70 disabled:shadow-none
+        sm:hover:shadow-[0_0_24px_rgba(239,68,68,0.45)]
       "
     >
       <span className="relative z-10">{isCreating ? "Creating..." : "Create Table"}</span>
-      <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <div className="absolute inset-0 bg-white/15 opacity-0 transition-opacity duration-300 sm:group-hover:opacity-100" />
     </button>
 
     {status ? (
-      <p className="text-xs text-red-500 dark:text-red-400">
+      <p className="text-xs font-semibold text-red-500 dark:text-red-400">
         {status}
       </p>
     ) : null}
-  </div>
+  </section>
 );
 
 export default CreateTableCard;

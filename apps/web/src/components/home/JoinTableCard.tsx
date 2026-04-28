@@ -15,33 +15,33 @@ const JoinTableCard = ({
   error,
   isJoining = false,
 }: JoinTableCardProps) => (
-  <div
-    className="
-      animate-slide-up [animation-delay:150ms]
-      rounded-2xl
-      p-5 sm:p-7
-      flex flex-col gap-5 sm:gap-6
-      w-full min-w-0 max-w-md
-      border bg-white/90 border-gray-200 backdrop-blur
-      shadow-lg sm:shadow-xl
-      dark:bg-gray-900 dark:border-gray-800
-    "
-  >
-    <h2 className="font-semibold text-lg sm:text-xl text-gray-900 dark:text-gray-100">
-      Join Table
-    </h2>
+  <section className="flex min-w-0 flex-col gap-3.5 rounded-2xl border border-gray-200/70 bg-white/45 p-3.5 shadow-sm dark:border-white/[0.06] dark:bg-white/[0.03]">
+    <div className="flex items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h2 className="text-base font-black tracking-tight text-gray-900 dark:text-white">
+          Join
+        </h2>
+        <p className="mt-0.5 text-xs font-semibold text-gray-500 dark:text-gray-400">
+          Enter a 6-character code.
+        </p>
+      </div>
+      <span className="font-mono text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500">
+        Code
+      </span>
+    </div>
 
     <div className="flex gap-2">
       <input
         className="
-          flex-1 min-h-[44px]
-          px-3 py-2.5 sm:p-3
-          rounded-lg border transition
-          border-gray-300 bg-gray-50 text-gray-900
+          flex-1 min-h-[48px] min-w-0
+          px-3.5 py-3
+          rounded-2xl border transition
+          border-gray-200/80 bg-white/72 font-mono text-sm font-black uppercase tracking-[0.18em] text-gray-900 shadow-sm
+          placeholder:font-sans placeholder:font-semibold placeholder:normal-case placeholder:tracking-normal placeholder:text-gray-400
           focus:outline-none focus:ring-2 focus:ring-red-400 focus:border-red-400
-          dark:border-gray-700 dark:bg-gray-950 dark:text-gray-100
+          dark:border-white/[0.08] dark:bg-gray-950/60 dark:text-gray-100
         "
-        placeholder="Enter table code"
+        placeholder="Table code"
         value={tableCode}
         onChange={(e) => setTableCode(e.target.value.toUpperCase())}
         onKeyDown={(e) => {
@@ -54,29 +54,29 @@ const JoinTableCard = ({
         disabled={isJoining}
         className="
           group relative
-          min-h-[44px]
+          min-h-[48px]
           px-4 sm:px-6
-          py-2.5 sm:py-3
-          rounded-lg font-semibold text-white
-          bg-gradient-to-r from-red-500 to-red-700
-          shadow-md hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]
-          active:scale-[0.97]
+          rounded-2xl font-black text-white
+          bg-gray-900 shadow-sm
+          active:scale-[0.98]
           transition-all duration-200
           focus:outline-none focus:ring-2 focus:ring-red-400
           overflow-hidden
-          disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:shadow-md
+          disabled:cursor-not-allowed disabled:opacity-70
+          dark:bg-white/[0.08] dark:text-white dark:ring-1 dark:ring-white/[0.08]
+          sm:hover:bg-red-600 dark:sm:hover:bg-red-600
         "
       >
         <span className="relative z-10">{isJoining ? "Checking..." : "Join"}</span>
-        <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="absolute inset-0 bg-white/10 opacity-0 transition-opacity duration-300 sm:group-hover:opacity-100" />
       </button>
     </div>
     {error ? (
-      <p className="text-xs text-red-500 dark:text-red-400">
+      <p className="text-xs font-semibold text-red-500 dark:text-red-400">
         {error}
       </p>
     ) : null}
-  </div>
+  </section>
 );
 
 export default JoinTableCard;

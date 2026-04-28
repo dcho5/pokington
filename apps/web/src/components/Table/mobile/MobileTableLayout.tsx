@@ -935,14 +935,9 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
             isSmallBlind={selectedOpponentSeatIndex === smallBlindIndex}
             isBigBlind={selectedOpponentSeatIndex === bigBlindIndex}
             runItOddsPercentage={selectedOpponentPlayer.id ? (runItOddsPercentagesByPlayerId[selectedOpponentPlayer.id] ?? null) : null}
-            spotlightSelected={selectedSpotlightPlayerId === selectedOpponentPlayer.id}
-            onToggleSpotlight={
-              canInteractWithSpotlight && selectedOpponentPlayer.id && isFullyTabled(selectedOpponentPlayer.holeCards)
-                ? () => {
-                    setSelectedSpotlightPlayerId((current) =>
-                      current === selectedOpponentPlayer.id ? null : selectedOpponentPlayer.id ?? null,
-                    );
-                  }
+            holeCardEmphasisByIndex={
+              selectedOpponentPlayer.id != null && selectedOpponentPlayer.id === spotlightPlayerId
+                ? spotlightHoleCardEmphasis
                 : undefined
             }
             onDismiss={handleOpponentDetailDismiss}

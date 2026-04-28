@@ -14,8 +14,7 @@ interface OpponentDetailSheetProps {
   isSmallBlind?: boolean;
   isBigBlind?: boolean;
   runItOddsPercentage?: number | null;
-  spotlightSelected?: boolean;
-  onToggleSpotlight?: () => void;
+  holeCardEmphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
   onDismiss: () => void;
 }
 
@@ -39,8 +38,7 @@ export default function OpponentDetailSheet({
   isSmallBlind = false,
   isBigBlind = false,
   runItOddsPercentage = null,
-  spotlightSelected = false,
-  onToggleSpotlight,
+  holeCardEmphasisByIndex = ["neutral", "neutral"],
   onDismiss,
 }: OpponentDetailSheetProps) {
   const markers = getPlayerPositionMarkers({
@@ -111,6 +109,7 @@ export default function OpponentDetailSheet({
               <Card
                 key={card ? `${card.rank}${card.suit}` : `hidden-${index}`}
                 card={card ?? undefined}
+                emphasis={holeCardEmphasisByIndex[index] ?? "neutral"}
                 size="compact"
                 className="rounded-[8px] shadow-xl"
                 style={{ width: 42, height: 58 }}
@@ -139,15 +138,6 @@ export default function OpponentDetailSheet({
             </p>
           )}
         </div>
-
-        {onToggleSpotlight && (
-          <button
-            onClick={onToggleSpotlight}
-            className="w-full h-12 rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-sm shadow-[0_0_18px_rgba(239,68,68,0.32)]"
-          >
-            {spotlightSelected ? "Hide Spotlight" : "Spotlight Hand"}
-          </button>
-        )}
       </div>
     </MobileBottomSheet>
   );
