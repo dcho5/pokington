@@ -35,7 +35,10 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const runtimeConfig = {
-    partykitHost: normalizePartyKitHost(process.env.PARTYKIT_HOST ?? process.env.NEXT_PUBLIC_PARTYKIT_HOST),
+    partykitHost: normalizePartyKitHost(
+      process.env.PARTYKIT_HOST
+      ?? (process.env.NODE_ENV === "production" ? process.env.NEXT_PUBLIC_PARTYKIT_HOST : null),
+    ),
   };
 
   return (

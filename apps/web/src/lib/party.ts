@@ -31,28 +31,43 @@ function isLocalHost(host: string | null | undefined): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1";
 }
 
+function getExplicitPartyKitHost(): string | null {
+  return normalizePartyKitHost(process.env.PARTYKIT_HOST);
+}
+
+function getPublicPartyKitHost(): string | null {
+  return normalizePartyKitHost(process.env.NEXT_PUBLIC_PARTYKIT_HOST);
+}
+
 export function getServerPartyKitHost(requestHost?: string | null): string {
+  const explicitHost = getExplicitPartyKitHost();
+  if (explicitHost) {
+    return explicitHost;
+  }
   if (isLocalHost(requestHost)) {
     return LOCAL_PARTYKIT_HOST;
   }
   const hostname = requestHost?.split(":")[0]?.split("/")[0];
-  return normalizePartyKitHost(process.env.PARTYKIT_HOST)
-    || normalizePartyKitHost(process.env.NEXT_PUBLIC_PARTYKIT_HOST)
-    || (hostname ? `${hostname}:1999` : LOCAL_PARTYKIT_HOST);
+  if (process.env.NODE_ENV !== "production") {
+    return hostname ? `${hostname}:1999` : LOCAL_PARTYKIT_HOST;
+  }
+  return getPublicPartyKitHost() || (hostname ? `${hostname}:1999` : LOCAL_PARTYKIT_HOST);
 }
 
 export function getPartyKitHost(): string {
   if (typeof window !== "undefined") {
+    const explicitHost = normalizePartyKitHost(window.__POKINGTON_RUNTIME_CONFIG__?.partykitHost);
+    if (explicitHost) {
+      return explicitHost;
+    }
     const { hostname } = window.location;
     if (hostname === "localhost" || hostname === "127.0.0.1") {
       return LOCAL_PARTYKIT_HOST;
     }
-    return normalizePartyKitHost(window.__POKINGTON_RUNTIME_CONFIG__?.partykitHost)
-      || normalizePartyKitHost(process.env.NEXT_PUBLIC_PARTYKIT_HOST)
-      || `${hostname}:1999`;
-  }
-  if (process.env.NODE_ENV !== "production") {
-    return LOCAL_PARTYKIT_HOST;
+    if (process.env.NODE_ENV !== "production") {
+      return `${hostname}:1999`;
+    }
+    return getPublicPartyKitHost() || `${hostname}:1999`;
   }
   return getServerPartyKitHost();
 }
