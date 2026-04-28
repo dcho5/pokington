@@ -31,7 +31,30 @@ export function TableFeedbackProvider({ children }: { children: React.ReactNode 
   }
 
   useEffect(() => {
+    const primeFeedback = () => platformRef.current?.prime();
+    const primeOnVisible = () => {
+      if (typeof document === "undefined" || !document.hidden) {
+        primeFeedback();
+      }
+    };
+    const gestureOptions: AddEventListenerOptions = { capture: true, passive: true };
+
+    window.addEventListener("pointerdown", primeFeedback, gestureOptions);
+    window.addEventListener("touchstart", primeFeedback, gestureOptions);
+    window.addEventListener("click", primeFeedback, gestureOptions);
+    window.addEventListener("keydown", primeFeedback, { capture: true });
+    window.addEventListener("focus", primeOnVisible);
+    window.addEventListener("pageshow", primeOnVisible);
+    document.addEventListener("visibilitychange", primeOnVisible);
+
     return () => {
+      window.removeEventListener("pointerdown", primeFeedback, gestureOptions);
+      window.removeEventListener("touchstart", primeFeedback, gestureOptions);
+      window.removeEventListener("click", primeFeedback, gestureOptions);
+      window.removeEventListener("keydown", primeFeedback, { capture: true });
+      window.removeEventListener("focus", primeOnVisible);
+      window.removeEventListener("pageshow", primeOnVisible);
+      document.removeEventListener("visibilitychange", primeOnVisible);
       platformRef.current?.dispose?.();
       platformRef.current = null;
     };

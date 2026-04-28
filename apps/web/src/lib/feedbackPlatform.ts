@@ -28,6 +28,7 @@ export interface FeedbackPlaybackContext {
 }
 
 export interface FeedbackPlatform {
+  prime: () => void;
   playSound: (
     cue: TableFeedbackPlaybackEvent["kind"],
     payload: TableFeedbackPlaybackEvent,
@@ -72,11 +73,11 @@ interface SoundRecipe {
 }
 
 const HAPTIC_PATTERNS: Record<FeedbackHapticPattern, number | number[]> = {
-  light: 18,
-  medium: [24, 28, 24],
-  heavy: [34, 24, 42],
-  success: [20, 32, 22, 48],
-  warning: [24, 28, 24, 28],
+  light: 35,
+  medium: [45, 35, 45],
+  heavy: [70, 40, 80],
+  success: [45, 45, 65],
+  warning: [50, 35, 50, 35],
 };
 
 function isViewerFocusedEvent(event: TableFeedbackPlaybackEvent, myPlayerId: string | null) {
@@ -444,6 +445,7 @@ export function createWebFeedbackPlatform(): FeedbackPlatform {
   let compressor: DynamicsCompressorNode | null = null;
   let noiseBuffer: AudioBuffer | null = null;
   let unlocked = false;
+  let unlockProbeContext: AudioContext | null = null;
   const pendingRecipeQueue: SoundRecipe[] = [];
 
   const ensureAudioGraph = () => {
@@ -462,7 +464,29 @@ export function createWebFeedbackPlatform(): FeedbackPlatform {
     masterGain.connect(compressor);
     compressor.connect(audioContext.destination);
     noiseBuffer = createNoiseBuffer(audioContext);
+    unlockProbeContext = null;
     return audioContext;
+  };
+
+  const playSilentUnlockProbe = (context: AudioContext) => {
+    if (unlockProbeContext === context && context.state === "running") return;
+
+    try {
+      const source = context.createBufferSource();
+      const gainNode = context.createGain();
+      source.buffer = context.createBuffer(1, 1, context.sampleRate);
+      gainNode.gain.value = 0;
+      source.connect(gainNode);
+      gainNode.connect(context.destination);
+      source.start(0);
+      source.stop(context.currentTime + 0.01);
+      if (context.state === "running") {
+        unlockProbeContext = context;
+      }
+    } catch {
+      // Some browsers reject even silent playback until a gesture. A later gesture
+      // will run this path again, so failing quietly is better than disabling sound.
+    }
   };
 
   const renderRecipe = (recipe: SoundRecipe) => {
@@ -540,6 +564,7 @@ export function createWebFeedbackPlatform(): FeedbackPlatform {
   const resumeAudio = () => {
     const context = ensureAudioGraph();
     if (!context || context.state === "closed") return;
+    playSilentUnlockProbe(context);
     if (context.state === "running") {
       unlocked = true;
       flushPendingRecipes();
@@ -551,17 +576,10 @@ export function createWebFeedbackPlatform(): FeedbackPlatform {
     }).catch(() => {});
   };
 
-  const handleUnlock = () => {
-    resumeAudio();
-  };
-
-  if (typeof window !== "undefined") {
-    window.addEventListener("pointerdown", handleUnlock, { passive: true });
-    window.addEventListener("keydown", handleUnlock, { passive: true });
-    window.addEventListener("touchstart", handleUnlock, { passive: true });
-  }
-
   return {
+    prime() {
+      resumeAudio();
+    },
     playSound(cue, payload, context) {
       if (cue === "turn_changed" && payload.kind === "turn_changed" && payload.actorId !== context.myPlayerId) {
         return;
@@ -576,6 +594,7 @@ export function createWebFeedbackPlatform(): FeedbackPlatform {
       if (!unlocked || contextNode.state !== "running") {
         pendingRecipeQueue.push(recipe);
         if (pendingRecipeQueue.length > 32) pendingRecipeQueue.shift();
+        resumeAudio();
         return;
       }
 
@@ -586,14 +605,10 @@ export function createWebFeedbackPlatform(): FeedbackPlatform {
       navigator.vibrate(HAPTIC_PATTERNS[pattern]);
     },
     dispose() {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("pointerdown", handleUnlock);
-        window.removeEventListener("keydown", handleUnlock);
-        window.removeEventListener("touchstart", handleUnlock);
-      }
       pendingRecipeQueue.length = 0;
       noiseBuffer = null;
       unlocked = false;
+      unlockProbeContext = null;
       if (audioContext && audioContext.state !== "closed") {
         void audioContext.close().catch(() => {});
       }

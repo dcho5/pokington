@@ -64,7 +64,9 @@ const BombPotSheet: React.FC<BombPotSheetProps> = ({ onConfirm, onDismiss, bigBl
                 }}
               >
                 <span className="text-[1.45rem] font-black text-white">{n}× BB</span>
-                <span className="text-[11px] text-sky-100/78 font-bold">{formatCents(anteCents)}</span>
+                <span className="rounded-full bg-slate-950/55 px-2 py-0.5 text-[11px] font-black text-white shadow-[0_1px_8px_rgba(0,0,0,0.22)]">
+                  {formatCents(anteCents)}
+                </span>
               </motion.button>
             );
           })}
