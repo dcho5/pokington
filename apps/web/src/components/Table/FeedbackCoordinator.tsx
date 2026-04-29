@@ -8,6 +8,11 @@ import {
   type TableFeedbackPlaybackEvent,
   type TableVisualFeedbackEvent,
 } from "lib/feedbackPlatform";
+import {
+  isInteractiveBridgeTarget,
+  postNativeWebViewFeedbackHaptic,
+  postNativeWebViewLocalPress,
+} from "lib/nativeWebViewBridge";
 import { markFeedbackKey } from "lib/tableFeedback.mjs";
 import { subscribeToTableFeedback, type TableFeedbackEvent, useGameStore } from "store/useGameStore";
 
@@ -32,6 +37,12 @@ export function TableFeedbackProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const primeFeedback = () => platformRef.current?.prime();
+    const primeAndBridgePress = (event: PointerEvent) => {
+      primeFeedback();
+      if (isInteractiveBridgeTarget(event.target)) {
+        postNativeWebViewLocalPress(`press:${Date.now()}`);
+      }
+    };
     const primeOnVisible = () => {
       if (typeof document === "undefined" || !document.hidden) {
         primeFeedback();
@@ -39,7 +50,7 @@ export function TableFeedbackProvider({ children }: { children: React.ReactNode 
     };
     const gestureOptions: AddEventListenerOptions = { capture: true, passive: true };
 
-    window.addEventListener("pointerdown", primeFeedback, gestureOptions);
+    window.addEventListener("pointerdown", primeAndBridgePress, gestureOptions);
     window.addEventListener("touchstart", primeFeedback, gestureOptions);
     window.addEventListener("click", primeFeedback, gestureOptions);
     window.addEventListener("keydown", primeFeedback, { capture: true });
@@ -48,7 +59,7 @@ export function TableFeedbackProvider({ children }: { children: React.ReactNode 
     document.addEventListener("visibilitychange", primeOnVisible);
 
     return () => {
-      window.removeEventListener("pointerdown", primeFeedback, gestureOptions);
+      window.removeEventListener("pointerdown", primeAndBridgePress, gestureOptions);
       window.removeEventListener("touchstart", primeFeedback, gestureOptions);
       window.removeEventListener("click", primeFeedback, gestureOptions);
       window.removeEventListener("keydown", primeFeedback, { capture: true });
@@ -75,6 +86,7 @@ export function TableFeedbackProvider({ children }: { children: React.ReactNode 
     const hapticPattern = getFeedbackHapticPattern(event, context);
     if (hapticPattern) {
       platform.playHaptic(hapticPattern, event, context);
+      postNativeWebViewFeedbackHaptic(event, context);
     }
   }, [isMobileLayout]);
 

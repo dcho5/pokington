@@ -7,9 +7,10 @@ function readPublicEnv(name: string): string | null {
 export const env = {
   appEnv: readPublicEnv("APP_ENV"),
   partyKitHost: readPublicEnv("PARTYKIT_HOST"),
+  webOrigin: readPublicEnv("WEB_ORIGIN"),
 } as const;
 
-export function requirePublicEnv(name: "APP_ENV" | "PARTYKIT_HOST"): string {
+export function requirePublicEnv(name: "APP_ENV" | "PARTYKIT_HOST" | "WEB_ORIGIN"): string {
   const value = readPublicEnv(name);
   if (value) return value;
   throw new Error(
