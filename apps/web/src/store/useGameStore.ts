@@ -1,6 +1,6 @@
 "use client";
 import { create } from "zustand";
-import PartySocket from "partysocket";
+import { createWebGameConnection, type GameConnection } from "@pokington/network";
 import {
   createInitialState,
   type GameEvent,
@@ -195,7 +195,7 @@ const STREET_PAUSE_MS = 1200;
 const SWEEP_DURATION_MS = 450;
 
 // Module-level — not reactive state
-let _socket: PartySocket | null = null;
+let _connection: GameConnection<ServerMessage, GameEvent> | null = null;
 let _visibilityHandler: (() => void) | null = null;
 let _idleCleanup: (() => void) | null = null;
 let sevenTwoAnnouncementTimer: ReturnType<typeof setTimeout> | null = null;
@@ -458,7 +458,7 @@ export const useGameStore = create<GameStore>((set, get) => {
     isFirstStateReceived: false,
 
     connect: (tableCode) => {
-      if (_socket) { _socket.close(); _socket = null; }
+      if (_connection) { _connection.disconnect(); _connection = null; }
       clearBoundaryPauseTimers();
       if (actionErrorTimer) {
         clearTimeout(actionErrorTimer);
@@ -497,37 +497,30 @@ export const useGameStore = create<GameStore>((set, get) => {
         isFirstStateReceived: false,
       });
 
-      const host = getPartyKitHost();
-      void (async () => {
-        let joinToken: Awaited<ReturnType<typeof createJoinToken>>;
-        try {
-          joinToken = await createJoinToken(tableCode, { clientId });
-        } catch (error) {
-          const code = error instanceof Error ? error.message : "";
+      _connection = createWebGameConnection<ServerMessage, GameEvent>({
+        host: getPartyKitHost(),
+        roomId: tableCode,
+        clientId,
+        protocolVersion: PROTOCOL_VERSION,
+        join: () => createJoinToken(tableCode, { clientId }),
+        getInitialAway: () => typeof document !== "undefined" ? document.hidden : false,
+        onStatusChange: (status) => {
+          set({ connectionStatus: status === "connected" ? "connected" : status === "connecting" ? "connecting" : "disconnected" });
+        },
+        onJoin: (joinToken) => {
+          set({
+            myPlayerId: joinToken.playerSessionId,
+            isCreator: joinToken.isCreator,
+          });
+        },
+        onJoinError: (error) => {
+          const code = error.message;
           set({
             connectionStatus: "disconnected",
             tableNotFound: code === "TABLE_NOT_FOUND" || code === "TABLE_NOT_ACTIVE",
           });
-          return;
-        }
-
-        set({
-          myPlayerId: joinToken.playerSessionId,
-          isCreator: joinToken.isCreator,
-        });
-
-        _socket = new PartySocket({ host, room: tableCode });
-
-        _socket.addEventListener("open", () => {
-          set({ connectionStatus: "connected" });
-          _socket?.send(JSON.stringify({ type: "AUTH", token: joinToken.token, protocolVersion: PROTOCOL_VERSION }));
-          _socket?.send(JSON.stringify({ type: "SET_AWAY", away: typeof document !== "undefined" ? document.hidden : false }));
-        });
-
-        _socket.addEventListener("message", (evt: MessageEvent) => {
-          let msg: ServerMessage;
-          try { msg = JSON.parse(evt.data as string) as ServerMessage; } catch { return; }
-
+        },
+        onMessage: (msg) => {
           switch (msg.type) {
             case "WELCOME":
               set({ isCreator: msg.isCreator, myPlayerId: msg.playerSessionId });
@@ -624,9 +617,9 @@ export const useGameStore = create<GameStore>((set, get) => {
                     _idleCleanup = null;
                   }
                 }
-                if (_socket) {
-                  _socket.close();
-                  _socket = null;
+                if (_connection) {
+                  _connection.disconnect();
+                  _connection = null;
                 }
                 set({
                   gameState: createPlaceholderPublicGameState(),
@@ -660,54 +653,50 @@ export const useGameStore = create<GameStore>((set, get) => {
               break;
             }
           }
-        });
+        },
+      });
 
-        _socket.addEventListener("close", () => set({ connectionStatus: "disconnected" }));
+      if (typeof document !== "undefined") {
+        if (_visibilityHandler) document.removeEventListener("visibilitychange", _visibilityHandler);
+        if (_idleCleanup) _idleCleanup();
 
-        if (typeof document !== "undefined") {
-          if (_visibilityHandler) document.removeEventListener("visibilitychange", _visibilityHandler);
-          if (_idleCleanup) _idleCleanup();
+        const handleVisibilityChange = () => {
+          _connection?.setAway(document.hidden);
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        _visibilityHandler = handleVisibilityChange;
 
-          const handleVisibilityChange = () => {
-            if (_socket) {
-              _socket.send(JSON.stringify({ type: "SET_AWAY", away: document.hidden }));
-            }
-          };
-          document.addEventListener("visibilitychange", handleVisibilityChange);
-          _visibilityHandler = handleVisibilityChange;
-
-          const IDLE_MS = 120_000;
-          const THROTTLE_MS = 200;
-          let lastActivity = Date.now();
-          let lastThrottleTime = 0;
-          let idleAway = false;
-          const onActivity = () => {
-            const now = Date.now();
-            if (now - lastThrottleTime < THROTTLE_MS) return;
-            lastThrottleTime = now;
-            lastActivity = now;
-            if (idleAway) {
-              idleAway = false;
-              if (_socket) _socket.send(JSON.stringify({ type: "SET_AWAY", away: false }));
-            }
-          };
-          const idleInterval = setInterval(() => {
-            if (!idleAway && Date.now() - lastActivity > IDLE_MS) {
-              idleAway = true;
-              if (_socket) _socket.send(JSON.stringify({ type: "SET_AWAY", away: true }));
-            }
-          }, 10_000);
-          document.addEventListener("mousemove", onActivity, { passive: true });
-          document.addEventListener("keydown", onActivity);
-          document.addEventListener("touchstart", onActivity, { passive: true });
-          _idleCleanup = () => {
-            clearInterval(idleInterval);
-            document.removeEventListener("mousemove", onActivity);
-            document.removeEventListener("keydown", onActivity);
-            document.removeEventListener("touchstart", onActivity);
-          };
-        }
-      })();
+        const IDLE_MS = 120_000;
+        const THROTTLE_MS = 200;
+        let lastActivity = Date.now();
+        let lastThrottleTime = 0;
+        let idleAway = false;
+        const onActivity = () => {
+          const now = Date.now();
+          if (now - lastThrottleTime < THROTTLE_MS) return;
+          lastThrottleTime = now;
+          lastActivity = now;
+          if (idleAway) {
+            idleAway = false;
+            _connection?.setAway(false);
+          }
+        };
+        const idleInterval = setInterval(() => {
+          if (!idleAway && Date.now() - lastActivity > IDLE_MS) {
+            idleAway = true;
+            _connection?.setAway(true);
+          }
+        }, 10_000);
+        document.addEventListener("mousemove", onActivity, { passive: true });
+        document.addEventListener("keydown", onActivity);
+        document.addEventListener("touchstart", onActivity, { passive: true });
+        _idleCleanup = () => {
+          clearInterval(idleInterval);
+          document.removeEventListener("mousemove", onActivity);
+          document.removeEventListener("keydown", onActivity);
+          document.removeEventListener("touchstart", onActivity);
+        };
+      }
     },
 
     disconnect: () => {
@@ -726,7 +715,7 @@ export const useGameStore = create<GameStore>((set, get) => {
           _idleCleanup = null;
         }
       }
-      if (_socket) { _socket.close(); _socket = null; }
+      if (_connection) { _connection.disconnect(); _connection = null; }
       set({
         gameState: createPlaceholderPublicGameState(),
         myUserId: null,
@@ -760,9 +749,9 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     sendEvent: (event) => {
-      if (!_socket) return;
+      if (!_connection) return;
       if (get().actionError) set({ actionError: null });
-      _socket.send(JSON.stringify({ type: "GAME_EVENT", event }));
+      _connection.sendAction(event);
     },
 
     sitDown: (seatIndex, name, buyInCents) => {
@@ -876,17 +865,13 @@ export const useGameStore = create<GameStore>((set, get) => {
     },
 
     revealCard: (cardIndex) => {
-      if (!_socket) return;
-      _socket.send(JSON.stringify({ type: "REVEAL_CARD", cardIndex }));
+      if (!_connection) return;
+      _connection.revealCard(cardIndex);
     },
 
     peekCard: (cardIndex) => {
-      if (!_socket) return;
-      _socket.send(JSON.stringify({
-        type: "PEEK_CARD",
-        cardIndex,
-        handNumber: get().gameState.handNumber,
-      }));
+      if (!_connection) return;
+      _connection.peekCard(cardIndex, get().gameState.handNumber);
     },
 
     setSevenTwoBounty: (bountyBB) => {

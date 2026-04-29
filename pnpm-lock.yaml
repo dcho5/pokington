@@ -92,6 +92,9 @@ importers:
       '@pokington/engine':
         specifier: workspace:*
         version: link:../../packages/engine
+      '@pokington/network':
+        specifier: workspace:*
+        version: link:../../packages/network
       '@pokington/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -153,7 +156,17 @@ importers:
         version: 5.9.3
 
   packages/network:
+    dependencies:
+      partysocket:
+        specifier: ^1.0.2
+        version: 1.1.18(react@19.2.0)
+      react:
+        specifier: '>=18'
+        version: 19.2.0
     devDependencies:
+      '@types/react':
+        specifier: ^18.2.0
+        version: 18.2.0
       typescript:
         specifier: ^5.0.0
         version: 5.9.3
@@ -7359,6 +7372,12 @@ snapshots:
       event-target-polyfill: 0.0.4
     optionalDependencies:
       react: 18.3.1
+
+  partysocket@1.1.18(react@19.2.0):
+    dependencies:
+      event-target-polyfill: 0.0.4
+    optionalDependencies:
+      react: 19.2.0
 
   path-exists@3.0.0: {}
 

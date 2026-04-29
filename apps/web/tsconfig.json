@@ -6,6 +6,12 @@
     "moduleResolution": "bundler",
     "baseUrl": "src",
     "paths": {
+      "@pokington/network": [
+        "../../../packages/network/src/index.ts"
+      ],
+      "@pokington/network/*": [
+        "../../../packages/network/src/*"
+      ],
       "framer-motion": [
         "types/framer-motion"
       ]

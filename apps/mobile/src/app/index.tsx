@@ -39,9 +39,9 @@ export default function HomeScreen() {
 
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Next Steps</Text>
-          <Text style={styles.bullet}>Keep the web app behavior frozen behind the new Playwright baselines.</Text>
-          <Text style={styles.bullet}>Add the shared config and token package first.</Text>
-          <Text style={styles.bullet}>Implement the PartyKit native adapter only after documenting protocol parity.</Text>
+          <Text style={styles.bullet}>Build native table screens against the shared connection contract.</Text>
+          <Text style={styles.bullet}>Wire AsyncStorage and AppState into the mobile table lifecycle.</Text>
+          <Text style={styles.bullet}>Keep web and native message handling on the same adapter test suite.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
