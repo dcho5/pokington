@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import type { Card } from "@pokington/shared";
 import { tokens } from "../../theme/tokens";
+import { nativeThemeStyles } from "../../theme/stylesheet";
 
 type Tone = "primary" | "secondary" | "danger";
 
@@ -47,7 +48,7 @@ export interface NativePanelProps {
 }
 
 export function NativePanel({ children, style }: NativePanelProps) {
-  return <View style={[styles.panel, style]}>{children}</View>;
+  return <View style={[nativeThemeStyles.panel, style]}>{children}</View>;
 }
 
 export interface NativeTextFieldProps extends TextInputProps {
@@ -146,10 +147,10 @@ const styles = StyleSheet.create({
   secondaryButton: {
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: tokens.colors.surfaceMuted,
   },
   dangerButton: {
-    backgroundColor: "#b91c1c",
+    backgroundColor: tokens.colors.danger,
   },
   disabled: {
     opacity: 0.5,
@@ -161,14 +162,6 @@ const styles = StyleSheet.create({
     color: tokens.colors.text,
     fontSize: 16,
     fontWeight: "800",
-  },
-  panel: {
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.md,
   },
   field: {
     gap: tokens.spacing.sm,
@@ -184,7 +177,7 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radii.md,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: tokens.colors.surfaceMuted,
     color: tokens.colors.text,
     fontSize: 18,
     fontWeight: "800",
@@ -200,21 +193,21 @@ const styles = StyleSheet.create({
     aspectRatio: 0.72,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "#f8fafc",
+    borderRadius: tokens.radii.sm,
+    backgroundColor: tokens.colors.cardFace,
   },
   hiddenCard: {
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    backgroundColor: "#0f172a",
+    backgroundColor: tokens.colors.cardBack,
   },
   cardText: {
-    color: "#111827",
+    color: tokens.colors.cardInk,
     fontSize: 18,
     fontWeight: "900",
   },
   redCardText: {
-    color: "#dc2626",
+    color: tokens.colors.cardRed,
   },
   playerRow: {
     minHeight: 64,
@@ -225,14 +218,14 @@ const styles = StyleSheet.create({
     borderRadius: tokens.radii.md,
     borderWidth: 1,
     borderColor: tokens.colors.border,
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: tokens.colors.surfaceSubtle,
     padding: tokens.spacing.md,
   },
   actorRow: {
     borderColor: tokens.colors.accent,
   },
   viewerRow: {
-    backgroundColor: "rgba(26,92,42,0.5)",
+    backgroundColor: tokens.colors.feltOverlay,
   },
   playerIdentity: {
     flex: 1,
@@ -263,10 +256,7 @@ const styles = StyleSheet.create({
   },
   statusPill: {
     alignSelf: "flex-start",
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    ...nativeThemeStyles.pill,
   },
   statusPillText: {
     color: tokens.colors.text,

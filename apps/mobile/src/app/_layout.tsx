@@ -1,3 +1,4 @@
+import { tokens } from "@pokington/ui";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
@@ -8,7 +9,7 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: "#07111d" },
+          contentStyle: { backgroundColor: tokens.colors.background },
         }}
       />
       <StatusBar style="light" />
