@@ -1,21 +1,11 @@
 import { env } from "@pokington/config";
 import { normalizePartyKitHost } from "@pokington/network";
-import {
-  NativeButton as SharedNativeButton,
-  NativePanel as SharedNativePanel,
-  NativeTextField as SharedNativeTextField,
-  StatusPill as SharedStatusPill,
-} from "@pokington/ui/native";
+import { NativeButton, NativePanel, NativeTextField, StatusPill } from "@pokington/ui/native";
 import { tokens } from "@pokington/ui";
 import { router } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-const NativeButton = SharedNativeButton as React.ComponentType<any>;
-const NativePanel = SharedNativePanel as React.ComponentType<any>;
-const NativeTextField = SharedNativeTextField as React.ComponentType<any>;
-const StatusPill = SharedStatusPill as React.ComponentType<any>;
 
 export default function HomeScreen() {
   const [tableCode, setTableCode] = useState("");

@@ -8,11 +8,11 @@ import {
 } from "@pokington/network";
 import { tokens } from "@pokington/ui";
 import {
-  CommunityBoard as SharedCommunityBoard,
-  NativeButton as SharedNativeButton,
-  NativePanel as SharedNativePanel,
-  PlayerRow as SharedPlayerRow,
-  StatusPill as SharedStatusPill,
+  CommunityBoard,
+  NativeButton,
+  NativePanel,
+  PlayerRow,
+  StatusPill,
   type PlayerSummary,
 } from "@pokington/ui/native";
 import type { GameEvent } from "@pokington/engine";
@@ -23,12 +23,6 @@ import { AppState, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const PROTOCOL_VERSION = 4;
-
-const CommunityBoard = SharedCommunityBoard as React.ComponentType<any>;
-const NativeButton = SharedNativeButton as React.ComponentType<any>;
-const NativePanel = SharedNativePanel as React.ComponentType<any>;
-const PlayerRow = SharedPlayerRow as React.ComponentType<{ player: PlayerSummary }>;
-const StatusPill = SharedStatusPill as React.ComponentType<any>;
 
 interface PublicPlayer {
   id: string;

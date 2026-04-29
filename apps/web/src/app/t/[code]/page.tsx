@@ -1,5 +1,6 @@
 import TablePageClient from "./page.client";
 
-export default function TablePage({ params }: { params: { code: string } }) {
-  return <TablePageClient code={params.code} />;
+export default async function TablePage({ params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
+  return <TablePageClient code={code} />;
 }

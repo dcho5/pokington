@@ -194,7 +194,7 @@
     "@pokington/shared": "workspace:*"
   },
   "peerDependencies": {
-    "framer-motion": "^10.0.0",
+    "framer-motion": "^12.38.0",
     "react": "^18.3.1 || ^19.0.0",
     "react-native": ">=0.73"
   },
@@ -204,9 +204,10 @@
     }
   },
   "devDependencies": {
-    "@types/react": "^18.2.0",
-    "framer-motion": "^10.0.0",
-    "react": "18.3.1",
+    "@types/react": "^19.2.14",
+    "framer-motion": "^12.38.0",
+    "react": "19.2.5",
+    "react-native": "0.83.6",
     "typescript": "^5.0.0"
   }
 }

@@ -2,16 +2,6 @@
   "name": "pokington",
   "private": true,
   "packageManager": "pnpm@10.28.0",
-  "pnpm": {
-    "packageExtensions": {
-      "next@14.2.29": {
-        "dependencies": {
-          "@types/react": "18.2.0",
-          "@types/react-dom": "18.2.0"
-        }
-      }
-    }
-  },
   "scripts": {
     "build": "turbo run build",
     "dev": "node scripts/dev.mjs",

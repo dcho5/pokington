@@ -29,8 +29,9 @@ async function forwardToPartyKit(path: string, requestHost?: string | null, init
   }
 }
 
-export async function GET(req: Request, { params }: { params: { code: string } }) {
-  return forwardToPartyKit(`__control__/tables/${params.code.toUpperCase()}`, req.headers.get("host"), {
+export async function GET(req: Request, { params }: { params: Promise<{ code: string }> }) {
+  const { code } = await params;
+  return forwardToPartyKit(`__control__/tables/${code.toUpperCase()}`, req.headers.get("host"), {
     method: "GET",
   });
 }

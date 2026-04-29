@@ -15,44 +15,29 @@ import { tokens } from "../../theme/tokens";
 
 type Tone = "primary" | "secondary" | "danger";
 
-const RnActivityIndicator = ActivityIndicator as unknown as React.ComponentType<any>;
-const RnPressable = Pressable as unknown as React.ComponentType<any>;
-const RnText = Text as unknown as React.ComponentType<any>;
-const RnTextInput = TextInput as unknown as React.ComponentType<any>;
-const RnView = View as unknown as React.ComponentType<any>;
-
 export interface NativeButtonProps extends PressableProps {
   label: string;
   tone?: Tone;
   loading?: boolean;
 }
 
-export function NativeButton({
-  label,
-  tone = "primary",
-  loading = false,
-  disabled,
-  style,
-  ...props
-}: NativeButtonProps) {
-  return React.createElement(
-    RnPressable,
-    {
-      accessibilityRole: "button",
-      disabled: disabled || loading,
-      style: (state: { pressed: boolean }) => [
+export function NativeButton({ label, tone = "primary", loading = false, disabled, style, ...props }: NativeButtonProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled || loading}
+      style={(state) => [
         styles.button,
         tone === "secondary" && styles.secondaryButton,
         tone === "danger" && styles.dangerButton,
         (disabled || loading) && styles.disabled,
         state.pressed && !disabled && !loading && styles.pressed,
-        typeof style === "function" ? style(state as never) : style,
-      ],
-      ...props,
-    },
-    loading
-      ? React.createElement(RnActivityIndicator, { color: tokens.colors.text })
-      : React.createElement(RnText, { style: styles.buttonText }, label),
+        typeof style === "function" ? style(state) : style,
+      ]}
+      {...props}
+    >
+      {loading ? <ActivityIndicator color={tokens.colors.text} /> : <Text style={styles.buttonText}>{label}</Text>}
+    </Pressable>
   );
 }
 
@@ -62,7 +47,7 @@ export interface NativePanelProps {
 }
 
 export function NativePanel({ children, style }: NativePanelProps) {
-  return React.createElement(RnView, { style: [styles.panel, style] }, children);
+  return <View style={[styles.panel, style]}>{children}</View>;
 }
 
 export interface NativeTextFieldProps extends TextInputProps {
@@ -70,17 +55,17 @@ export interface NativeTextFieldProps extends TextInputProps {
 }
 
 export function NativeTextField({ label, style, ...props }: NativeTextFieldProps) {
-  return React.createElement(
-    RnView,
-    { style: styles.field },
-    React.createElement(RnText, { style: styles.fieldLabel }, label),
-    React.createElement(RnTextInput, {
-      placeholderTextColor: tokens.colors.muted,
-      autoCapitalize: "characters",
-      autoCorrect: false,
-      style: [styles.input, style],
-      ...props,
-    }),
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        placeholderTextColor={tokens.colors.muted}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        style={[styles.input, style]}
+        {...props}
+      />
+    </View>
   );
 }
 
@@ -88,29 +73,21 @@ export function PokerCard({ card, hidden = false }: { card: Card | null | undefi
   const label = hidden || !card ? "?" : `${card.rank}${card.suit[0].toUpperCase()}`;
   const isRed = !hidden && card ? card.suit === "hearts" || card.suit === "diamonds" : false;
 
-  return React.createElement(
-    RnView,
-    { style: [styles.card, hidden && styles.hiddenCard] },
-    React.createElement(RnText, { style: [styles.cardText, isRed && styles.redCardText] }, label),
+  return (
+    <View style={[styles.card, hidden && styles.hiddenCard]}>
+      <Text style={[styles.cardText, isRed && styles.redCardText]}>{label}</Text>
+    </View>
   );
 }
 
 export function CommunityBoard({ cards }: { cards: Card[] }) {
-  const paddedCards = [
-    ...cards,
-    ...Array.from<Card | null>({ length: Math.max(0, 5 - cards.length) }).fill(null),
-  ].slice(0, 5);
-
-  return React.createElement(
-    RnView,
-    { style: styles.board },
-    paddedCards.map((card, index) => (
-      React.createElement(PokerCard, {
-        key: `${card?.rank ?? "empty"}-${card?.suit ?? "slot"}-${index}`,
-        card,
-        hidden: !card,
-      })
-    )),
+  const paddedCards = [...cards, ...Array.from<Card | null>({ length: Math.max(0, 5 - cards.length) }).fill(null)].slice(0, 5);
+  return (
+    <View style={styles.board}>
+      {paddedCards.map((card, index) => (
+        <PokerCard key={`${card?.rank ?? "empty"}-${card?.suit ?? "slot"}-${index}`} card={card} hidden={!card} />
+      ))}
+    </View>
   );
 }
 
@@ -128,39 +105,32 @@ export interface PlayerSummary {
 }
 
 export function PlayerRow({ player }: { player: PlayerSummary }) {
-  return React.createElement(
-    RnView,
-    { style: [styles.playerRow, player.isActor && styles.actorRow, player.isViewer && styles.viewerRow] },
-    React.createElement(
-      RnView,
-      { style: styles.playerIdentity },
-      React.createElement(
-        RnText,
-        { style: styles.playerName, numberOfLines: 1 },
-        player.name || `Seat ${player.seatIndex + 1}`,
-      ),
-      React.createElement(
-        RnText,
-        { style: styles.playerMeta },
-        `Seat ${player.seatIndex + 1}${player.isAway ? " · Away" : ""}${player.isFolded ? " · Folded" : ""}${player.isAllIn ? " · All-in" : ""}`,
-      ),
-    ),
-    React.createElement(
-      RnView,
-      { style: styles.playerNumbers },
-      React.createElement(RnText, { style: styles.playerStack }, `$${(player.stack / 100).toFixed(2)}`),
-      player.currentBet > 0
-        ? React.createElement(RnText, { style: styles.playerBet }, `Bet $${(player.currentBet / 100).toFixed(2)}`)
-        : null,
-    ),
+  return (
+    <View style={[styles.playerRow, player.isActor && styles.actorRow, player.isViewer && styles.viewerRow]}>
+      <View style={styles.playerIdentity}>
+        <Text style={styles.playerName} numberOfLines={1}>
+          {player.name || `Seat ${player.seatIndex + 1}`}
+        </Text>
+        <Text style={styles.playerMeta}>
+          Seat {player.seatIndex + 1}
+          {player.isAway ? " · Away" : ""}
+          {player.isFolded ? " · Folded" : ""}
+          {player.isAllIn ? " · All-in" : ""}
+        </Text>
+      </View>
+      <View style={styles.playerNumbers}>
+        <Text style={styles.playerStack}>${(player.stack / 100).toFixed(2)}</Text>
+        {player.currentBet > 0 ? <Text style={styles.playerBet}>Bet ${(player.currentBet / 100).toFixed(2)}</Text> : null}
+      </View>
+    </View>
   );
 }
 
 export function StatusPill({ label }: { label: string }) {
-  return React.createElement(
-    RnView,
-    { style: styles.statusPill },
-    React.createElement(RnText, { style: styles.statusPillText }, label),
+  return (
+    <View style={styles.statusPill}>
+      <Text style={styles.statusPillText}>{label}</Text>
+    </View>
   );
 }
 

@@ -1,5 +1,6 @@
 import FixtureTablePageClient from "./page.client";
 
-export default function FixtureTablePage({ params }: { params: { fixture: string } }) {
-  return <FixtureTablePageClient fixture={params.fixture} />;
+export default async function FixtureTablePage({ params }: { params: Promise<{ fixture: string }> }) {
+  const { fixture } = await params;
+  return <FixtureTablePageClient fixture={fixture} />;
 }
