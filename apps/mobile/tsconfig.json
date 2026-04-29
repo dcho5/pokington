@@ -4,7 +4,18 @@
     "strict": true,
     "module": "esnext",
     "moduleResolution": "bundler",
-    "noEmit": true
+    "noEmit": true,
+    "baseUrl": "../..",
+    "paths": {
+      "@pokington/ui": ["packages/ui/src/index.ts"],
+      "@pokington/ui/*": ["packages/ui/src/*"],
+      "@pokington/network": ["packages/network/src/index.ts"],
+      "@pokington/network/*": ["packages/network/src/*"],
+      "@pokington/config": ["packages/config/src/index.ts"],
+      "@pokington/config/*": ["packages/config/src/*"],
+      "@pokington/engine": ["packages/engine/dist/index"],
+      "@pokington/shared": ["packages/shared/dist/index"]
+    }
   },
   "include": [
     "**/*.ts",

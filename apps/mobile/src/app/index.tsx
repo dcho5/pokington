@@ -1,49 +1,67 @@
-import { createDeck } from "@pokington/engine";
 import { env } from "@pokington/config";
-import { NETWORK_PACKAGE_STATUS, normalizePartyKitHost } from "@pokington/network";
+import { normalizePartyKitHost } from "@pokington/network";
+import {
+  NativeButton as SharedNativeButton,
+  NativePanel as SharedNativePanel,
+  NativeTextField as SharedNativeTextField,
+  StatusPill as SharedStatusPill,
+} from "@pokington/ui/native";
 import { tokens } from "@pokington/ui";
-import React from "react";
+import { router } from "expo-router";
+import React, { useMemo, useState } from "react";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
 
-const sampleBoard = createDeck()
-  .slice(0, 5)
-  .map((card) => `${card.rank}${card.suit[0].toUpperCase()}`);
+const NativeButton = SharedNativeButton as React.ComponentType<any>;
+const NativePanel = SharedNativePanel as React.ComponentType<any>;
+const NativeTextField = SharedNativeTextField as React.ComponentType<any>;
+const StatusPill = SharedStatusPill as React.ComponentType<any>;
 
 export default function HomeScreen() {
-  const normalizedHost = env.partyKitHost ? normalizePartyKitHost(env.partyKitHost) : "not set";
+  const [tableCode, setTableCode] = useState("");
+  const normalizedHost = useMemo(
+    () => (env.partyKitHost ? normalizePartyKitHost(env.partyKitHost) : null),
+    [],
+  );
+  const canJoin = tableCode.trim().length > 0;
+
+  const joinTable = () => {
+    const code = tableCode.trim().toUpperCase();
+    if (!code) return;
+    router.push(`/table/${encodeURIComponent(code)}` as never);
+  };
 
   return (
     <SafeAreaView style={styles.screen}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
-          <Text style={styles.eyebrow}>SDK 55 scaffold</Text>
-          <Text style={styles.title}>Pokington Mobile</Text>
-          <Text style={styles.subtitle}>
-            This app is intentionally minimal: it proves Expo SDK 55, Expo Dev Client,
-            and shared workspace package resolution without changing the current web UX.
-          </Text>
-        </View>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboard}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+          <View style={styles.header}>
+            <StatusPill label="Mobile table client" />
+            <Text style={styles.title}>Pokington</Text>
+            <Text style={styles.subtitle}>Join an active table and play from the native client.</Text>
+          </View>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Workspace Resolution</Text>
-          <Text style={styles.rowLabel}>@pokington/engine</Text>
-          <Text style={styles.rowValue}>Sample board: {sampleBoard.join(" ")}</Text>
-          <Text style={styles.rowLabel}>@pokington/config</Text>
-          <Text style={styles.rowValue}>PartyKit host: {normalizedHost}</Text>
-          <Text style={styles.rowLabel}>@pokington/network</Text>
-          <Text style={styles.rowValue}>Status: {NETWORK_PACKAGE_STATUS}</Text>
-          <Text style={styles.rowLabel}>@pokington/ui</Text>
-          <Text style={styles.rowValue}>Accent token: {tokens.colors.accent}</Text>
-        </View>
+          <NativePanel>
+            <NativeTextField
+              label="Table code"
+              value={tableCode}
+              onChangeText={(value: string) => setTableCode(value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase())}
+              onSubmitEditing={joinTable}
+              returnKeyType="go"
+              placeholder="ABC123"
+              maxLength={12}
+            />
+            <NativeButton label="Join Table" disabled={!canJoin} onPress={joinTable} />
+          </NativePanel>
 
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Next Steps</Text>
-          <Text style={styles.bullet}>Build native table screens against the shared connection contract.</Text>
-          <Text style={styles.bullet}>Wire AsyncStorage and AppState into the mobile table lifecycle.</Text>
-          <Text style={styles.bullet}>Keep web and native message handling on the same adapter test suite.</Text>
-        </View>
-      </ScrollView>
+          <NativePanel>
+            <Text style={styles.panelTitle}>Connection</Text>
+            <Text style={styles.bodyText}>
+              Realtime host: {normalizedHost ?? "set EXPO_PUBLIC_PARTYKIT_HOST to connect outside local dev"}
+            </Text>
+          </NativePanel>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -51,61 +69,38 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#07111d",
+    backgroundColor: tokens.colors.background,
+  },
+  keyboard: {
+    flex: 1,
   },
   content: {
+    flexGrow: 1,
+    justifyContent: "center",
     paddingHorizontal: tokens.spacing.lg,
     paddingVertical: tokens.spacing.xl,
     gap: tokens.spacing.lg,
   },
-  hero: {
-    gap: tokens.spacing.sm,
-  },
-  eyebrow: {
-    color: tokens.colors.muted,
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.8,
-    textTransform: "uppercase",
+  header: {
+    gap: tokens.spacing.md,
   },
   title: {
     color: tokens.colors.text,
-    fontSize: 34,
-    fontWeight: "800",
+    fontSize: 40,
+    fontWeight: "900",
   },
   subtitle: {
     color: tokens.colors.muted,
-    fontSize: 16,
+    fontSize: 17,
     lineHeight: 24,
-  },
-  panel: {
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    padding: tokens.spacing.lg,
-    gap: tokens.spacing.sm,
   },
   panelTitle: {
     color: tokens.colors.text,
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
   },
-  rowLabel: {
-    color: tokens.colors.accent,
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginTop: tokens.spacing.sm,
-  },
-  rowValue: {
-    color: tokens.colors.text,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  bullet: {
-    color: tokens.colors.text,
+  bodyText: {
+    color: tokens.colors.muted,
     fontSize: 15,
     lineHeight: 22,
   },

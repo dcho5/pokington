@@ -12,6 +12,10 @@
       "types": "./dist/web.d.ts",
       "default": "./dist/web.js"
     },
+    "./native": {
+      "types": "./dist/native.d.ts",
+      "default": "./dist/native.js"
+    },
     "./web/AnnouncementBanner": {
       "types": "./dist/components/web/Table/AnnouncementBanner.d.ts",
       "default": "./dist/components/web/Table/AnnouncementBanner.js"
@@ -191,7 +195,13 @@
   },
   "peerDependencies": {
     "framer-motion": "^10.0.0",
-    "react": "^18.3.1 || ^19.0.0"
+    "react": "^18.3.1 || ^19.0.0",
+    "react-native": ">=0.73"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

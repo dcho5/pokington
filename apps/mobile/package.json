@@ -16,6 +16,7 @@
     "@pokington/network": "workspace:*",
     "@pokington/shared": "workspace:*",
     "@pokington/ui": "workspace:*",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~55.0.17",
     "expo-constants": "~55.0.15",
     "expo-dev-client": "~6.0.17",
