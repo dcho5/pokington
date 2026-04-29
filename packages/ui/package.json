@@ -1,188 +1,188 @@
 {
   "name": "@pokington/ui",
   "version": "0.0.1",
-  "main": "dist/index.js",
+  "main": "dist/index.ts",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
-    },
-    "./web": {
-      "types": "./dist/web.d.ts",
-      "default": "./dist/web.js"
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./native": {
-      "types": "./dist/native.d.ts",
-      "default": "./dist/native.js"
+      "types": "./src/native.ts",
+      "default": "./src/native.ts"
+    },
+    "./web": {
+      "types": "./src/web.ts",
+      "default": "./src/web.ts"
     },
     "./web/AnnouncementBanner": {
-      "types": "./dist/components/web/Table/AnnouncementBanner.d.ts",
-      "default": "./dist/components/web/Table/AnnouncementBanner.js"
+      "types": "./src/components/web/Table/AnnouncementBanner.d.ts",
+      "default": "./src/components/web/Table/AnnouncementBanner.js"
     },
     "./web/ActionBar": {
-      "types": "./dist/components/web/Table/ActionBar.d.ts",
-      "default": "./dist/components/web/Table/ActionBar.js"
+      "types": "./src/components/web/Table/ActionBar.d.ts",
+      "default": "./src/components/web/Table/ActionBar.js"
     },
     "./web/AutoPeelToggle": {
-      "types": "./dist/components/web/Table/AutoPeelToggle.d.ts",
-      "default": "./dist/components/web/Table/AutoPeelToggle.js"
+      "types": "./src/components/web/Table/AutoPeelToggle.d.ts",
+      "default": "./src/components/web/Table/AutoPeelToggle.js"
     },
     "./web/BombPotSheet": {
-      "types": "./dist/components/web/Table/BombPotSheet.d.ts",
-      "default": "./dist/components/web/Table/BombPotSheet.js"
+      "types": "./src/components/web/Table/BombPotSheet.d.ts",
+      "default": "./src/components/web/Table/BombPotSheet.js"
     },
     "./web/BombPotVotingPanel": {
-      "types": "./dist/components/web/Table/BombPotVotingPanel.d.ts",
-      "default": "./dist/components/web/Table/BombPotVotingPanel.js"
+      "types": "./src/components/web/Table/BombPotVotingPanel.d.ts",
+      "default": "./src/components/web/Table/BombPotVotingPanel.js"
     },
     "./web/Card": {
-      "types": "./dist/components/web/poker/Card.d.ts",
-      "default": "./dist/components/web/poker/Card.js"
+      "types": "./src/components/web/poker/Card.d.ts",
+      "default": "./src/components/web/poker/Card.js"
     },
     "./web/CreateTableCard": {
-      "types": "./dist/components/web/home/CreateTableCard.d.ts",
-      "default": "./dist/components/web/home/CreateTableCard.js"
+      "types": "./src/components/web/home/CreateTableCard.d.ts",
+      "default": "./src/components/web/home/CreateTableCard.js"
     },
     "./web/DesktopBombPotMenu": {
-      "types": "./dist/components/web/Table/DesktopBombPotMenu.d.ts",
-      "default": "./dist/components/web/Table/DesktopBombPotMenu.js"
+      "types": "./src/components/web/Table/DesktopBombPotMenu.d.ts",
+      "default": "./src/components/web/Table/DesktopBombPotMenu.js"
     },
     "./web/DesktopHandIndicatorFan": {
-      "types": "./dist/components/web/Table/DesktopHandIndicatorFan.d.ts",
-      "default": "./dist/components/web/Table/DesktopHandIndicatorFan.js"
+      "types": "./src/components/web/Table/DesktopHandIndicatorFan.d.ts",
+      "default": "./src/components/web/Table/DesktopHandIndicatorFan.js"
     },
     "./web/DesktopLedgerPanel": {
-      "types": "./dist/components/web/Table/DesktopLedgerPanel.d.ts",
-      "default": "./dist/components/web/Table/DesktopLedgerPanel.js"
+      "types": "./src/components/web/Table/DesktopLedgerPanel.d.ts",
+      "default": "./src/components/web/Table/DesktopLedgerPanel.js"
     },
     "./web/DesktopRaisePopover": {
-      "types": "./dist/components/web/Table/DesktopRaisePopover.d.ts",
-      "default": "./dist/components/web/Table/DesktopRaisePopover.js"
+      "types": "./src/components/web/Table/DesktopRaisePopover.d.ts",
+      "default": "./src/components/web/Table/DesktopRaisePopover.js"
     },
     "./web/DesktopTableDialog": {
-      "types": "./dist/components/web/Table/DesktopTableDialog.d.ts",
-      "default": "./dist/components/web/Table/DesktopTableDialog.js"
+      "types": "./src/components/web/Table/DesktopTableDialog.d.ts",
+      "default": "./src/components/web/Table/DesktopTableDialog.js"
     },
     "./web/HoleCards": {
-      "types": "./dist/components/web/poker/HoleCards.d.ts",
-      "default": "./dist/components/web/poker/HoleCards.js"
+      "types": "./src/components/web/poker/HoleCards.d.ts",
+      "default": "./src/components/web/poker/HoleCards.js"
     },
     "./web/holeCardReveal": {
-      "types": "./dist/lib/holeCardReveal.d.ts",
-      "default": "./dist/lib/holeCardReveal.js"
+      "types": "./src/lib/holeCardReveal.d.ts",
+      "default": "./src/lib/holeCardReveal.js"
     },
     "./web/JoinTableCard": {
-      "types": "./dist/components/web/home/JoinTableCard.d.ts",
-      "default": "./dist/components/web/home/JoinTableCard.js"
+      "types": "./src/components/web/home/JoinTableCard.d.ts",
+      "default": "./src/components/web/home/JoinTableCard.js"
     },
     "./web/OptionSelector": {
-      "types": "./dist/components/web/home/OptionSelector.d.ts",
-      "default": "./dist/components/web/home/OptionSelector.js"
+      "types": "./src/components/web/home/OptionSelector.d.ts",
+      "default": "./src/components/web/home/OptionSelector.js"
     },
     "./web/PeekEyeIcon": {
-      "types": "./dist/components/web/poker/PeekEyeIcon.d.ts",
-      "default": "./dist/components/web/poker/PeekEyeIcon.js"
+      "types": "./src/components/web/poker/PeekEyeIcon.d.ts",
+      "default": "./src/components/web/poker/PeekEyeIcon.js"
     },
     "./web/PlayerPositionMarkers": {
-      "types": "./dist/components/web/Table/PlayerPositionMarkers.d.ts",
-      "default": "./dist/components/web/Table/PlayerPositionMarkers.js"
+      "types": "./src/components/web/Table/PlayerPositionMarkers.d.ts",
+      "default": "./src/components/web/Table/PlayerPositionMarkers.js"
     },
     "./web/playerPositionMarkers": {
-      "types": "./dist/lib/playerPositionMarkers.d.ts",
-      "default": "./dist/lib/playerPositionMarkers.js"
+      "types": "./src/lib/playerPositionMarkers.d.ts",
+      "default": "./src/lib/playerPositionMarkers.js"
     },
     "./web/PokerChip": {
-      "types": "./dist/components/web/poker/PokerChip.d.ts",
-      "default": "./dist/components/web/poker/PokerChip.js"
+      "types": "./src/components/web/poker/PokerChip.d.ts",
+      "default": "./src/components/web/poker/PokerChip.js"
     },
     "./web/MobileBottomSheet": {
-      "types": "./dist/components/web/Table/MobileBottomSheet.d.ts",
-      "default": "./dist/components/web/Table/MobileBottomSheet.js"
+      "types": "./src/components/web/Table/MobileBottomSheet.d.ts",
+      "default": "./src/components/web/Table/MobileBottomSheet.js"
     },
     "./web/RebuySheet": {
-      "types": "./dist/components/web/Table/RebuySheet.d.ts",
-      "default": "./dist/components/web/Table/RebuySheet.js"
+      "types": "./src/components/web/Table/RebuySheet.d.ts",
+      "default": "./src/components/web/Table/RebuySheet.js"
     },
     "./web/RunItOddsBadge": {
-      "types": "./dist/components/web/Table/RunItOddsBadge.d.ts",
-      "default": "./dist/components/web/Table/RunItOddsBadge.js"
+      "types": "./src/components/web/Table/RunItOddsBadge.d.ts",
+      "default": "./src/components/web/Table/RunItOddsBadge.js"
     },
     "./web/RunItMobileTabs": {
-      "types": "./dist/components/web/Table/RunItMobileTabs.d.ts",
-      "default": "./dist/components/web/Table/RunItMobileTabs.js"
+      "types": "./src/components/web/Table/RunItMobileTabs.d.ts",
+      "default": "./src/components/web/Table/RunItMobileTabs.js"
     },
     "./web/SeatManager": {
-      "types": "./dist/components/web/Table/SeatManager.d.ts",
-      "default": "./dist/components/web/Table/SeatManager.js"
+      "types": "./src/components/web/Table/SeatManager.d.ts",
+      "default": "./src/components/web/Table/SeatManager.js"
     },
     "./web/SevenTwoAnnouncement": {
-      "types": "./dist/components/web/Table/SevenTwoAnnouncement.d.ts",
-      "default": "./dist/components/web/Table/SevenTwoAnnouncement.js"
+      "types": "./src/components/web/Table/SevenTwoAnnouncement.d.ts",
+      "default": "./src/components/web/Table/SevenTwoAnnouncement.js"
     },
     "./web/ShowdownSpotlight": {
-      "types": "./dist/components/web/Table/ShowdownSpotlight.d.ts",
-      "default": "./dist/components/web/Table/ShowdownSpotlight.js"
+      "types": "./src/components/web/Table/ShowdownSpotlight.d.ts",
+      "default": "./src/components/web/Table/ShowdownSpotlight.js"
     },
     "./web/SitDownForm": {
-      "types": "./dist/components/web/Table/SitDownForm.d.ts",
-      "default": "./dist/components/web/Table/SitDownForm.js"
+      "types": "./src/components/web/Table/SitDownForm.d.ts",
+      "default": "./src/components/web/Table/SitDownForm.js"
     },
     "./web/TimerBar": {
-      "types": "./dist/components/web/Table/TimerBar.d.ts",
-      "default": "./dist/components/web/Table/TimerBar.js"
+      "types": "./src/components/web/Table/TimerBar.d.ts",
+      "default": "./src/components/web/Table/TimerBar.js"
     },
     "./web/VotingPanel": {
-      "types": "./dist/components/web/Table/VotingPanel.d.ts",
-      "default": "./dist/components/web/Table/VotingPanel.js"
+      "types": "./src/components/web/Table/VotingPanel.d.ts",
+      "default": "./src/components/web/Table/VotingPanel.js"
     },
     "./web/WinnerBanner": {
-      "types": "./dist/components/web/Table/WinnerBanner.d.ts",
-      "default": "./dist/components/web/Table/WinnerBanner.js"
+      "types": "./src/components/web/Table/WinnerBanner.d.ts",
+      "default": "./src/components/web/Table/WinnerBanner.js"
     },
     "./web/useRaiseAmount": {
-      "types": "./dist/hooks/useRaiseAmount.d.ts",
-      "default": "./dist/hooks/useRaiseAmount.js"
+      "types": "./src/hooks/useRaiseAmount.d.ts",
+      "default": "./src/hooks/useRaiseAmount.js"
     },
     "./web/useColorScheme": {
-      "types": "./dist/hooks/useColorScheme.d.ts",
-      "default": "./dist/hooks/useColorScheme.js"
+      "types": "./src/hooks/useColorScheme.d.ts",
+      "default": "./src/hooks/useColorScheme.js"
     },
     "./web/useCopyCurrentUrl": {
-      "types": "./dist/hooks/useCopyCurrentUrl.d.ts",
-      "default": "./dist/hooks/useCopyCurrentUrl.js"
+      "types": "./src/hooks/useCopyCurrentUrl.d.ts",
+      "default": "./src/hooks/useCopyCurrentUrl.js"
     },
     "./web/useIsMobileLayout": {
-      "types": "./dist/hooks/useIsMobileLayout.d.ts",
-      "default": "./dist/hooks/useIsMobileLayout.js"
+      "types": "./src/hooks/useIsMobileLayout.d.ts",
+      "default": "./src/hooks/useIsMobileLayout.js"
     },
     "./web/useIsPortrait": {
-      "types": "./dist/hooks/useIsPortrait.d.ts",
-      "default": "./dist/hooks/useIsPortrait.js"
+      "types": "./src/hooks/useIsPortrait.d.ts",
+      "default": "./src/hooks/useIsPortrait.js"
     },
     "./web/useRunAnimationTicker": {
-      "types": "./dist/hooks/useRunAnimationTicker.d.ts",
-      "default": "./dist/hooks/useRunAnimationTicker.js"
+      "types": "./src/hooks/useRunAnimationTicker.d.ts",
+      "default": "./src/hooks/useRunAnimationTicker.js"
     },
     "./web/useTimedPanelVisibility": {
-      "types": "./dist/hooks/useTimedPanelVisibility.d.ts",
-      "default": "./dist/hooks/useTimedPanelVisibility.js"
+      "types": "./src/hooks/useTimedPanelVisibility.d.ts",
+      "default": "./src/hooks/useTimedPanelVisibility.js"
     },
     "./web/tableLayoutMode": {
-      "types": "./dist/lib/tableLayoutMode.d.ts",
-      "default": "./dist/lib/tableLayoutMode.js"
+      "types": "./src/lib/tableLayoutMode.d.ts",
+      "default": "./src/lib/tableLayoutMode.js"
     },
     "./web/desktopHandIndicatorLayout": {
-      "types": "./dist/lib/desktopHandIndicatorLayout.d.ts",
-      "default": "./dist/lib/desktopHandIndicatorLayout.js"
+      "types": "./src/lib/desktopHandIndicatorLayout.d.ts",
+      "default": "./src/lib/desktopHandIndicatorLayout.js"
     },
     "./web/runAnimation": {
-      "types": "./dist/lib/runAnimation.d.ts",
-      "default": "./dist/lib/runAnimation.js"
+      "types": "./src/lib/runAnimation.d.ts",
+      "default": "./src/lib/runAnimation.js"
     },
     "./web/mobileShell": {
-      "types": "./dist/lib/mobileShell.d.ts",
-      "default": "./dist/lib/mobileShell.js"
+      "types": "./src/lib/mobileShell.d.ts",
+      "default": "./src/lib/mobileShell.js"
     }
   },
   "scripts": {

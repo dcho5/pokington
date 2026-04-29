@@ -1,5 +1,6 @@
-import { tokens } from "@pokington/ui";
+import 'partysocket/event-target-polyfill';
 import { Stack } from "expo-router";
+import { tokens } from "@pokington/ui";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 
