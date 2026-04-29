@@ -9,7 +9,8 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "requireFullScreen": true
+      "requireFullScreen": true,
+      "bundleIdentifier": "com.anonymous.pokington-mobile"
     },
     "android": {
       "adaptiveIcon": {

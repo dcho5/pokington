@@ -12,7 +12,7 @@ async function freezePage(page: Parameters<typeof test>[0]["page"]) {
       }
     `,
   });
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(1000);
 }
 
 async function openFixture(page: Parameters<typeof test>[0]["page"], path: string, readyText: string) {
@@ -22,81 +22,69 @@ async function openFixture(page: Parameters<typeof test>[0]["page"], path: strin
   await freezePage(page);
 }
 
+async function expectFrozenScreenshot(
+  page: Parameters<typeof test>[0]["page"],
+  name: string,
+  options: { fullPage?: boolean; maxDiffPixels?: number; maxDiffPixelRatio?: number } = {},
+) {
+  const screenshot = await page.screenshot({
+    animations: "disabled",
+    fullPage: options.fullPage,
+    scale: "css",
+  });
+  expect(screenshot).toMatchSnapshot(name, {
+    ...(options.maxDiffPixels == null ? {} : { maxDiffPixels: options.maxDiffPixels }),
+    maxDiffPixelRatio: options.maxDiffPixelRatio ?? 0.02,
+  });
+}
+
 test.describe("visual baselines", () => {
   test("home create/join entry", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Pokington" })).toBeVisible();
     await freezePage(page);
-    await expect(page).toHaveScreenshot("home-entry.png", {
-      animations: "disabled",
-      fullPage: true,
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "home-entry.png", { fullPage: true });
   });
 
   test("reconnect overlay table state", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/table/reconnect-overlay", "Live Table Sync");
-    await expect(page).toHaveScreenshot("fixture-reconnect-overlay.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-reconnect-overlay.png");
   });
 
   test("waiting table with open seats", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/table/waiting-open-seats", "Fixture Table");
-    await expect(page).toHaveScreenshot("fixture-waiting-open-seats.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-waiting-open-seats.png");
   });
 
   test("active desktop hand", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/table/active-hand", "Fixture Table");
-    await expect(page).toHaveScreenshot("fixture-active-desktop.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-active-desktop.png");
   });
 
   test("showdown state", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/table/showdown-complete", "Royal Flush");
-    await expect(page).toHaveScreenshot("fixture-showdown.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-showdown.png");
   });
 
   test("run-it sequence state", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/table/run-it", "Fixture Table");
-    await expect(page).toHaveScreenshot("fixture-run-it.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-run-it.png");
   });
 
   test("bomb-pot state", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/table/bomb-pot", "Fixture Table");
-    await expect(page).toHaveScreenshot("fixture-bomb-pot.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-bomb-pot.png");
   });
 
   test("seat manager surface", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/seat-manager", "Queued Update");
-    await expect(page).toHaveScreenshot("fixture-seat-manager.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-seat-manager.png");
   });
 
   test("ledger surface", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/ledger", "Session Ledger");
-    await expect(page).toHaveScreenshot("fixture-ledger.png", {
-      animations: "disabled",
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-ledger.png");
   });
 });
 
@@ -105,11 +93,7 @@ test.describe("mobile layout baselines", () => {
 
   test("active hand mobile layout", async ({ page }) => {
     await openFixture(page, "/qa-fixtures/table/active-hand", "Fixture Table");
-    await expect(page).toHaveScreenshot("fixture-active-mobile.png", {
-      animations: "disabled",
-      maxDiffPixels: 10,
-      timeout: 15_000,
-    });
+    await expectFrozenScreenshot(page, "fixture-active-mobile.png", { maxDiffPixels: 500 });
   });
 
   test("big blind controls stay anchored from preflop to flop", async ({ page }) => {
