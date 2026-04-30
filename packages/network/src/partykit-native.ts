@@ -1,8 +1,11 @@
 import { createPartyKitGameConnection, type SocketLike } from "./connection";
-import { buildPartyKitWebSocketUrl, normalizePartyKitHost } from "./partykit-web";
+import { buildPartyKitWebSocketUrl, normalizePartyKitHost, shouldUseInsecureLocalProtocol } from "./partykit-web";
 import type {
   GameConnection,
   GameConnectionLifecycle,
+  CreateTableRequest,
+  CreateTableResponse,
+  GetTableResponse,
   JoinTokenResponse,
   KeyValueStorage,
   NativeAppStateLike,
@@ -49,6 +52,93 @@ export async function getOrCreateNativeClientId(
   const clientId = createClientId();
   await storage.setItem(CLIENT_ID_STORAGE_KEY, clientId);
   return clientId;
+}
+
+export interface NativeControlPlaneOptions {
+  explicitHost?: string | null;
+  requestHostname?: string | null;
+  fetchImpl?: typeof fetch;
+}
+
+function buildNativeControlPlaneUrl(
+  path: string,
+  options: NativeControlPlaneOptions = {},
+): string {
+  const host = resolveNativePartyKitHost({
+    explicitHost: options.explicitHost,
+    requestHostname: options.requestHostname,
+  });
+  const protocol = shouldUseInsecureLocalProtocol(host) ? "http" : "https";
+  return `${protocol}://${host}/parties/main/__control__/${path.replace(/^\/+/, "")}`;
+}
+
+async function requestNativeControlPlane<T>(
+  path: string,
+  options: NativeControlPlaneOptions & {
+    method?: string;
+    body?: unknown;
+  } = {},
+): Promise<T> {
+  const request = options.fetchImpl ?? fetch;
+  const response = await request(buildNativeControlPlaneUrl(path, options), {
+    method: options.method ?? "GET",
+    cache: "no-store",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: options.body == null ? undefined : JSON.stringify(options.body),
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const code =
+      payload && typeof payload === "object" && "code" in payload && typeof payload.code === "string"
+        ? payload.code
+        : "REQUEST_FAILED";
+    throw new Error(code);
+  }
+  return payload as T;
+}
+
+export function buildNativeControlPlaneUrlForTest(
+  path: string,
+  options: NativeControlPlaneOptions = {},
+): string {
+  return buildNativeControlPlaneUrl(path, options);
+}
+
+export function createNativeTable(
+  request: CreateTableRequest,
+  options: NativeControlPlaneOptions = {},
+): Promise<CreateTableResponse> {
+  return requestNativeControlPlane<CreateTableResponse>("tables", {
+    ...options,
+    method: "POST",
+    body: {
+      ...request,
+      tableName: request.tableName.trim(),
+    },
+  });
+}
+
+export function getNativeTable(
+  code: string,
+  options: NativeControlPlaneOptions = {},
+): Promise<GetTableResponse> {
+  return requestNativeControlPlane<GetTableResponse>(`tables/${code.toUpperCase()}`, options);
+}
+
+export function requestNativeJoinToken(
+  roomId: string,
+  clientId: string,
+  options: NativeControlPlaneOptions = {},
+): Promise<JoinTokenResponse> {
+  return requestNativeControlPlane<JoinTokenResponse>(`tables/${roomId.toUpperCase()}/join-token`, {
+    ...options,
+    method: "POST",
+    body: { clientId },
+  });
 }
 
 export async function createNativeGameConnection<

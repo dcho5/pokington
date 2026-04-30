@@ -2,10 +2,14 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   CLIENT_ID_STORAGE_KEY,
+  buildNativeControlPlaneUrlForTest,
   buildPartyKitWebSocketUrl,
+  createNativeTable,
   createNativeGameConnection,
   createWebGameConnection,
+  getNativeTable,
   getOrCreateNativeClientId,
+  requestNativeJoinToken,
   resolveNativePartyKitHost,
 } from "../dist/index.js";
 
@@ -161,6 +165,7 @@ test("native helpers normalize host and persist existing client ids", async () =
   assert.equal(resolveNativePartyKitHost({ requestHostname: "localhost:3000" }), "127.0.0.1:1999");
   assert.equal(resolveNativePartyKitHost({ requestHostname: "table.example.com" }), "table.example.com:1999");
   assert.equal(buildPartyKitWebSocketUrl("127.0.0.1:1999", "ABC123"), "ws://127.0.0.1:1999/parties/main/ABC123");
+  assert.equal(buildPartyKitWebSocketUrl("192.168.1.146:1999", "ABC123"), "ws://192.168.1.146:1999/parties/main/ABC123");
 
   const storage = new Map([[CLIENT_ID_STORAGE_KEY, "existing-client"]]);
   const clientId = await getOrCreateNativeClientId({
@@ -168,4 +173,48 @@ test("native helpers normalize host and persist existing client ids", async () =
     setItem: (key, value) => storage.set(key, value),
   });
   assert.equal(clientId, "existing-client");
+});
+
+test("native control plane helpers build direct PartyKit requests and surface error codes", async () => {
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push({ url, init });
+    if (url.endsWith("/tables/BAD123")) {
+      return new Response(JSON.stringify({ code: "TABLE_NOT_FOUND" }), { status: 404 });
+    }
+    if (url.endsWith("/tables")) {
+      return new Response(JSON.stringify({ code: "ABC123", tableId: "t1", joinUrl: "/t/ABC123", status: "active" }), { status: 200 });
+    }
+    if (url.endsWith("/tables/ABC123/join-token")) {
+      return new Response(JSON.stringify(joinToken), { status: 200 });
+    }
+    return new Response(JSON.stringify({ exists: true, status: "active", tableName: "A", blinds: { small: 10, big: 25 } }), { status: 200 });
+  };
+
+  assert.equal(
+    buildNativeControlPlaneUrlForTest("tables/ABC123", { explicitHost: "https://table.example.com/" }),
+    "https://table.example.com/parties/main/__control__/tables/ABC123",
+  );
+  assert.equal(
+    buildNativeControlPlaneUrlForTest("tables/ABC123", { requestHostname: "192.168.1.146:8081" }),
+    "http://192.168.1.146:1999/parties/main/__control__/tables/ABC123",
+  );
+
+  const created = await createNativeTable({
+    tableName: "  Friday  ",
+    blinds: { small: 10, big: 25 },
+    creatorClientId: "client-1",
+    sevenTwoBountyBB: 2,
+  }, { explicitHost: "127.0.0.1:1999", fetchImpl });
+  assert.equal(created.code, "ABC123");
+  assert.equal(requests[0].url, "http://127.0.0.1:1999/parties/main/__control__/tables");
+  assert.equal(JSON.parse(requests[0].init.body).tableName, "Friday");
+
+  await getNativeTable("abc123", { explicitHost: "table.example.com", fetchImpl });
+  await requestNativeJoinToken("abc123", "client-1", { explicitHost: "table.example.com", fetchImpl });
+
+  await assert.rejects(
+    () => getNativeTable("BAD123", { explicitHost: "table.example.com", fetchImpl }),
+    /TABLE_NOT_FOUND/,
+  );
 });

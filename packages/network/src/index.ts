@@ -1,8 +1,11 @@
 export type {
   CardIndex,
   ConnectionStatus,
+  CreateTableRequest,
+  CreateTableResponse,
   GameConnection,
   GameConnectionLifecycle,
+  GetTableResponse,
   JoinTokenResponse,
   KeyValueStorage,
   NativeAppStateLike,
@@ -16,13 +19,19 @@ export {
   buildPartyKitWebSocketUrl,
   createWebGameConnection,
   normalizePartyKitHost,
+  shouldUseInsecureLocalProtocol,
   type CreateWebGameConnectionOptions,
 } from "./partykit-web";
 export {
+  buildNativeControlPlaneUrlForTest,
+  createNativeTable,
   createNativeGameConnection,
+  getNativeTable,
   getOrCreateNativeClientId,
+  requestNativeJoinToken,
   resolveNativePartyKitHost,
   type CreateNativeGameConnectionOptions,
+  type NativeControlPlaneOptions,
 } from "./partykit-native";
 export { useGameConnection, type UseGameConnectionResult } from "./useGameConnection";
 

@@ -1,18 +1,20 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { env } from "@pokington/config";
 import {
-  resolveNativePartyKitHost,
+  requestNativeJoinToken,
   useGameConnection,
   type JoinTokenResponse,
   type PartyKitServerMessage,
 } from "@pokington/network";
-import { tokens } from "@pokington/ui";
 import {
+  NativeBottomSheet,
   NativeButton,
-  PokerCard,
-  StatusPill,
+  NativeCard,
+  NativePokerChip,
+  nativeLightTheme,
   type PlayerSummary,
 } from "@pokington/ui/native";
+import { formatCents } from "@pokington/shared";
 import type {
   BombPotAnteBB,
   GameEvent,
@@ -25,20 +27,40 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
-  Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
+  type ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { playNativeFeedbackHaptic } from "../../lib/haptics";
+import { getExpoRequestHostname } from "../../lib/nativePartyHost";
 
 const PROTOCOL_VERSION = 4;
 const MAX_SEATS = 10;
 const DEFAULT_BUY_IN_CENTS = 10_000;
+const DEG_PER_RAD = 180 / Math.PI;
+const CHIP_HIGHLIGHT_BASE_ANGLE = Math.atan2(35 - 50, 62 - 50) * DEG_PER_RAD;
+const DEFAULT_CHIP_ANGLE = -90 - CHIP_HIGHLIGHT_BASE_ANGLE;
+const MOBILE_CHIP_POINT = { x: 0.5, y: 0.66 };
+const MOBILE_SELF_POINT = { x: 0.5, y: 0.88 };
+const MOBILE_VIEWPORT_COLUMN_X = [0.1, 0.3, 0.5, 0.7, 0.9];
+const MOBILE_VIEWPORT_ROW_Y = [0.13, 0.205];
+const CLOCKWISE_GRID_POSITIONS = [
+  { row: 0, column: 2 },
+  { row: 0, column: 3 },
+  { row: 0, column: 4 },
+  { row: 1, column: 4 },
+  { row: 1, column: 3 },
+  { row: 1, column: 2 },
+  { row: 1, column: 1 },
+  { row: 1, column: 0 },
+  { row: 0, column: 0 },
+  { row: 0, column: 1 },
+] as const;
 
 interface PublicPlayer {
   id: string;
@@ -65,6 +87,7 @@ interface PublicTableState {
   lastLegalRaiseIncrement?: number;
   isBlindIncomplete?: boolean;
   blinds: { small: number; big: number };
+  sevenTwoBountyBB?: number;
   handNumber: number;
   needsToAct: string[];
   closedActors?: string[];
@@ -86,6 +109,31 @@ interface PublicTableState {
   pendingBoundaryUpdates?: Record<string, unknown>;
 }
 
+interface LedgerEntry {
+  playerId: string;
+  name: string;
+  buyIns: number[];
+  cashOuts: number[];
+  isSeated: boolean;
+  currentStack: number;
+}
+
+interface LedgerRow {
+  playerId: string;
+  name: string;
+  totalBuyIn: number;
+  totalCashOut: number;
+  net: number;
+  isSeated: boolean;
+}
+
+interface LayoutRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 type MobileServerMessage =
   | PartyKitServerMessage<PublicTableState>
   | { type: "PRIVATE_STATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]> }
@@ -96,49 +144,126 @@ type MobileServerMessage =
       peekedCounts: Record<string, number>;
       queuedLeavePlayerIds: string[];
     }
-  | { type: "LEDGER_STATE"; entries: unknown[] }
+  | { type: "LEDGER_STATE"; entries: LedgerEntry[] }
   | { type: "ERROR"; code: string; message: string };
 
 function cents(amount: number | null | undefined): string {
-  return `$${((amount ?? 0) / 100).toFixed(2)}`;
-}
-
-function compactCents(amount: number | null | undefined): string {
-  const dollars = (amount ?? 0) / 100;
-  if (Math.abs(dollars) >= 1000) return `$${(dollars / 1000).toFixed(1)}k`;
-  return `$${dollars.toFixed(0)}`;
+  return formatCents(amount ?? 0);
 }
 
 function cardKey(card: Card | null | undefined, index: number) {
   return `${card?.rank ?? "empty"}-${card?.suit ?? "slot"}-${index}`;
 }
 
+function computeAngleBetweenPoints(
+  fromPoint: { x: number; y: number },
+  toPoint: { x: number; y: number },
+) {
+  return Math.atan2(toPoint.y - fromPoint.y, toPoint.x - fromPoint.x) * DEG_PER_RAD;
+}
+
+function computeChipFacingAngle(
+  fromPoint: { x: number; y: number },
+  toPoint: { x: number; y: number },
+) {
+  return computeAngleBetweenPoints(fromPoint, toPoint) - CHIP_HIGHLIGHT_BASE_ANGLE;
+}
+
+function getMobileSeatPoint({
+  seatIndex,
+  viewerSeatIndex = null,
+  totalSeats = MAX_SEATS,
+}: {
+  seatIndex: number | null;
+  viewerSeatIndex?: number | null;
+  totalSeats?: number;
+}) {
+  if (seatIndex == null || seatIndex < 0 || seatIndex >= totalSeats) {
+    return null;
+  }
+
+  if (viewerSeatIndex != null && seatIndex === viewerSeatIndex) {
+    return MOBILE_SELF_POINT;
+  }
+
+  const gridPosition = CLOCKWISE_GRID_POSITIONS[seatIndex];
+  if (!gridPosition) return null;
+
+  return {
+    x: MOBILE_VIEWPORT_COLUMN_X[gridPosition.column],
+    y: MOBILE_VIEWPORT_ROW_Y[gridPosition.row],
+  };
+}
+
+function computeMobileChipAngle({
+  actorSeatIndex,
+  viewerSeatIndex = null,
+  totalSeats = MAX_SEATS,
+}: {
+  actorSeatIndex: number | null;
+  viewerSeatIndex?: number | null;
+  totalSeats?: number;
+}) {
+  const actorPoint = getMobileSeatPoint({
+    seatIndex: actorSeatIndex,
+    viewerSeatIndex,
+    totalSeats,
+  });
+
+  if (!actorPoint) {
+    return DEFAULT_CHIP_ANGLE;
+  }
+
+  return computeChipFacingAngle(MOBILE_CHIP_POINT, actorPoint);
+}
+
+function rectsMatch(a: LayoutRect | null, b: LayoutRect) {
+  return !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+function centerOf(rect: LayoutRect, origin = { x: 0, y: 0 }) {
+  return {
+    x: origin.x + rect.x + rect.width / 2,
+    y: origin.y + rect.y + rect.height / 2,
+  };
+}
+
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  return (name.trim().slice(0, 2) || "?").toUpperCase();
+}
+
+function sumAmounts(amounts: number[] | undefined): number {
+  return (amounts ?? []).reduce((sum, amount) => sum + amount, 0);
+}
+
+function deriveLedgerRows(entries: LedgerEntry[]): LedgerRow[] {
+  return entries.map((entry) => {
+    const totalBuyIn = sumAmounts(entry.buyIns);
+    const realizedCashOut = sumAmounts(entry.cashOuts);
+    const totalCashOut = realizedCashOut + (entry.isSeated ? entry.currentStack : 0);
+    return {
+      playerId: entry.playerId,
+      name: entry.name,
+      totalBuyIn,
+      totalCashOut,
+      net: totalCashOut - totalBuyIn,
+      isSeated: entry.isSeated,
+    };
+  });
+}
+
 function isFeedbackCue(value: unknown): value is GameFeedbackCueEnvelope {
   return !!value && typeof value === "object" && "kind" in value && "key" in value;
 }
 
-async function requestJoinToken(roomId: string, clientId: string): Promise<JoinTokenResponse> {
-  const host = resolveNativePartyKitHost({ explicitHost: env.partyKitHost });
-  const protocol = host.startsWith("127.0.0.1") || host.startsWith("localhost") ? "http" : "https";
-  const response = await fetch(`${protocol}://${host}/parties/main/__control__/tables/${roomId}/join-token`, {
-    method: "POST",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ clientId }),
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const code =
-      payload && typeof payload === "object" && "code" in payload && typeof payload.code === "string"
-        ? payload.code
-        : "JOIN_TOKEN_FAILED";
-    throw new Error(code);
-  }
-  return payload as JoinTokenResponse;
+async function requestJoinToken(
+  roomId: string,
+  clientId: string,
+  requestHostname?: string | null,
+): Promise<JoinTokenResponse> {
+  return requestNativeJoinToken(roomId, clientId, { explicitHost: env.partyKitHost, requestHostname });
 }
 
 function BoardCards({ cards }: { cards: Card[] }) {
@@ -146,7 +271,11 @@ function BoardCards({ cards }: { cards: Card[] }) {
   return (
     <View style={styles.boardRow}>
       {paddedCards.map((card, index) => (
-        <PokerCard key={cardKey(card, index)} card={card} hidden={!card} />
+        card ? (
+          <NativeCard key={cardKey(card, index)} card={card} compact style={styles.boardCard} />
+        ) : (
+          <View key={cardKey(card, index)} style={[styles.boardCard, styles.boardCardPlaceholder]} />
+        )
       ))}
     </View>
   );
@@ -174,6 +303,7 @@ function SeatBubble({
     isSmallBlind ? "SB" : null,
     isBigBlind ? "BB" : null,
   ].filter(Boolean);
+  const initials = player ? (player.isViewer ? "YOU" : getInitials(player.name)) : String(seatIndex + 1);
   return (
     <Pressable
       accessibilityRole="button"
@@ -188,15 +318,24 @@ function SeatBubble({
         pressed && styles.pressed,
       ]}
     >
-      <View style={styles.seatAvatar}>
-        <Text style={styles.seatAvatarText}>{player ? player.name.slice(0, 1).toUpperCase() : seatIndex + 1}</Text>
-      </View>
-      <Text style={styles.seatName} numberOfLines={1}>{player?.name ?? "Open"}</Text>
-      <Text style={styles.seatMeta} numberOfLines={1}>
-        {player ? compactCents(player.stack) : locked ? "Locked" : "Sit"}
-      </Text>
-      {player?.currentBet ? <Text style={styles.seatBet}>{compactCents(player.currentBet)}</Text> : null}
-      {badges.length > 0 ? <Text style={styles.seatBadges}>{badges.join(" ")}</Text> : null}
+      {player ? (
+        <>
+          <View style={styles.seatAvatar}>
+            <Text style={styles.seatAvatarText}>{initials}</Text>
+          </View>
+          {player.currentBet ? <Text style={styles.seatBet}>{cents(player.currentBet)}</Text> : null}
+        </>
+      ) : (
+        <>
+          <Text style={styles.emptySeatLabel}>Seat</Text>
+          <Text style={styles.emptySeatNumber}>{seatIndex + 1}</Text>
+        </>
+      )}
+      {badges.length > 0 ? (
+        <View style={styles.seatBadge}>
+          <Text style={styles.seatBadgeText}>{badges[0]}</Text>
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -211,23 +350,42 @@ export default function TableScreen() {
   const [awayPlayerIds, setAwayPlayerIds] = useState<string[]>([]);
   const [peekedCounts, setPeekedCounts] = useState<Record<string, number>>({});
   const [queuedLeavePlayerIds, setQueuedLeavePlayerIds] = useState<string[]>([]);
-  const [ledgerEntries, setLedgerEntries] = useState<unknown[]>([]);
+  const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"seat" | "ledger" | "bomb" | "raise" | null>(null);
+  const [sheet, setSheet] = useState<"seat" | "ledger" | "bomb" | "raise" | "menu" | null>(null);
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
   const [sitName, setSitName] = useState("");
   const [buyIn, setBuyIn] = useState(String(DEFAULT_BUY_IN_CENTS / 100));
   const [raiseTotal, setRaiseTotal] = useState("");
+  const [seatRailLayout, setSeatRailLayout] = useState<LayoutRect | null>(null);
+  const [seatRailOuterLayout, setSeatRailOuterLayout] = useState<LayoutRect | null>(null);
+  const [seatRailInnerLayout, setSeatRailInnerLayout] = useState<LayoutRect | null>(null);
+  const [seatSlotLayouts, setSeatSlotLayouts] = useState<Array<LayoutRect | null>>(() =>
+    Array.from<LayoutRect | null>({ length: MAX_SEATS }).fill(null),
+  );
+  const [utilityRailLayout, setUtilityRailLayout] = useState<LayoutRect | null>(null);
+  const [utilityChipLayout, setUtilityChipLayout] = useState<LayoutRect | null>(null);
   const seenFeedbackKeysRef = useRef(new Set<string>());
   const myPlayerIdRef = useRef<string | null>(null);
+  const requestHostname = useMemo(() => getExpoRequestHostname(), []);
+
+  const handleSeatSlotLayout = useCallback((seatIndex: number, event: LayoutChangeEvent) => {
+    const nextLayout = event.nativeEvent.layout;
+    setSeatSlotLayouts((current) => {
+      if (rectsMatch(current[seatIndex], nextLayout)) return current;
+      const next = [...current];
+      next[seatIndex] = nextLayout;
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     myPlayerIdRef.current = myPlayerId;
   }, [myPlayerId]);
 
   const join = useCallback(
-    ({ clientId }: { clientId: string; roomId: string }) => requestJoinToken(roomId, clientId),
-    [roomId],
+    ({ clientId }: { clientId: string; roomId: string }) => requestJoinToken(roomId, clientId, requestHostname),
+    [requestHostname, roomId],
   );
 
   const handleMessage = useCallback((message: MobileServerMessage) => {
@@ -253,7 +411,7 @@ export default function TableScreen() {
         setQueuedLeavePlayerIds(message.queuedLeavePlayerIds ?? []);
         break;
       case "LEDGER_STATE":
-        setLedgerEntries(message.entries ?? []);
+        setLedgerEntries((message.entries ?? []) as LedgerEntry[]);
         break;
       case "ERROR":
         setError(message.message || message.code);
@@ -269,6 +427,7 @@ export default function TableScreen() {
     protocolVersion: PROTOCOL_VERSION,
     storage: AsyncStorage,
     explicitHost: env.partyKitHost,
+    requestHostname,
     appState: AppState,
     join,
     onJoin: (joinToken) => {
@@ -313,6 +472,48 @@ export default function TableScreen() {
 
   const viewer = players.find((player) => player.id === myPlayerId) ?? null;
   const actorId = tableState?.needsToAct[0] ?? null;
+  const activeSeatIndex = players.find((player) => player.id === actorId)?.seatIndex ?? null;
+  const fallbackChipGlowAngle = computeMobileChipAngle({
+    actorSeatIndex: activeSeatIndex,
+    viewerSeatIndex: viewer?.seatIndex ?? null,
+    totalSeats: MAX_SEATS,
+  });
+  const chipGlowAngle = useMemo(() => {
+    const activeSeatLayout = activeSeatIndex == null ? null : seatSlotLayouts[activeSeatIndex];
+    if (
+      !seatRailLayout ||
+      !seatRailOuterLayout ||
+      !seatRailInnerLayout ||
+      !utilityRailLayout ||
+      !utilityChipLayout ||
+      !activeSeatLayout
+    ) {
+      return fallbackChipGlowAngle;
+    }
+
+    const seatRailOrigin = {
+      x: seatRailLayout.x + seatRailOuterLayout.x + seatRailInnerLayout.x,
+      y: seatRailLayout.y + seatRailOuterLayout.y + seatRailInnerLayout.y,
+    };
+    const chipOrigin = {
+      x: utilityRailLayout.x,
+      y: utilityRailLayout.y,
+    };
+
+    return computeChipFacingAngle(
+      centerOf(utilityChipLayout, chipOrigin),
+      centerOf(activeSeatLayout, seatRailOrigin),
+    );
+  }, [
+    activeSeatIndex,
+    fallbackChipGlowAngle,
+    seatRailInnerLayout,
+    seatRailLayout,
+    seatRailOuterLayout,
+    seatSlotLayouts,
+    utilityChipLayout,
+    utilityRailLayout,
+  ]);
   const canAct = !!viewer && actorId === myPlayerId;
   const callAmount = viewer && tableState ? Math.max(0, tableState.roundBet - viewer.currentBet) : 0;
   const lastRaise = tableState?.lastLegalRaiseIncrement ?? tableState?.blinds.big ?? 0;
@@ -331,6 +532,7 @@ export default function TableScreen() {
     : tableState?.runResults?.length
       ? tableState.runResults.map((run) => run.board)
       : [tableState?.communityCards ?? []];
+  const ledgerRows = useMemo(() => deriveLedgerRows(ledgerEntries), [ledgerEntries]);
 
   const sendEvent = useCallback((event: GameEvent, strength: "light" | "medium" | "heavy" = "light") => {
     connection?.sendAction(event);
@@ -408,17 +610,44 @@ export default function TableScreen() {
     playNativeFeedbackHaptic({ kind: "local_press", key: `peek:${cardIndex}` }, { myPlayerId });
   };
 
+  const toggleLeave = () => {
+    if (!viewer) return;
+    if (leaveQueued) {
+      sendViewerEvent((playerId) => ({ type: "CANCEL_BOUNDARY_UPDATE", playerId }), "light");
+      return;
+    }
+    sendViewerEvent((playerId) => ({
+      type: "REQUEST_BOUNDARY_UPDATE",
+      playerId,
+      leaveSeat: true,
+      moveToSeatIndex: null,
+      chipDelta: 0,
+    }), "medium");
+  };
+
   return (
-    <SafeAreaView style={styles.screen}>
+    <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
       <View style={styles.headerBar}>
-        <NativeButton label="Back" tone="secondary" onPress={() => router.back()} style={styles.headerButton} />
-        <View style={styles.headerCopy}>
-          <Text style={styles.tableName} numberOfLines={1}>{tableState?.tableName || `Table ${roomId}`}</Text>
-          <Text style={styles.tableMeta}>
-            {tableState ? `${tableState.phase} · Hand ${tableState.handNumber} · ${cents(tableState.blinds.small)} / ${cents(tableState.blinds.big)}` : "connecting"}
-          </Text>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backArrow}>‹</Text>
+        </Pressable>
+        <Text style={styles.tableName} numberOfLines={1}>{tableState?.tableName || `Table ${roomId}`}</Text>
+        <View style={styles.headerRight}>
+          {(tableState?.sevenTwoBountyBB ?? 0) > 0 ? (
+            <Text style={styles.bountyPill}>7-2 {tableState?.sevenTwoBountyBB}×</Text>
+          ) : null}
+          {tableState?.blinds ? (
+            <Text style={styles.blindsPill}>{cents(tableState.blinds.small)} / {cents(tableState.blinds.big)}</Text>
+          ) : null}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Table menu"
+            onPress={() => setSheet("menu")}
+            style={styles.menuButton}
+          >
+            <Text style={styles.menuDots}>⋮</Text>
+          </Pressable>
         </View>
-        <StatusPill label={status} />
       </View>
 
       {error ? (
@@ -428,35 +657,49 @@ export default function TableScreen() {
         </View>
       ) : null}
 
-      <View style={styles.seatRail}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.seatRailContent}>
-          {seatPlayers.map((player, seatIndex) => (
-            <SeatBubble
-              key={`seat-${seatIndex}`}
-              player={player}
-              seatIndex={seatIndex}
-              isDealer={tableState?.dealerSeatIndex === seatIndex}
-              isSmallBlind={tableState?.smallBlindSeatIndex === seatIndex}
-              isBigBlind={tableState?.bigBlindSeatIndex === seatIndex}
-              locked={!isWaiting && !isShowdown}
-              onPress={() => openSeat(seatIndex)}
-            />
-          ))}
-        </ScrollView>
+      <View style={styles.seatRail} onLayout={(event) => setSeatRailLayout(event.nativeEvent.layout)}>
+        <View style={styles.seatRailOuter} onLayout={(event) => setSeatRailOuterLayout(event.nativeEvent.layout)}>
+          <View style={styles.seatRailInner} onLayout={(event) => setSeatRailInnerLayout(event.nativeEvent.layout)}>
+            {seatPlayers.map((player, seatIndex) => (
+              <View
+                key={`seat-slot-${seatIndex}`}
+                onLayout={(event) => handleSeatSlotLayout(seatIndex, event)}
+                style={[styles.seatSlot, seatSlotPositionStyles[seatIndex]]}
+              >
+                <SeatBubble
+                  player={player}
+                  seatIndex={seatIndex}
+                  isDealer={tableState?.dealerSeatIndex === seatIndex}
+                  isSmallBlind={tableState?.smallBlindSeatIndex === seatIndex}
+                  isBigBlind={tableState?.bigBlindSeatIndex === seatIndex}
+                  locked={!isWaiting && !isShowdown}
+                  onPress={() => openSeat(seatIndex)}
+                />
+              </View>
+            ))}
+          </View>
+        </View>
       </View>
 
       <View style={styles.tableStage}>
-        <View style={styles.feltOval}>
+        <View style={styles.boardArea}>
           {boardSets.slice(0, 3).map((cards, index) => (
             <View key={`board-${index}`} style={styles.boardStack}>
               {boardSets.length > 1 ? <Text style={styles.boardLabel}>{tableState?.isBombPot ? `Board ${index + 1}` : `Run ${index + 1}`}</Text> : null}
               <BoardCards cards={cards} />
             </View>
           ))}
-          <View style={styles.potPill}>
+        </View>
+        <View style={styles.potPill}>
+          <Text style={styles.potValue}>{cents(tableState?.pot ?? 0)}</Text>
+          {players.some((player) => player.currentBet > 0) ? (
+            <>
+              <View style={styles.potDivider} />
+              <Text style={styles.potLabel}>Total {cents(tablePot)}</Text>
+            </>
+          ) : (
             <Text style={styles.potLabel}>Pot</Text>
-            <Text style={styles.potValue}>{cents(tablePot)}</Text>
-          </View>
+          )}
         </View>
 
         {tableState?.bombPotVote ? (
@@ -491,58 +734,76 @@ export default function TableScreen() {
         ) : null}
       </View>
 
-      <View style={styles.utilityRail}>
-        <NativeButton label="Ledger" tone="secondary" onPress={() => { setSheet("ledger"); playNativeFeedbackHaptic({ kind: "local_press", key: "ledger" }, { myPlayerId }); }} style={styles.utilityButton} />
-        <NativeButton label="Bomb" tone="secondary" disabled={!viewer || !!tableState?.bombPotVote} onPress={() => setSheet("bomb")} style={styles.utilityButton} />
-        {viewer ? (
-          <NativeButton
-            label={leaveQueued ? "Cancel Leave" : "Leave"}
-            tone="secondary"
-            onPress={() => {
-              if (leaveQueued) {
-                sendViewerEvent((playerId) => ({ type: "CANCEL_BOUNDARY_UPDATE", playerId }), "light");
-              } else {
-                sendViewerEvent((playerId) => ({
-                  type: "REQUEST_BOUNDARY_UPDATE",
-                  playerId,
-                  leaveSeat: true,
-                  moveToSeatIndex: null,
-                  chipDelta: 0,
-                }), "medium");
-              }
-            }}
-            style={styles.utilityButton}
-          />
-        ) : null}
+      <View style={styles.utilityRail} onLayout={(event) => setUtilityRailLayout(event.nativeEvent.layout)}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={!viewer || !!tableState?.bombPotVote}
+          onPress={() => setSheet("bomb")}
+          style={[styles.floatingUtility, (!viewer || !!tableState?.bombPotVote) && styles.utilityDisabled]}
+        >
+          <Text style={styles.utilityIcon}>💣</Text>
+        </Pressable>
+        <View style={styles.utilityChipSlot} onLayout={(event) => setUtilityChipLayout(event.nativeEvent.layout)}>
+          <NativePokerChip size={44} glowAngle={chipGlowAngle} />
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => { setSheet("ledger"); playNativeFeedbackHaptic({ kind: "local_press", key: "ledger" }, { myPlayerId }); }}
+          style={styles.floatingUtility}
+        >
+          <Text style={styles.utilityIcon}>💰</Text>
+        </Pressable>
       </View>
 
       <View style={styles.handPanel}>
-        <View style={styles.handIdentity}>
-          <Text style={styles.handName}>{viewer?.name ?? "Not seated"}</Text>
-          <Text style={styles.handMeta}>{viewer ? `${cents(viewer.stack)} stack${peekedCounts[viewer.id] ? ` · peeked ${peekedCounts[viewer.id]}` : ""}` : "Tap an open seat to sit"}</Text>
-        </View>
+        <Pressable
+          accessibilityRole={viewer ? "button" : undefined}
+          onPress={toggleLeave}
+          style={styles.handIdentity}
+        >
+          {viewer ? <Text style={styles.youBadge}>You</Text> : null}
+          <View style={styles.viewerAvatar}>
+            <Text style={styles.viewerAvatarText}>{viewer ? viewer.name.slice(0, 2).toUpperCase() : "IN"}</Text>
+          </View>
+          <Text style={styles.handName} numberOfLines={1}>{viewer?.name ?? "Not seated"}</Text>
+          <Text style={styles.handMeta} numberOfLines={1}>{viewer ? (leaveQueued ? "leaving next hand" : "tap to leave") : "tap an open seat"}</Text>
+        </Pressable>
         <View style={styles.handCards}>
-          {[0, 1].map((index) => (
-            <View key={`hole-${index}`} style={styles.holeCardWrap}>
-              <PokerCard card={holeCards?.[index] ?? revealedHoleCards[myPlayerId ?? ""]?.[index] ?? null} hidden={!holeCards?.[index]} />
-              <View style={styles.cardActions}>
-                <Pressable onPress={() => peekCard(index as 0 | 1)} style={styles.cardActionButton}>
-                  <Text style={styles.cardActionText}>Peek</Text>
-                </Pressable>
-                <Pressable onPress={() => revealCard(index as 0 | 1)} style={styles.cardActionButton}>
-                  <Text style={styles.cardActionText}>Show</Text>
-                </Pressable>
-              </View>
-            </View>
-          ))}
+          {[0, 1].map((index) => {
+            const card = holeCards?.[index] ?? revealedHoleCards[myPlayerId ?? ""]?.[index] ?? null;
+            return (
+              <Pressable
+                key={`hole-${index}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Hole card ${index + 1}`}
+                onPress={() => peekCard(index as 0 | 1)}
+                onLongPress={() => revealCard(index as 0 | 1)}
+                style={styles.holeCardWrap}
+              >
+                <NativeCard card={card} hidden={!card} style={styles.holeCard} />
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.handStats}>
+          <Text style={styles.handStatsLabel}>Hand</Text>
+          <Text style={styles.handStatsValue}>--</Text>
+          {viewer?.currentBet ? (
+            <>
+              <Text style={styles.handStatsLabel}>Bet</Text>
+              <Text style={styles.handBet}>{cents(viewer.currentBet)}</Text>
+            </>
+          ) : null}
+          <Text style={styles.handStatsLabel}>Stack</Text>
+          <Text style={styles.stackValue}>{viewer ? cents(viewer.stack) : "--"}</Text>
         </View>
       </View>
 
       <View style={styles.actionDock}>
         {isWaiting || (isShowdown && tableState?.winners?.length) ? (
-          <NativeButton label="Start Game" disabled={!viewer} onPress={() => sendEvent({ type: "START_HAND" }, "medium")} />
+          <NativeButton label="Start Game" disabled={!viewer} onPress={() => sendEvent({ type: "START_HAND" }, "medium")} style={styles.fullActionButton} />
         ) : (
-          <View style={styles.actionGrid}>
+          <View style={[styles.actionRow, !canAct && styles.disabledActions]}>
             <NativeButton label="Fold" tone="danger" disabled={!canAct} onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "fold" }))} style={styles.actionButton} />
             <NativeButton
               label={canCheck ? "Check" : `Call ${cents(callAmount)}`}
@@ -550,27 +811,74 @@ export default function TableScreen() {
               onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: canCheck ? "check" : "call" }))}
               style={styles.actionButton}
             />
-            <NativeButton label={`Raise ${compactCents(minRaiseTotal)}`} tone="secondary" disabled={!canRaise} onPress={() => { setRaiseTotal(String(minRaiseTotal / 100)); setSheet("raise"); }} style={styles.actionButton} />
-            <NativeButton label="All-in" tone="secondary" disabled={!canAllIn} onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "all-in" }), "heavy")} style={styles.actionButton} />
+            {canRaise ? (
+              <NativeButton label="Raise" disabled={!canRaise} onPress={() => { setRaiseTotal(String(minRaiseTotal / 100)); setSheet("raise"); }} style={styles.actionButton} />
+            ) : (
+              <NativeButton label="All-in" disabled={!canAllIn} onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "all-in" }), "heavy")} style={styles.actionButton} />
+            )}
           </View>
         )}
       </View>
 
-      <Modal visible={sheet != null} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
-        <Pressable style={styles.sheetScrim} onPress={() => setSheet(null)} />
-        <View style={styles.sheet}>
+      <NativeBottomSheet visible={sheet != null} onDismiss={() => setSheet(null)}>
+          {sheet === "menu" ? (
+            <>
+              <Text style={styles.sheetTitle}>Table Menu</Text>
+              <NativeButton
+                label="Session Ledger"
+                tone="secondary"
+                onPress={() => setSheet("ledger")}
+              />
+              {viewer ? (
+                <NativeButton
+                  label={leaveQueued ? "Cancel Leave" : "Leave Table"}
+                  tone="secondary"
+                  onPress={() => {
+                    toggleLeave();
+                    setSheet(null);
+                  }}
+                />
+              ) : null}
+            </>
+          ) : null}
           {sheet === "seat" ? (
             <>
               <Text style={styles.sheetTitle}>Seat {(selectedSeatIndex ?? 0) + 1}</Text>
-              <TextInput value={sitName} onChangeText={setSitName} placeholder="Your name" placeholderTextColor={tokens.colors.muted} style={styles.input} />
-              <TextInput value={buyIn} onChangeText={setBuyIn} placeholder="Buy-in dollars" keyboardType="number-pad" placeholderTextColor={tokens.colors.muted} style={styles.input} />
+              <TextInput value={sitName} onChangeText={setSitName} placeholder="Your name" placeholderTextColor={nativeLightTheme.colors.muted} style={styles.input} />
+              <TextInput value={buyIn} onChangeText={setBuyIn} placeholder="Buy-in dollars" keyboardType="number-pad" placeholderTextColor={nativeLightTheme.colors.muted} style={styles.input} />
               <NativeButton label="Sit Down" onPress={confirmSit} />
             </>
           ) : null}
           {sheet === "ledger" ? (
             <>
               <Text style={styles.sheetTitle}>Session Ledger</Text>
-              <Text style={styles.sheetText}>{ledgerEntries.length > 0 ? `${ledgerEntries.length} ledger entries synced.` : "No ledger entries yet."}</Text>
+              {ledgerRows.length > 0 ? (
+                <View style={styles.ledgerTable}>
+                  <View style={styles.ledgerHeader}>
+                    <Text style={styles.ledgerHeaderPlayerText}>Player</Text>
+                    <Text style={styles.ledgerHeaderText}>Buy-in</Text>
+                    <Text style={styles.ledgerHeaderText}>Out</Text>
+                    <Text style={styles.ledgerHeaderText}>Net</Text>
+                  </View>
+                  {ledgerRows.map((row) => {
+                    const netPrefix = row.net > 0 ? "+" : row.net < 0 ? "-" : "";
+                    const netColor = row.net > 0 ? "#16a34a" : row.net < 0 ? nativeLightTheme.colors.accent : nativeLightTheme.colors.muted;
+                    return (
+                      <View key={row.playerId} style={styles.ledgerRow}>
+                        <View style={styles.ledgerPlayerCell}>
+                          <Text style={styles.ledgerName} numberOfLines={1}>{row.name}</Text>
+                          {row.isSeated ? <Text style={styles.ledgerSeated}>seated</Text> : null}
+                        </View>
+                        <Text style={styles.ledgerAmount}>{cents(row.totalBuyIn)}</Text>
+                        <Text style={styles.ledgerAmount}>{cents(row.totalCashOut)}</Text>
+                        <Text style={[styles.ledgerNet, { color: netColor }]}>{netPrefix}{cents(Math.abs(row.net))}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={styles.sheetText}>No players have sat down yet.</Text>
+              )}
             </>
           ) : null}
           {sheet === "bomb" ? (
@@ -586,13 +894,13 @@ export default function TableScreen() {
           {sheet === "raise" ? (
             <>
               <Text style={styles.sheetTitle}>Raise Total</Text>
-              <TextInput value={raiseTotal} onChangeText={setRaiseTotal} placeholder="Total bet dollars" keyboardType="number-pad" placeholderTextColor={tokens.colors.muted} style={styles.input} />
+              <Text style={styles.sheetText}>Minimum {cents(minRaiseTotal)}</Text>
+              <TextInput value={raiseTotal} onChangeText={setRaiseTotal} placeholder="Total bet dollars" keyboardType="number-pad" placeholderTextColor={nativeLightTheme.colors.muted} style={styles.input} />
               <NativeButton label="Raise" onPress={confirmRaise} />
             </>
           ) : null}
           <NativeButton label="Close" tone="secondary" onPress={() => setSheet(null)} />
-        </View>
-      </Modal>
+      </NativeBottomSheet>
     </SafeAreaView>
   );
 }
@@ -600,149 +908,235 @@ export default function TableScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: tokens.colors.background,
+    backgroundColor: nativeLightTheme.colors.background,
   },
   headerBar: {
-    minHeight: 64,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     borderBottomWidth: 1,
-    borderBottomColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surfaceSubtle,
+    borderBottomColor: "rgba(209,213,219,0.58)",
+    backgroundColor: nativeLightTheme.colors.header,
   },
-  headerButton: {
-    minHeight: 40,
-    paddingHorizontal: tokens.spacing.md,
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: -8,
   },
-  headerCopy: {
-    flex: 1,
-    minWidth: 0,
+  backArrow: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 42,
+    lineHeight: 42,
+    fontWeight: "500",
   },
   tableName: {
-    color: tokens.colors.text,
-    fontSize: 18,
+    flex: 1,
+    color: nativeLightTheme.colors.text,
+    fontSize: 20,
     fontWeight: "900",
   },
-  tableMeta: {
-    color: tokens.colors.muted,
+  headerRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    maxWidth: "58%",
+  },
+  bountyPill: {
+    overflow: "hidden",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.24)",
+    backgroundColor: "rgba(239,68,68,0.1)",
+    color: nativeLightTheme.colors.accent,
+    fontSize: 10,
+    fontWeight: "900",
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+  },
+  blindsPill: {
+    overflow: "hidden",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: nativeLightTheme.colors.border,
+    backgroundColor: "rgba(255,255,255,0.78)",
+    color: "#5b6070",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "900",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  menuButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: nativeLightTheme.colors.border,
+    backgroundColor: "rgba(255,255,255,0.82)",
+    ...nativeLightTheme.shadow.soft,
+  },
+  menuDots: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 34,
+    lineHeight: 34,
+    fontWeight: "900",
   },
   errorBanner: {
-    marginHorizontal: tokens.spacing.md,
-    marginTop: tokens.spacing.sm,
-    borderRadius: tokens.radii.md,
+    marginHorizontal: 16,
+    marginTop: 8,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: tokens.colors.accent,
-    backgroundColor: tokens.colors.surface,
-    padding: tokens.spacing.md,
+    borderColor: nativeLightTheme.colors.accent,
+    backgroundColor: "#fff7f7",
+    padding: 12,
   },
   errorTitle: {
-    color: tokens.colors.text,
+    color: nativeLightTheme.colors.text,
     fontSize: 14,
     fontWeight: "900",
   },
   errorText: {
-    color: tokens.colors.muted,
+    color: nativeLightTheme.colors.muted,
     fontSize: 13,
   },
   seatRail: {
-    minHeight: 118,
-    paddingVertical: tokens.spacing.sm,
+    height: 148,
+    paddingTop: 14,
+    paddingHorizontal: 5,
   },
-  seatRailContent: {
-    gap: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.md,
+  seatRailOuter: {
+    height: 128,
+    borderRadius: 34,
+    backgroundColor: "#2b3a4e",
+    paddingHorizontal: 10,
+    paddingTop: 8,
+    paddingBottom: 16,
+    ...nativeLightTheme.shadow.surface,
+  },
+  seatRailInner: {
+    flex: 1,
+    borderRadius: 28,
+    backgroundColor: "#111a26",
+    overflow: "visible",
+  },
+  seatSlot: {
+    position: "absolute",
+    width: 56,
+    height: 54,
+    marginLeft: -28,
+    marginTop: -27,
   },
   seatBubble: {
-    width: 82,
-    minHeight: 100,
+    width: 56,
+    height: 54,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
-    borderRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    padding: tokens.spacing.sm,
+    borderRadius: 28,
   },
   viewerSeat: {
-    backgroundColor: tokens.colors.feltOverlay,
+    borderWidth: 2,
+    borderColor: "rgba(239,68,68,0.42)",
   },
   actorSeat: {
-    borderColor: tokens.colors.accent,
+    transform: [{ scale: 1.06 }],
   },
   emptySeat: {
+    borderWidth: 2,
     borderStyle: "dashed",
-    backgroundColor: tokens.colors.surfaceSubtle,
+    borderColor: "rgba(156,163,175,0.44)",
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
   lockedSeat: {
-    opacity: 0.55,
+    opacity: 0.5,
   },
   pressed: {
     opacity: 0.78,
   },
   seatAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: tokens.colors.accent,
+    backgroundColor: nativeLightTheme.colors.accentStrong,
   },
   seatAvatarText: {
-    color: tokens.colors.text,
+    color: "#ffffff",
+    fontSize: 14,
     fontWeight: "900",
   },
-  seatName: {
-    maxWidth: "100%",
-    color: tokens.colors.text,
-    fontSize: 12,
+  emptySeatLabel: {
+    position: "absolute",
+    top: 12,
+    color: "rgba(156,163,175,0.72)",
+    fontSize: 8,
     fontWeight: "900",
+    letterSpacing: 2,
+    textTransform: "uppercase",
   },
-  seatMeta: {
-    color: tokens.colors.muted,
-    fontSize: 11,
-    fontWeight: "700",
+  emptySeatNumber: {
+    position: "absolute",
+    top: 24,
+    color: "rgba(156,163,175,0.72)",
+    fontSize: 16,
+    fontWeight: "900",
   },
   seatBet: {
-    color: tokens.colors.accent,
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  seatBadges: {
-    color: tokens.colors.text,
+    position: "absolute",
+    bottom: -9,
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: nativeLightTheme.colors.yellow,
+    color: "#000000",
     fontSize: 9,
+    fontWeight: "900",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  seatBadge: {
+    position: "absolute",
+    right: -3,
+    top: -4,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: nativeLightTheme.colors.yellow,
+    backgroundColor: nativeLightTheme.colors.tableInner,
+  },
+  seatBadgeText: {
+    color: nativeLightTheme.colors.yellow,
+    fontSize: 8,
     fontWeight: "900",
   },
   tableStage: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: tokens.spacing.md,
-    gap: tokens.spacing.md,
+    justifyContent: "flex-start",
+    paddingHorizontal: 16,
+    gap: 10,
+    paddingTop: 6,
   },
-  feltOval: {
+  boardArea: {
+    minHeight: 88,
     width: "100%",
-    minHeight: 230,
     alignItems: "center",
     justifyContent: "center",
-    gap: tokens.spacing.sm,
-    borderRadius: 120,
-    borderWidth: 10,
-    borderColor: tokens.colors.web.wood.dark,
-    backgroundColor: tokens.colors.felt,
-    padding: tokens.spacing.lg,
   },
   boardStack: {
     alignItems: "center",
-    gap: tokens.spacing.xs,
+    gap: 6,
   },
   boardLabel: {
-    color: tokens.colors.text,
+    color: nativeLightTheme.colors.muted,
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -750,180 +1144,362 @@ const styles = StyleSheet.create({
   boardRow: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: tokens.spacing.sm,
+    gap: 8,
+  },
+  boardCard: {
+    width: 44,
+  },
+  boardCardPlaceholder: {
+    aspectRatio: 0.72,
+    opacity: 0,
   },
   potPill: {
-    minWidth: 112,
+    minWidth: 142,
     alignItems: "center",
-    borderRadius: tokens.radii.pill,
-    backgroundColor: tokens.colors.accent,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    borderRadius: 20,
+    backgroundColor: nativeLightTheme.colors.accent,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    ...nativeLightTheme.shadow.red,
+  },
+  potDivider: {
+    width: "100%",
+    height: 1,
+    marginVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.24)",
   },
   potLabel: {
-    color: tokens.colors.text,
-    fontSize: 10,
+    color: "rgba(255,255,255,0.76)",
+    fontSize: 11,
     fontWeight: "900",
+    letterSpacing: 4,
     textTransform: "uppercase",
   },
   potValue: {
-    color: tokens.colors.text,
-    fontSize: 20,
+    color: "#ffffff",
+    fontSize: 25,
     fontWeight: "900",
   },
   overlayCard: {
     width: "100%",
-    borderRadius: tokens.radii.lg,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    padding: tokens.spacing.md,
-    gap: tokens.spacing.sm,
+    borderColor: nativeLightTheme.colors.border,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    padding: 16,
+    gap: 10,
+    ...nativeLightTheme.shadow.soft,
   },
   overlayTitle: {
-    color: tokens.colors.text,
+    color: nativeLightTheme.colors.text,
     fontSize: 16,
     fontWeight: "900",
     textAlign: "center",
   },
   overlayText: {
-    color: tokens.colors.muted,
+    color: nativeLightTheme.colors.muted,
     fontSize: 13,
     textAlign: "center",
   },
   winnerBanner: {
     width: "100%",
-    borderRadius: tokens.radii.lg,
-    backgroundColor: tokens.colors.surface,
-    padding: tokens.spacing.md,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    padding: 16,
     alignItems: "center",
+    ...nativeLightTheme.shadow.soft,
   },
   winnerTitle: {
-    color: tokens.colors.accent,
+    color: nativeLightTheme.colors.accent,
     fontSize: 12,
     fontWeight: "900",
     textTransform: "uppercase",
   },
   winnerText: {
-    color: tokens.colors.text,
+    color: nativeLightTheme.colors.text,
     fontSize: 15,
     fontWeight: "900",
     textAlign: "center",
   },
   utilityRail: {
-    flexDirection: "row",
-    gap: tokens.spacing.sm,
-    paddingHorizontal: tokens.spacing.md,
-    paddingBottom: tokens.spacing.sm,
-  },
-  utilityButton: {
-    flex: 1,
-    minHeight: 42,
-  },
-  handPanel: {
+    height: 56,
     flexDirection: "row",
     alignItems: "center",
-    gap: tokens.spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    justifyContent: "center",
+    gap: 16,
+  },
+  utilityChipSlot: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  floatingUtility: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.8)",
+    backgroundColor: "rgba(255,255,255,0.62)",
+    ...nativeLightTheme.shadow.soft,
+  },
+  utilityDisabled: {
+    opacity: 0.36,
+  },
+  utilityIcon: {
+    fontSize: 21,
+  },
+  handPanel: {
+    height: 134,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingBottom: 8,
   },
   handIdentity: {
     flex: 1,
     minWidth: 0,
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: nativeLightTheme.colors.border,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    padding: 10,
+    ...nativeLightTheme.shadow.soft,
+  },
+  youBadge: {
+    overflow: "hidden",
+    borderRadius: 5,
+    backgroundColor: "#fee2e2",
+    color: nativeLightTheme.colors.accent,
+    fontSize: 12,
+    fontWeight: "900",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    textTransform: "uppercase",
+  },
+  viewerAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#1e2c5c",
+  },
+  viewerAvatarText: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "900",
   },
   handName: {
-    color: tokens.colors.text,
-    fontSize: 16,
+    maxWidth: "100%",
+    color: nativeLightTheme.colors.text,
+    fontSize: 15,
     fontWeight: "900",
   },
   handMeta: {
-    color: tokens.colors.muted,
-    fontSize: 12,
-    fontWeight: "700",
+    color: nativeLightTheme.colors.muted,
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
   },
   handCards: {
     flexDirection: "row",
-    gap: tokens.spacing.sm,
+    alignItems: "center",
+    gap: 8,
   },
   holeCardWrap: {
     alignItems: "center",
+    justifyContent: "center",
+  },
+  holeCard: {
+    width: 84,
+  },
+  handStats: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: nativeLightTheme.colors.border,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    padding: 10,
     gap: 4,
+    ...nativeLightTheme.shadow.soft,
   },
-  cardActions: {
-    flexDirection: "row",
-    gap: 4,
+  handStatsLabel: {
+    color: nativeLightTheme.colors.faint,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 3,
+    textTransform: "uppercase",
   },
-  cardActionButton: {
-    borderRadius: tokens.radii.sm,
-    backgroundColor: tokens.colors.surfaceMuted,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+  handStatsValue: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 18,
+    fontWeight: "900",
   },
-  cardActionText: {
-    color: tokens.colors.text,
-    fontSize: 9,
+  handBet: {
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: nativeLightTheme.colors.yellow,
+    color: "#000000",
+    fontSize: 12,
+    fontWeight: "900",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  stackValue: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 18,
     fontWeight: "900",
   },
   actionDock: {
+    minHeight: 76,
     borderTopWidth: 1,
-    borderTopColor: tokens.colors.border,
-    backgroundColor: tokens.colors.background,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    borderTopColor: "rgba(209,213,219,0.7)",
+    backgroundColor: "rgba(255,255,255,0.96)",
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
   },
-  actionGrid: {
+  actionRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: tokens.spacing.sm,
+    gap: 10,
+  },
+  disabledActions: {
+    opacity: 0.55,
   },
   actionButton: {
-    flexBasis: "48%",
-    flexGrow: 1,
+    flex: 1,
+    minHeight: 56,
+  },
+  fullActionButton: {
+    minHeight: 56,
   },
   inlineActions: {
     flexDirection: "row",
-    gap: tokens.spacing.sm,
+    gap: 10,
   },
   inlineButton: {
     flex: 1,
   },
-  sheetScrim: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  sheet: {
-    gap: tokens.spacing.md,
-    borderTopLeftRadius: tokens.radii.lg,
-    borderTopRightRadius: tokens.radii.lg,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surface,
-    padding: tokens.spacing.lg,
-  },
   sheetTitle: {
-    color: tokens.colors.text,
-    fontSize: 18,
+    color: nativeLightTheme.colors.text,
+    fontSize: 22,
     fontWeight: "900",
     textAlign: "center",
   },
   sheetText: {
-    color: tokens.colors.muted,
+    color: nativeLightTheme.colors.muted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
   },
-  input: {
-    minHeight: 52,
-    borderRadius: tokens.radii.md,
+  ledgerTable: {
+    gap: 6,
+  },
+  ledgerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 10,
+  },
+  ledgerHeaderText: {
+    width: 62,
+    color: nativeLightTheme.colors.faint,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    textAlign: "right",
+    textTransform: "uppercase",
+  },
+  ledgerHeaderPlayerText: {
+    flex: 1,
+    minWidth: 0,
+    color: nativeLightTheme.colors.faint,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    textAlign: "left",
+    textTransform: "uppercase",
+  },
+  ledgerRow: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surfaceMuted,
-    color: tokens.colors.text,
+    borderColor: nativeLightTheme.colors.border,
+    backgroundColor: nativeLightTheme.colors.surfaceMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  ledgerPlayerCell: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: "flex-start",
+    textAlign: "left",
+  },
+  ledgerName: {
+    maxWidth: "100%",
+    color: nativeLightTheme.colors.text,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  ledgerSeated: {
+    marginTop: 2,
+    overflow: "hidden",
+    borderRadius: 999,
+    backgroundColor: "rgba(34,197,94,0.12)",
+    color: "#16a34a",
+    fontSize: 9,
+    fontWeight: "900",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    textTransform: "uppercase",
+  },
+  ledgerAmount: {
+    width: 62,
+    color: nativeLightTheme.colors.muted,
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  ledgerNet: {
+    width: 62,
+    fontSize: 12,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  input: {
+    minHeight: 56,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: nativeLightTheme.colors.border,
+    backgroundColor: nativeLightTheme.colors.surfaceMuted,
+    color: nativeLightTheme.colors.text,
     fontSize: 18,
     fontWeight: "800",
-    paddingHorizontal: tokens.spacing.md,
+    paddingHorizontal: 16,
   },
 });
+
+const seatSlotPositionStyles: ViewStyle[] = [
+  { left: "50%", top: "24%" },
+  { left: "70%", top: "24%" },
+  { left: "90%", top: "24%" },
+  { left: "90%", top: "68%" },
+  { left: "70%", top: "68%" },
+  { left: "50%", top: "68%" },
+  { left: "30%", top: "68%" },
+  { left: "10%", top: "68%" },
+  { left: "10%", top: "24%" },
+  { left: "30%", top: "24%" },
+];

@@ -14,14 +14,26 @@ export function normalizePartyKitHost(host: string | null | undefined): string |
   return trimmed.replace(/^(https?:\/\/|wss?:\/\/)/i, "").replace(/\/+$/, "");
 }
 
+export function shouldUseInsecureLocalProtocol(host: string): boolean {
+  const normalizedHost = normalizePartyKitHost(host);
+  const hostname = normalizedHost?.split("/")[0]?.split(":")[0] ?? "";
+  if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+  if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+  const match = /^172\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(hostname);
+  if (match) {
+    const second = Number(match[1]);
+    return second >= 16 && second <= 31;
+  }
+  return false;
+}
+
 export function buildPartyKitWebSocketUrl(host: string, roomId: string): string {
   const normalizedHost = normalizePartyKitHost(host);
   if (!normalizedHost) {
     throw new Error("PARTYKIT_HOST_REQUIRED");
   }
-  const protocol = normalizedHost.startsWith("127.0.0.1") || normalizedHost.startsWith("localhost")
-    ? "ws"
-    : "wss";
+  const protocol = shouldUseInsecureLocalProtocol(normalizedHost) ? "ws" : "wss";
   return `${protocol}://${normalizedHost}/parties/main/${encodeURIComponent(roomId)}`;
 }
 

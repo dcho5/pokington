@@ -135,6 +135,7 @@ interface PersistedRoomState {
 const CONTROL_ROOM_ID = "__control__";
 const ROOM_STATE_KEY = "roomDocument";
 const JOIN_TOKEN_TTL_MS = 1000 * 60 * 60 * 12;
+const MAX_JOIN_TOKENS = 64;
 const ROOM_HTTP_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -664,6 +665,7 @@ export default class PokerRoom implements Party.Server {
 
     const now = Date.now();
     this.cleanExpiredJoinTokens();
+    this.removeJoinTokensForClient(body.clientId);
     let session = this.playerSessions.get(body.clientId);
     if (!session) {
       session = {
@@ -686,6 +688,7 @@ export default class PokerRoom implements Party.Server {
       playerSessionId: session.playerSessionId,
       expiresAt: now + JOIN_TOKEN_TTL_MS,
     });
+    this.trimJoinTokens();
     await this.persistRoomState();
 
     return jsonResponse({
@@ -717,6 +720,7 @@ export default class PokerRoom implements Party.Server {
     }
 
     const { clientId, playerSessionId } = joinToken;
+    this.joinTokens.delete(token);
     this.clientIdToPlayerSessionId.set(clientId, playerSessionId);
     authenticatePresence(
       {
@@ -737,6 +741,7 @@ export default class PokerRoom implements Party.Server {
     this.sendPrivateTo(conn, clientId);
     this.send(conn, { type: "LEDGER_STATE", entries: Array.from(this.sessionLedger.values()) });
     this.broadcastRoomPresence();
+    void this.persistRoomState();
   }
 
   private handleGameEvent(conn: Party.Connection, event: GameEvent) {
@@ -1554,6 +1559,29 @@ export default class PokerRoom implements Party.Server {
     const now = Date.now();
     for (const [token, record] of this.joinTokens) {
       if (record.expiresAt !== null && record.expiresAt <= now) {
+        this.joinTokens.delete(token);
+      }
+    }
+  }
+
+  private removeJoinTokensForClient(clientId: string) {
+    for (const [token, record] of this.joinTokens) {
+      if (record.clientId === clientId) {
+        this.joinTokens.delete(token);
+      }
+    }
+  }
+
+  private trimJoinTokens() {
+    if (this.joinTokens.size <= MAX_JOIN_TOKENS) return;
+    const newestTokens = new Set(
+      Array.from(this.joinTokens.values())
+        .sort((a, b) => (b.expiresAt ?? Number.MAX_SAFE_INTEGER) - (a.expiresAt ?? Number.MAX_SAFE_INTEGER))
+        .slice(0, MAX_JOIN_TOKENS)
+        .map((record) => record.token),
+    );
+    for (const token of this.joinTokens.keys()) {
+      if (!newestTokens.has(token)) {
         this.joinTokens.delete(token);
       }
     }

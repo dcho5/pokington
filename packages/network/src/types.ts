@@ -37,6 +37,34 @@ export interface JoinTokenResponse {
   isCreator: boolean;
 }
 
+export type TableStatus = "creating" | "active" | "archived" | "error";
+
+export interface TableBlinds {
+  small: number;
+  big: number;
+}
+
+export interface CreateTableRequest {
+  tableName: string;
+  blinds: TableBlinds;
+  creatorClientId: string;
+  sevenTwoBountyBB?: number;
+}
+
+export interface CreateTableResponse {
+  code: string;
+  tableId: string;
+  joinUrl: string;
+  status: TableStatus;
+}
+
+export interface GetTableResponse {
+  exists: boolean;
+  status: TableStatus | null;
+  tableName: string | null;
+  blinds: TableBlinds | null;
+}
+
 export interface GameConnection<TServerMessage = PartyKitServerMessage, TGameAction = SerializedGameAction> {
   readonly status: ConnectionStatus;
   readonly clientId: string;
