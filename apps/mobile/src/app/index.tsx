@@ -58,6 +58,7 @@ export default function HomeScreen() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -85,67 +86,88 @@ export default function HomeScreen() {
     outputRange: [0, 236],
     extrapolate: "clamp",
   });
-  const heroScale = scrollY.interpolate({
-    inputRange: [0, 420],
-    outputRange: [1, 0.86],
-    extrapolate: "clamp",
-  });
+
   const panelTranslateY = scrollY.interpolate({
     inputRange: [0, 260],
     outputRange: [0, 8],
     extrapolate: "clamp",
   });
-  const launchChipSize = 92;
-  const heroChipSize = 54;
+
+  const chipRenderSize = 108;
+  const launchChipVisualSize = 92;
+  const heroChipVisualSize = 54;
+  const chipHeroScale = heroChipVisualSize / chipRenderSize;
+  const chipLaunchStartScale = launchChipVisualSize / chipRenderSize;
+
   const launchTitleSize = 34;
   const launchChipCenterY = height * 0.5 - 26;
   const launchTitleCenterY = height * 0.5 + 53;
+
   const measuredHeaderX = (firstSceneLayout?.x ?? 18) + (headerLayout?.x ?? 0);
   const measuredHeaderY = (firstSceneLayout?.y ?? contentInset.paddingTop) + (headerLayout?.y ?? 0);
+
   const finalChipCenterX = brandChipLayout
     ? measuredHeaderX + brandChipLayout.x + brandChipLayout.width / 2
     : width / 2 + Math.min(150, width * 0.36);
+
   const finalChipCenterY = brandChipLayout
     ? measuredHeaderY + brandChipLayout.y + brandChipLayout.height / 2
     : contentInset.paddingTop + firstSceneMinHeight / 2;
+
   const finalBrandCenterX = brandLayout
     ? measuredHeaderX + brandLayout.x + brandLayout.width / 2
     : width / 2 - 42;
+
   const finalBrandCenterY = brandLayout
     ? measuredHeaderY + brandLayout.y + brandLayout.height / 2
     : contentInset.paddingTop + firstSceneMinHeight / 2;
+
   const logoLayoutReady = !!firstSceneLayout && !!headerLayout && !!brandLayout && !!brandChipLayout;
+
   const brandLaunchTranslateX = launchProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [width / 2 - finalBrandCenterX, 0],
   });
+
   const brandLaunchTranslateY = launchProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [launchTitleCenterY - finalBrandCenterY, 0],
   });
+
   const brandLaunchScale = launchProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [launchTitleSize / 52, 1],
   });
+
   const chipLaunchTranslateX = launchProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [width / 2 - finalChipCenterX, 0],
   });
+
   const chipLaunchTranslateY = launchProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [launchChipCenterY - finalChipCenterY, 0],
   });
+
   const chipLaunchScale = launchProgress.interpolate({
-    inputRange: [0, 0.72, 1],
-    outputRange: [1, launchChipSize / 90, heroChipSize / launchChipSize],
+    inputRange: [0, 1],
+    outputRange: [chipLaunchStartScale, chipHeroScale],
   });
+
   const panelIntroOpacity = menuIntroProgress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
   });
+
   const panelIntroTranslateY = menuIntroProgress.interpolate({
-    inputRange: [0, 1],
+    inputRange: [0, 0.4],
     outputRange: [18, 0],
+  });
+
+  const createPanelCatchupTranslateY = scrollY.interpolate({
+    inputRange: [0, 510],
+    outputRange: [144, 0],
+    extrapolate: "clamp",
   });
 
   useEffect(() => {
@@ -190,12 +212,15 @@ export default function HomeScreen() {
     try {
       const creatorClientId = await getOrCreateNativeClientId(AsyncStorage);
       const blinds = BLIND_CENTS[blindIdx] ?? BLIND_CENTS[0];
-      const response = await createNativeTable({
-        tableName: tableName.trim(),
-        blinds,
-        creatorClientId,
-        sevenTwoBountyBB: BOUNTY_VALUES[bountyIdx],
-      }, { explicitHost: env.partyKitHost, requestHostname });
+      const response = await createNativeTable(
+        {
+          tableName: tableName.trim(),
+          blinds,
+          creatorClientId,
+          sevenTwoBountyBB: BOUNTY_VALUES[bountyIdx],
+        },
+        { explicitHost: env.partyKitHost, requestHostname },
+      );
       navigateToTable(response.code);
     } catch (error) {
       setCreateError(mapCreateError(error));
@@ -244,8 +269,8 @@ export default function HomeScreen() {
             setTableCode(value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase());
             if (joinError) setJoinError(null);
           }}
-          onSubmitEditing={handleJoin}
-          returnKeyType="go"
+          returnKeyType="done"
+          blurOnSubmit
           placeholder="Table code"
           autoCapitalize="characters"
           maxLength={6}
@@ -271,10 +296,9 @@ export default function HomeScreen() {
           contentContainerStyle={[styles.content, contentInset]}
           keyboardDismissMode="interactive"
           keyboardShouldPersistTaps="handled"
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-            { useNativeDriver: true },
-          )}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+          })}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           style={styles.scroller}
@@ -285,7 +309,13 @@ export default function HomeScreen() {
           >
             <Animated.View
               onLayout={(event) => setHeaderLayout(event.nativeEvent.layout)}
-              style={[styles.header, { transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }]}
+              style={[
+                styles.header,
+                {
+                  opacity: logoLayoutReady ? 1 : 0,
+                  transform: [{ translateY: heroTranslateY }],
+                },
+              ]}
             >
               <Animated.Text
                 onLayout={(event) => setBrandLayout(event.nativeEvent.layout)}
@@ -305,17 +335,28 @@ export default function HomeScreen() {
               <Animated.View
                 onLayout={(event) => setBrandChipLayout(event.nativeEvent.layout)}
                 style={[
-                  styles.brandChip,
+                  styles.brandChipSlot,
                   {
                     transform: [
                       { translateX: chipLaunchTranslateX },
                       { translateY: chipLaunchTranslateY },
-                      { scale: chipLaunchScale },
                     ],
                   },
                 ]}
               >
-                <NativePokerChip size={launchChipSize} />
+                <Animated.View
+                  style={[
+                    styles.brandChipInner,
+                    {
+                      width: chipRenderSize,
+                      height: chipRenderSize,
+                      transform: [{ scale: chipLaunchScale }],
+                    },
+                  ]}
+                  renderToHardwareTextureAndroid
+                >
+                  <NativePokerChip size={chipRenderSize} />
+                </Animated.View>
               </Animated.View>
             </Animated.View>
           </View>
@@ -332,47 +373,53 @@ export default function HomeScreen() {
           >
             <View style={styles.swipeHandle} />
             {renderJoinPanel()}
-            <View style={styles.createSection}>
-              <View style={styles.joinHeader}>
-                <View>
-                  <Text style={styles.sectionTitle}>Create</Text>
-                  <Text style={styles.sectionSubtitle}>Set stakes, create, share link.</Text>
+            <Animated.View
+              style={{
+                transform: [{ translateY: createPanelCatchupTranslateY }],
+              }}
+            >
+              <View style={styles.createSection}>
+                <View style={styles.joinHeader}>
+                  <View>
+                    <Text style={styles.sectionTitle}>Create</Text>
+                    <Text style={styles.sectionSubtitle}>Set stakes, create, share link.</Text>
+                  </View>
+                  <Text style={styles.codeLabel}>New</Text>
                 </View>
-                <Text style={styles.codeLabel}>New</Text>
+
+                <NativeTextField
+                  label=""
+                  value={tableName}
+                  onChangeText={setTableName}
+                  onFocus={() => {
+                    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+                  }}
+                  returnKeyType="done"
+                  blurOnSubmit
+                  placeholder="Table name"
+                  autoCapitalize="none"
+                />
+
+                <View style={styles.selectorBlock}>
+                  <Text style={styles.selectorLabel}>Blinds</Text>
+                  <NativeOptionSelector compact options={BLIND_OPTIONS} value={blindIdx} onChange={setBlindIdx} />
+                </View>
+
+                <View style={styles.selectorBlock}>
+                  <Text style={styles.selectorLabel}>Bounty</Text>
+                  <NativeOptionSelector compact options={BOUNTY_OPTIONS} value={bountyIdx} onChange={setBountyIdx} />
+                </View>
+
+                <NativeButton
+                  label={isCreating ? "Creating..." : "Create Table"}
+                  loading={isCreating}
+                  disabled={isCreating}
+                  onPress={handleCreate}
+                  style={styles.createButton}
+                />
+                {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
               </View>
-
-              <NativeTextField
-                label=""
-                value={tableName}
-                onChangeText={setTableName}
-                onFocus={() => {
-                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
-                }}
-                returnKeyType="done"
-                blurOnSubmit
-                placeholder="Table name"
-                autoCapitalize="none"
-              />
-
-              <View style={styles.selectorBlock}>
-                <Text style={styles.selectorLabel}>Blinds</Text>
-                <NativeOptionSelector compact options={BLIND_OPTIONS} value={blindIdx} onChange={setBlindIdx} />
-              </View>
-
-              <View style={styles.selectorBlock}>
-                <Text style={styles.selectorLabel}>Bounty</Text>
-                <NativeOptionSelector compact options={BOUNTY_OPTIONS} value={bountyIdx} onChange={setBountyIdx} />
-              </View>
-
-              <NativeButton
-                label={isCreating ? "Creating..." : "Create Table"}
-                loading={isCreating}
-                disabled={isCreating}
-                onPress={handleCreate}
-                style={styles.createButton}
-              />
-              {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
-            </View>
+            </Animated.View>
           </Animated.View>
         </Animated.ScrollView>
       </KeyboardAvoidingView>
@@ -413,10 +460,17 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     lineHeight: 58,
   },
-  brandChip: {
-    width: 92,
-    height: 92,
-    marginHorizontal: (54 - 92) / 2,
+  brandChipSlot: {
+    width: 54,
+    height: 54,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  brandChipInner: {
+    position: "absolute",
+    alignItems: "center",
+    justifyContent: "center",
   },
   finalPanelStack: {
     gap: 20,
