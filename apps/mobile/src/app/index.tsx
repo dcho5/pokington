@@ -17,12 +17,14 @@ import { router } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
+  Easing,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  type LayoutRectangle,
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -43,7 +45,11 @@ function mapJoinError(error: unknown) {
 }
 
 export default function HomeScreen() {
-  const [showLaunch, setShowLaunch] = useState(true);
+  const [isLaunchActive, setIsLaunchActive] = useState(true);
+  const [firstSceneLayout, setFirstSceneLayout] = useState<LayoutRectangle | null>(null);
+  const [headerLayout, setHeaderLayout] = useState<LayoutRectangle | null>(null);
+  const [brandLayout, setBrandLayout] = useState<LayoutRectangle | null>(null);
+  const [brandChipLayout, setBrandChipLayout] = useState<LayoutRectangle | null>(null);
   const [blindIdx, setBlindIdx] = useState(0);
   const [bountyIdx, setBountyIdx] = useState(0);
   const [tableName, setTableName] = useState("");
@@ -53,10 +59,12 @@ export default function HomeScreen() {
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
-  const { height } = useWindowDimensions();
+  const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
+  const launchProgress = useRef(new Animated.Value(0)).current;
+  const menuIntroProgress = useRef(new Animated.Value(0)).current;
 
   const contentInset = useMemo(
     () => ({
@@ -87,11 +95,90 @@ export default function HomeScreen() {
     outputRange: [0, 8],
     extrapolate: "clamp",
   });
+  const launchChipSize = 92;
+  const heroChipSize = 54;
+  const launchTitleSize = 34;
+  const launchChipCenterY = height * 0.5 - 26;
+  const launchTitleCenterY = height * 0.5 + 53;
+  const measuredHeaderX = (firstSceneLayout?.x ?? 18) + (headerLayout?.x ?? 0);
+  const measuredHeaderY = (firstSceneLayout?.y ?? contentInset.paddingTop) + (headerLayout?.y ?? 0);
+  const finalChipCenterX = brandChipLayout
+    ? measuredHeaderX + brandChipLayout.x + brandChipLayout.width / 2
+    : width / 2 + Math.min(150, width * 0.36);
+  const finalChipCenterY = brandChipLayout
+    ? measuredHeaderY + brandChipLayout.y + brandChipLayout.height / 2
+    : contentInset.paddingTop + firstSceneMinHeight / 2;
+  const finalBrandCenterX = brandLayout
+    ? measuredHeaderX + brandLayout.x + brandLayout.width / 2
+    : width / 2 - 42;
+  const finalBrandCenterY = brandLayout
+    ? measuredHeaderY + brandLayout.y + brandLayout.height / 2
+    : contentInset.paddingTop + firstSceneMinHeight / 2;
+  const logoLayoutReady = !!firstSceneLayout && !!headerLayout && !!brandLayout && !!brandChipLayout;
+  const brandLaunchTranslateX = launchProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [width / 2 - finalBrandCenterX, 0],
+  });
+  const brandLaunchTranslateY = launchProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [launchTitleCenterY - finalBrandCenterY, 0],
+  });
+  const brandLaunchScale = launchProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [launchTitleSize / 52, 1],
+  });
+  const chipLaunchTranslateX = launchProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [width / 2 - finalChipCenterX, 0],
+  });
+  const chipLaunchTranslateY = launchProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [launchChipCenterY - finalChipCenterY, 0],
+  });
+  const chipLaunchScale = launchProgress.interpolate({
+    inputRange: [0, 0.72, 1],
+    outputRange: [1, launchChipSize / 90, heroChipSize / launchChipSize],
+  });
+  const panelIntroOpacity = menuIntroProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const panelIntroTranslateY = menuIntroProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [18, 0],
+  });
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowLaunch(false), 1050);
-    return () => clearTimeout(timer);
-  }, []);
+    if (!logoLayoutReady) return undefined;
+
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(launchProgress, {
+          toValue: 1,
+          duration: 860,
+          easing: Easing.bezier(0.16, 1, 0.3, 1),
+          useNativeDriver: true,
+        }),
+        Animated.sequence([
+          Animated.delay(690),
+          Animated.timing(menuIntroProgress, {
+            toValue: 1,
+            duration: 260,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]).start(({ finished }) => {
+        if (finished) setIsLaunchActive(false);
+      });
+    }, 620);
+
+    return () => {
+      clearTimeout(timer);
+      launchProgress.stopAnimation();
+      menuIntroProgress.stopAnimation();
+    };
+  }, [launchProgress, logoLayoutReady, menuIntroProgress]);
 
   const navigateToTable = useCallback((code: string) => {
     router.push(`/table/${encodeURIComponent(code.toUpperCase())}` as never);
@@ -176,15 +263,6 @@ export default function HomeScreen() {
     </View>
   );
 
-  if (showLaunch) {
-    return (
-      <SafeAreaView style={styles.launchScreen}>
-        <NativePokerChip size={92} />
-        <Text style={styles.launchTitle}>Pokington</Text>
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboard}>
@@ -201,14 +279,57 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           style={styles.scroller}
         >
-          <View style={[styles.firstScene, { minHeight: firstSceneMinHeight }]}>
-            <Animated.View style={[styles.header, { transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }]}>
-              <Text style={styles.brand}>Pokington</Text>
-              <NativePokerChip size={54} />
+          <View
+            onLayout={(event) => setFirstSceneLayout(event.nativeEvent.layout)}
+            style={[styles.firstScene, { minHeight: firstSceneMinHeight }]}
+          >
+            <Animated.View
+              onLayout={(event) => setHeaderLayout(event.nativeEvent.layout)}
+              style={[styles.header, { transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }]}
+            >
+              <Animated.Text
+                onLayout={(event) => setBrandLayout(event.nativeEvent.layout)}
+                style={[
+                  styles.brand,
+                  {
+                    transform: [
+                      { translateX: brandLaunchTranslateX },
+                      { translateY: brandLaunchTranslateY },
+                      { scale: brandLaunchScale },
+                    ],
+                  },
+                ]}
+              >
+                Pokington
+              </Animated.Text>
+              <Animated.View
+                onLayout={(event) => setBrandChipLayout(event.nativeEvent.layout)}
+                style={[
+                  styles.brandChip,
+                  {
+                    transform: [
+                      { translateX: chipLaunchTranslateX },
+                      { translateY: chipLaunchTranslateY },
+                      { scale: chipLaunchScale },
+                    ],
+                  },
+                ]}
+              >
+                <NativePokerChip size={launchChipSize} />
+              </Animated.View>
             </Animated.View>
           </View>
 
-          <Animated.View style={[styles.finalPanelStack, { transform: [{ translateY: panelTranslateY }] }]}>
+          <Animated.View
+            pointerEvents={isLaunchActive ? "none" : "auto"}
+            style={[
+              styles.finalPanelStack,
+              {
+                opacity: panelIntroOpacity,
+                transform: [{ translateY: panelTranslateY }, { translateY: panelIntroTranslateY }],
+              },
+            ]}
+          >
             <View style={styles.swipeHandle} />
             {renderJoinPanel()}
             <View style={styles.createSection}>
@@ -264,18 +385,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: nativeLightTheme.colors.background,
   },
-  launchScreen: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    backgroundColor: nativeLightTheme.colors.background,
-  },
-  launchTitle: {
-    color: nativeLightTheme.colors.text,
-    fontSize: 34,
-    fontWeight: "900",
-  },
   keyboard: {
     flex: 1,
   },
@@ -303,6 +412,11 @@ const styles = StyleSheet.create({
     fontSize: 52,
     fontWeight: "900",
     lineHeight: 58,
+  },
+  brandChip: {
+    width: 92,
+    height: 92,
+    marginHorizontal: (54 - 92) / 2,
   },
   finalPanelStack: {
     gap: 20,
