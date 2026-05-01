@@ -19,7 +19,6 @@ import { nativeThemeStyles } from "../../theme/stylesheet";
 
 type Tone = "primary" | "secondary" | "danger";
 
-const DEFAULT_CHIP_GLOW_ANGLE = -45;
 const CHIP_ROTATE_RANGE = 1080;
 
 function getShortestAngleDelta(targetAngle: number, currentAngle: number) {
@@ -151,7 +150,7 @@ function isRedSuit(card: Card | null | undefined): boolean {
 export function NativePokerChip({
   size = 38,
   animated = true,
-  glowAngle = DEFAULT_CHIP_GLOW_ANGLE,
+  glowAngle = 0,
 }: {
   size?: number;
   animated?: boolean;

@@ -25,7 +25,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { getExpoRequestHostname } from "../lib/nativePartyHost";
 
 function mapCreateError(error: unknown) {
@@ -54,30 +54,37 @@ export default function HomeScreen() {
   const [isJoining, setIsJoining] = useState(false);
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
   const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const contentInset = useMemo(
     () => ({
-      paddingTop: Math.max(72, Math.min(126, height * 0.15)),
-      paddingBottom: Math.max(32, height * 0.16),
+      paddingTop: Math.max(18, height * 0.03),
+      paddingBottom: Math.max(34, insets.bottom + 24),
     }),
-    [height],
+    [height, insets.bottom],
+  );
+
+  const initialJoinReserve = Math.max(214, height * 0.24);
+  const firstSceneMinHeight = Math.max(
+    420,
+    height - contentInset.paddingTop - contentInset.paddingBottom - initialJoinReserve,
   );
 
   const heroTranslateY = scrollY.interpolate({
-    inputRange: [0, 220],
-    outputRange: [0, 44],
+    inputRange: [0, 420],
+    outputRange: [0, 236],
     extrapolate: "clamp",
   });
   const heroScale = scrollY.interpolate({
-    inputRange: [0, 220],
-    outputRange: [1, 0.96],
+    inputRange: [0, 420],
+    outputRange: [1, 0.86],
     extrapolate: "clamp",
   });
   const panelTranslateY = scrollY.interpolate({
-    inputRange: [0, 220],
-    outputRange: [0, 18],
+    inputRange: [0, 260],
+    outputRange: [0, 8],
     extrapolate: "clamp",
   });
 
@@ -132,6 +139,43 @@ export default function HomeScreen() {
     }
   }, [navigateToTable, requestHostname, tableCode]);
 
+  const renderJoinPanel = () => (
+    <View style={styles.joinSection}>
+      <View style={styles.joinHeader}>
+        <View>
+          <Text style={styles.joinTitle}>Join</Text>
+          <Text style={styles.joinSubtitle}>Enter a 6-character code.</Text>
+        </View>
+        <Text style={styles.codeLabel}>Code</Text>
+      </View>
+      <View style={styles.joinRow}>
+        <NativeTextField
+          label=""
+          containerStyle={styles.codeField}
+          value={tableCode}
+          onChangeText={(value: string) => {
+            setTableCode(value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase());
+            if (joinError) setJoinError(null);
+          }}
+          onSubmitEditing={handleJoin}
+          returnKeyType="go"
+          placeholder="Table code"
+          autoCapitalize="characters"
+          maxLength={6}
+          style={styles.codeInput}
+        />
+        <NativeButton
+          label={isJoining ? "..." : "Join"}
+          disabled={isJoining}
+          loading={isJoining}
+          onPress={handleJoin}
+          style={styles.joinButton}
+        />
+      </View>
+      {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
+    </View>
+  );
+
   if (showLaunch) {
     return (
       <SafeAreaView style={styles.launchScreen}>
@@ -157,24 +201,34 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
           style={styles.scroller}
         >
-          <Animated.View style={[styles.header, { transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }]}>
-            <Text style={styles.brand}>Pokington</Text>
-            <NativePokerChip size={40} />
-          </Animated.View>
+          <View style={[styles.firstScene, { minHeight: firstSceneMinHeight }]}>
+            <Animated.View style={[styles.header, { transform: [{ translateY: heroTranslateY }, { scale: heroScale }] }]}>
+              <Text style={styles.brand}>Pokington</Text>
+              <NativePokerChip size={54} />
+            </Animated.View>
+          </View>
 
-          <Animated.View style={[styles.panelStack, { transform: [{ translateY: panelTranslateY }] }]}>
+          <Animated.View style={[styles.finalPanelStack, { transform: [{ translateY: panelTranslateY }] }]}>
             <View style={styles.swipeHandle} />
+            {renderJoinPanel()}
             <View style={styles.createSection}>
-              <View>
-                <Text style={styles.sectionTitle}>Create</Text>
+              <View style={styles.joinHeader}>
+                <View>
+                  <Text style={styles.sectionTitle}>Create</Text>
+                  <Text style={styles.sectionSubtitle}>Set stakes, create, share link.</Text>
+                </View>
+                <Text style={styles.codeLabel}>New</Text>
               </View>
 
               <NativeTextField
                 label=""
                 value={tableName}
                 onChangeText={setTableName}
-                onSubmitEditing={handleCreate}
-                returnKeyType="go"
+                onFocus={() => {
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+                }}
+                returnKeyType="done"
+                blurOnSubmit
                 placeholder="Table name"
                 autoCapitalize="none"
               />
@@ -197,44 +251,6 @@ export default function HomeScreen() {
                 style={styles.createButton}
               />
               {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
-            </View>
-
-            <View style={styles.joinSection}>
-              <View style={styles.joinHeader}>
-                <View>
-                  <Text style={styles.joinTitle}>Join</Text>
-                  <Text style={styles.joinSubtitle}>Enter a 6-character code.</Text>
-                </View>
-                <Text style={styles.codeLabel}>Code</Text>
-              </View>
-              <View style={styles.joinRow}>
-                <NativeTextField
-                  label=""
-                  containerStyle={styles.codeField}
-                  value={tableCode}
-                  onChangeText={(value: string) => {
-                    setTableCode(value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase());
-                    if (joinError) setJoinError(null);
-                  }}
-                  onSubmitEditing={handleJoin}
-                  onFocus={() => {
-                    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
-                  }}
-                  returnKeyType="go"
-                  placeholder="Table code"
-                  autoCapitalize="characters"
-                  maxLength={6}
-                  style={styles.codeInput}
-                />
-                <NativeButton
-                  label={isJoining ? "..." : "Join"}
-                  disabled={isJoining}
-                  loading={isJoining}
-                  onPress={handleJoin}
-                  style={styles.joinButton}
-                />
-              </View>
-              {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
             </View>
           </Animated.View>
         </Animated.ScrollView>
@@ -269,10 +285,14 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
     paddingHorizontal: 18,
-    gap: 18,
+    gap: 16,
+  },
+  firstScene: {
+    justifyContent: "center",
   },
   header: {
-    minHeight: 84,
+    flex: 1,
+    minHeight: 260,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -280,12 +300,12 @@ const styles = StyleSheet.create({
   },
   brand: {
     color: nativeLightTheme.colors.text,
-    fontSize: 42,
+    fontSize: 52,
     fontWeight: "900",
-    lineHeight: 48,
+    lineHeight: 58,
   },
-  panelStack: {
-    gap: 14,
+  finalPanelStack: {
+    gap: 20,
   },
   swipeHandle: {
     alignSelf: "center",
@@ -299,8 +319,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: nativeLightTheme.colors.border,
     backgroundColor: "rgba(255,255,255,0.96)",
-    padding: 12,
-    gap: 9,
+    padding: 16,
+    gap: 12,
     ...nativeLightTheme.shadow.surface,
   },
   sectionTitle: {
@@ -308,8 +328,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "900",
   },
+  sectionSubtitle: {
+    marginTop: 4,
+    color: nativeLightTheme.colors.muted,
+    fontSize: 13,
+    fontWeight: "800",
+  },
   selectorBlock: {
-    gap: 4,
+    gap: 6,
   },
   selectorLabel: {
     color: nativeLightTheme.colors.muted,
@@ -323,13 +349,13 @@ const styles = StyleSheet.create({
     borderRadius: 18,
   },
   joinSection: {
-    gap: 10,
-    borderRadius: 22,
+    gap: 12,
+    borderRadius: 26,
     borderWidth: 1,
     borderColor: nativeLightTheme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.88)",
-    padding: 12,
-    ...nativeLightTheme.shadow.soft,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    padding: 16,
+    ...nativeLightTheme.shadow.surface,
   },
   joinHeader: {
     flexDirection: "row",
