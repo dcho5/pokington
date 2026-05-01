@@ -21,6 +21,32 @@ type Tone = "primary" | "secondary" | "danger";
 
 const CHIP_ROTATE_RANGE = 1080;
 
+const CHIP_BODY_LAYERS = [
+  { scale: 1, color: "#7f1d1d", opacity: 1 },
+  { scale: 0.94, color: "#8b2222", opacity: 0.78 },
+  { scale: 0.86, color: "#972626", opacity: 0.58 },
+  { scale: 0.76, color: "#a52a2a", opacity: 0.44 },
+  { scale: 0.64, color: "#b22b2b", opacity: 0.34 },
+  { scale: 0.5, color: "#ba2929", opacity: 0.25 },
+  { scale: 0.34, color: "#be1c1c", opacity: 0.16 },
+] as const;
+
+const CHIP_GLINT_LAYERS = [
+  { scale: 1, opacity: 0.08 },
+  { scale: 0.84, opacity: 0.11 },
+  { scale: 0.68, opacity: 0.14 },
+  { scale: 0.52, opacity: 0.17 },
+  { scale: 0.36, opacity: 0.2 },
+  { scale: 0.22, opacity: 0.24 },
+] as const;
+
+const CHIP_HALO_LAYERS = [
+  { scale: 0.96, opacity: 0.06 },
+  { scale: 0.78, opacity: 0.08 },
+  { scale: 0.6, opacity: 0.08 },
+  { scale: 0.42, opacity: 0.05 },
+] as const;
+
 function getShortestAngleDelta(targetAngle: number, currentAngle: number) {
   const delta = ((targetAngle - currentAngle + 540) % 360) - 180;
   return delta === -180 ? 180 : delta;
@@ -158,13 +184,9 @@ export function NativePokerChip({
 }) {
   const rim = Math.round(size * 0.96);
   const body = Math.round(size * 0.8);
-  const bodyCenter = Math.round(size * 0.62);
-  const bodyHotspot = Math.round(size * 0.24);
   const inner = Math.round(size * 0.68);
   const ring = Math.round(size * 0.7);
   const glint = Math.round(size * 0.46);
-  const glintMid = Math.round(glint * 0.62);
-  const glintCore = Math.round(glint * 0.34);
   const glintLeft = body * 0.65 - glint / 2;
   const glintTop = body * 0.3125 - glint / 2;
   const pulse = useRef(new Animated.Value(0)).current;
@@ -273,81 +295,117 @@ export function NativePokerChip({
           style={[
             styles.chipHalo,
             {
-              width: rim,
-              height: rim,
-              borderRadius: rim / 2,
-              left: (size - rim) / 2,
-              top: (size - rim) / 2,
+              width: size,
+              height: size,
               opacity: animated ? haloOpacity : 0.8,
               transform: [{ scale: animated ? haloScale : 1 }],
             },
           ]}
-        />
-        <View style={[styles.chipRim, { width: rim, height: rim, borderRadius: rim / 2 }]}>
+        >
+          {CHIP_HALO_LAYERS.map((layer) => {
+            const layerSize = size * layer.scale;
+            return (
+              <View
+                key={layer.scale}
+                style={[
+                  styles.chipHaloLayer,
+                  {
+                    width: layerSize,
+                    height: layerSize,
+                    borderRadius: layerSize / 2,
+                    opacity: layer.opacity,
+                  },
+                ]}
+              />
+            );
+          })}
+        </Animated.View>
+
+        <Animated.View
+          style={[
+            styles.chipRim,
+            {
+              width: rim,
+              height: rim,
+              borderRadius: rim / 2,
+              transform: [{ rotate: glintRotate }],
+            },
+          ]}
+        >
           <View style={[styles.chipBody, { width: body, height: body, borderRadius: body / 2 }]}>
-            <View style={[styles.chipBodyShade, { width: bodyCenter, height: bodyCenter, borderRadius: bodyCenter / 2 }]} />
+            {CHIP_BODY_LAYERS.map((layer) => {
+              const layerSize = body * layer.scale;
+              return (
+                <View
+                  key={layer.scale}
+                  style={[
+                    styles.chipBodyLayer,
+                    {
+                      width: layerSize,
+                      height: layerSize,
+                      borderRadius: layerSize / 2,
+                      backgroundColor: layer.color,
+                      opacity: layer.opacity,
+                    },
+                  ]}
+                />
+              );
+            })}
+            <View style={[styles.chipInnerWash, { width: inner, height: inner, borderRadius: inner / 2 }]} />
             <View
               style={[
-                styles.chipBodyHotspot,
+                styles.chipRing,
                 {
-                  width: bodyHotspot,
-                  height: bodyHotspot,
-                  borderRadius: bodyHotspot / 2,
-                  top: body * 0.16,
+                  width: ring,
+                  height: ring,
+                  borderRadius: ring / 2,
+                  borderWidth: Math.max(1, size * 0.03),
                 },
               ]}
             />
-            <View style={[styles.chipInner, { width: inner, height: inner, borderRadius: inner / 2 }]} />
-            <View style={[styles.chipRing, { width: ring, height: ring, borderRadius: ring / 2 }]} />
-            <Animated.View
+            <View
               style={[
-                styles.chipGlintOrbit,
+                styles.chipGlint,
+                {
+                  width: glint,
+                  height: glint,
+                  borderRadius: glint / 2,
+                  left: glintLeft,
+                  top: glintTop,
+                },
+              ]}
+            >
+              {CHIP_GLINT_LAYERS.map((layer) => {
+                const layerSize = glint * layer.scale;
+                return (
+                  <View
+                    key={layer.scale}
+                    style={[
+                      styles.chipGlintLayer,
+                      {
+                        width: layerSize,
+                        height: layerSize,
+                        borderRadius: layerSize / 2,
+                        opacity: layer.opacity,
+                      },
+                    ]}
+                  />
+                );
+              })}
+            </View>
+            <View
+              style={[
+                styles.chipEdgeShade,
                 {
                   width: body,
                   height: body,
                   borderRadius: body / 2,
-                  transform: [{ rotate: glintRotate }],
+                  borderWidth: Math.max(1, size * 0.035),
                 },
               ]}
-            >
-              <View
-                style={[
-                  styles.chipGlint,
-                  {
-                    width: glint,
-                    height: glint,
-                    borderRadius: glint / 2,
-                    left: glintLeft,
-                    top: glintTop,
-                  },
-                ]}
-              >
-                <View
-                  style={[
-                    styles.chipGlintMid,
-                    {
-                      width: glintMid,
-                      height: glintMid,
-                      borderRadius: glintMid / 2,
-                    },
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.chipGlintCore,
-                      {
-                        width: glintCore,
-                        height: glintCore,
-                        borderRadius: glintCore / 2,
-                      },
-                    ]}
-                  />
-                </View>
-              </View>
-            </Animated.View>
-            <View style={[styles.chipCoreShade, { width: body, height: body, borderRadius: body / 2 }]} />
+            />
           </View>
-        </View>
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -713,7 +771,10 @@ const styles = StyleSheet.create({
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(190,28,28,0.25)",
+  },
+  chipHaloLayer: {
+    position: "absolute",
+    backgroundColor: "#be1c1c",
   },
   chipRim: {
     alignItems: "center",
@@ -727,48 +788,30 @@ const styles = StyleSheet.create({
     backgroundColor: "#7f1d1d",
     overflow: "hidden",
   },
-  chipBodyShade: {
+  chipBodyLayer: {
     position: "absolute",
-    backgroundColor: "#be1c1c",
-    opacity: 0.62,
   },
-  chipBodyHotspot: {
+  chipInnerWash: {
     position: "absolute",
-    backgroundColor: "rgba(255,255,255,0.14)",
-  },
-  chipInner: {
-    position: "absolute",
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "#ffffff",
+    opacity: 0.08,
   },
   chipRing: {
     position: "absolute",
-    borderWidth: 2,
     borderColor: "rgba(255,255,255,0.18)",
-    backgroundColor: "transparent",
-  },
-  chipGlintOrbit: {
-    position: "absolute",
-    left: 0,
-    top: 0,
   },
   chipGlint: {
     position: "absolute",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
   },
-  chipGlintMid: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.14)",
-  },
-  chipGlintCore: {
-    backgroundColor: "rgba(255,255,255,0.25)",
-  },
-  chipCoreShade: {
+  chipGlintLayer: {
     position: "absolute",
-    borderWidth: 3,
-    borderColor: "rgba(127,29,29,0.36)",
+    backgroundColor: "#ffffff",
+  },
+  chipEdgeShade: {
+    position: "absolute",
+    borderColor: "rgba(127,29,29,0.34)",
   },
   optionGrid: {
     flexDirection: "row",

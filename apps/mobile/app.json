@@ -8,7 +8,7 @@
     "scheme": "pokington",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "requireFullScreen": true,
       "bundleIdentifier": "com.anonymous.pokington-mobile"
     },
