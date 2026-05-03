@@ -7,7 +7,6 @@ import {
   type PartyKitServerMessage,
 } from "@pokington/network";
 import {
-  CommunityBoard,
   NativeBottomSheet,
   NativeButton,
   NativePokerChip,
@@ -28,6 +27,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AppState,
   Pressable,
+  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -43,6 +43,8 @@ import OpponentStrip from "../../components/Table/OpponentStrip";
 import type { TablePlayer } from "../../components/Table/PlayerBubble";
 import HandPanel from "../../components/Table/HandPanel";
 import FooterStatusBanner from "../../components/Table/FooterStatusBanner";
+import OpponentDetailSheet from "../../components/Table/OpponentDetailSheet";
+import CommunityCards from "../../components/Table/CommunityCards";
 
 const PROTOCOL_VERSION = 4;
 const MAX_SEATS = 10;
@@ -103,6 +105,10 @@ interface PublicTableState {
   runItVotes?: Record<string, 1 | 2 | 3>;
   runCount?: 1 | 2 | 3;
   runResults?: RunResult[];
+  runDealStartedAt?: number | null;
+  runAnnouncement?: 1 | 2 | 3 | null;
+  knownCardCount?: number;
+  isRunItBoard?: boolean;
   isBombPot?: boolean;
   bombPotVote?: {
     anteBB: BombPotAnteBB;
@@ -265,6 +271,9 @@ export default function TableScreen() {
   const [buyIn, setBuyIn] = useState(String(DEFAULT_BUY_IN_CENTS / 100));
   const [raiseTotal, setRaiseTotal] = useState("");
   const [autoPeelEnabled, setAutoPeelEnabled] = useState(false);
+  const [detailSeatIndex, setDetailSeatIndex] = useState<number | null>(null);
+  const [activeBombPotBoard, setActiveBombPotBoard] = useState(0);
+  const [viewingRun, setViewingRun] = useState(0);
   const [utilityRailLayout, setUtilityRailLayout] = useState<LayoutRect | null>(null);
   const [utilityChipLayout, setUtilityChipLayout] = useState<LayoutRect | null>(null);
   const seenFeedbackKeysRef = useRef(new Set<string>());
@@ -341,6 +350,8 @@ export default function TableScreen() {
   const tablePlayers = useMemo<TablePlayer[]>(() => {
     if (!tableState) return [];
     const actorId = tableState.needsToAct[0] ?? null;
+    const winnerIds = new Set(tableState.winners?.map((w) => w.playerId) ?? []);
+    const isMultiWinner = (tableState.winners?.length ?? 0) > 1;
     return Object.values(tableState.players)
       .sort((a, b) => a.seatIndex - b.seatIndex)
       .map((player) => ({
@@ -356,8 +367,16 @@ export default function TableScreen() {
         isViewer: myPlayerId === player.id,
         hasCards: player.hasCards,
         lastAction: player.lastAction ?? null,
+        peekedCount: peekedCounts[player.id] ?? 0,
+        holeCards: (revealedHoleCards[player.id] ?? null) as [Card | null, Card | null] | null,
+        winType: winnerIds.has(player.id)
+          ? (isMultiWinner ? "partial" : "full")
+          : null,
+        winAnimationKey: winnerIds.has(player.id)
+          ? `${tableState.handNumber}:${player.id}`
+          : null,
       }));
-  }, [awayPlayerIds, myPlayerId, tableState]);
+  }, [awayPlayerIds, myPlayerId, tableState, peekedCounts, revealedHoleCards]);
 
   // Seat-indexed player slots for OpponentStrip (null = empty seat)
   const seatPlayers = useMemo(() => {
@@ -419,11 +438,6 @@ export default function TableScreen() {
   const tablePot = (tableState?.pot ?? 0) + players.reduce((sum, p) => sum + p.currentBet, 0);
 
   const communityCards = tableState?.communityCards ?? [];
-  const boardSets = tableState?.isBombPot
-    ? [tableState.communityCards, tableState.communityCards2 ?? []]
-    : tableState?.runResults?.length
-      ? tableState.runResults.map((run) => run.board)
-      : [communityCards];
 
   const ledgerRows = useMemo(() => deriveLedgerRows(ledgerEntries), [ledgerEntries]);
 
@@ -553,24 +567,29 @@ export default function TableScreen() {
           bigBlindIndex={tableState?.bigBlindSeatIndex ?? null}
           seatSelectionLocked={!isWaiting && !isShowdown}
           onEmptySeatTap={openSeat}
-          onPlayerTap={() => { /* opponent detail — out of scope */ }}
+          onPlayerTap={(seatIndex) => setDetailSeatIndex(seatIndex)}
+          selectedDetailSeatIndex={detailSeatIndex}
         />
       </View>
 
       {/* ── Table stage: boards + pot + overlays ── */}
       <View style={styles.tableStage}>
-        <View style={styles.boardArea}>
-          {boardSets.slice(0, 3).map((cards, index) => (
-            <View key={`board-${index}`} style={styles.boardStack}>
-              {boardSets.length > 1 ? (
-                <Text style={styles.boardLabel}>
-                  {tableState?.isBombPot ? `Board ${index + 1}` : `Run ${index + 1}`}
-                </Text>
-              ) : null}
-              <CommunityBoard cards={cards} />
-            </View>
-          ))}
-        </View>
+        <CommunityCards
+          phase={tableState?.phase}
+          communityCards={tableState?.communityCards}
+          communityCards2={tableState?.communityCards2}
+          isBombPot={tableState?.isBombPot}
+          isRunItBoard={tableState?.isRunItBoard}
+          runResults={tableState?.runResults}
+          knownCardCount={tableState?.knownCardCount}
+          runDealStartedAt={tableState?.runDealStartedAt}
+          runAnnouncement={tableState?.runAnnouncement}
+          handNumber={tableState?.handNumber}
+          activeBombPotBoardIndex={activeBombPotBoard}
+          onActiveBoardChange={setActiveBombPotBoard}
+          viewingRunIndex={viewingRun}
+          onViewingRunChange={setViewingRun}
+        />
 
         {(tableState?.pot ?? 0) > 0 && (
           <View style={styles.potPill}>
@@ -724,15 +743,36 @@ export default function TableScreen() {
         )}
       </View>
 
+      {/* ── Opponent detail sheet ── */}
+      {(() => {
+        const detailPlayer = detailSeatIndex !== null ? (seatPlayers[detailSeatIndex] ?? null) : null;
+        return (
+          <OpponentDetailSheet
+            player={detailPlayer}
+            isDealer={tableState?.dealerSeatIndex === detailSeatIndex}
+            isSmallBlind={tableState?.smallBlindSeatIndex === detailSeatIndex}
+            isBigBlind={tableState?.bigBlindSeatIndex === detailSeatIndex}
+            onDismiss={() => setDetailSeatIndex(null)}
+          />
+        );
+      })()}
+
       {/* ── Bottom sheets ── */}
       <NativeBottomSheet visible={sheet != null} onDismiss={() => setSheet(null)}>
         {sheet === "menu" ? (
           <>
             <Text style={styles.sheetTitle}>Table Menu</Text>
-            <NativeButton label="Session Ledger" tone="secondary" onPress={() => setSheet("ledger")} />
+            <NativeButton
+              label="Share Table Code"
+              tone="secondary"
+              onPress={() => {
+                Share.share({ message: roomId });
+                playNativeFeedbackHaptic({ kind: "local_press", key: "share_code" }, { myPlayerId });
+              }}
+            />
             {viewer ? (
               <NativeButton
-                label={leaveQueued ? "Cancel Leave" : "Leave Table"}
+                label={leaveQueued ? "Cancel Leave" : "Leave Next Hand"}
                 tone="secondary"
                 onPress={() => { toggleLeave(); setSheet(null); }}
               />
@@ -829,8 +869,6 @@ export default function TableScreen() {
             <NativeButton label="Raise" onPress={confirmRaise} />
           </>
         ) : null}
-
-        <NativeButton label="Close" tone="secondary" onPress={() => setSheet(null)} />
       </NativeBottomSheet>
     </SafeAreaView>
   );
@@ -874,24 +912,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
   },
-  boardArea: {
-    width: "100%",
-    alignItems: "center",
-    justifyContent: "flex-start",
-    gap: 6,
-  },
-  boardStack: {
-    alignItems: "center",
-    gap: 4,
-  },
-  boardLabel: {
-    color: "rgba(100,116,139,0.8)",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-
   potPill: {
     minWidth: 140,
     alignItems: "center",

@@ -553,23 +553,35 @@ export function NativeBottomSheet({
   onDismiss: () => void;
   children: React.ReactNode;
 }) {
-  const translateY = useRef(new Animated.Value(34)).current;
+  const translateY = useRef(new Animated.Value(500)).current;
+  const scrimOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!visible) return;
-    translateY.setValue(34);
-    Animated.timing(translateY, {
-      toValue: 0,
-      duration: 220,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [translateY, visible]);
+    translateY.setValue(500);
+    scrimOpacity.setValue(0);
+    Animated.parallel([
+      Animated.spring(translateY, {
+        toValue: 0,
+        tension: 65,
+        friction: 11,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scrimOpacity, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [translateY, scrimOpacity, visible]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
       <View style={styles.sheetModalRoot}>
-        <Pressable style={styles.sheetScrim} onPress={onDismiss} />
+        <Animated.View style={[styles.sheetScrim, { opacity: scrimOpacity }]}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
+        </Animated.View>
         <Animated.View style={[styles.bottomSheet, { transform: [{ translateY }] }]}>
           {children}
         </Animated.View>

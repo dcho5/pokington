@@ -1,6 +1,9 @@
 "use client";
+
 import React, { useEffect } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
+
+// Internal Libs
 import { getAvatarColor, getInitials } from "lib/avatarColor";
 import { formatCents } from "@pokington/shared";
 import {
@@ -9,6 +12,8 @@ import {
 } from "lib/mobileSeatStripLayout.mjs";
 import { isFullyTabled } from "lib/showdownSpotlight";
 import { getPlayerPositionMarkers } from "lib/playerPositionMarkers.mjs";
+
+// UI Components & Types
 import { PeekEyeIcon } from "@pokington/ui/web/PeekEyeIcon";
 import type { Player } from "types/player";
 
@@ -61,7 +66,10 @@ const SUIT_SYMBOLS = {
 } as const;
 
 function getPrimaryBadgeClass(kind: string) {
-  return PRIMARY_BADGE_STYLES[kind as keyof typeof PRIMARY_BADGE_STYLES] ?? PRIMARY_BADGE_STYLES.action;
+  return (
+    PRIMARY_BADGE_STYLES[kind as keyof typeof PRIMARY_BADGE_STYLES] ??
+    PRIMARY_BADGE_STYLES.action
+  );
 }
 
 function isRedSuit(suit?: string | null) {
@@ -100,10 +108,16 @@ export default function PlayerBubble({
   useEffect(() => {
     if (!player?.winAnimationKey) return;
     if (player.winType === "full") {
-      avatarBounce.start({ scale: [1, 1.22, 0.9, 1.1, 1], transition: { duration: 0.55 } });
+      avatarBounce.start({
+        scale: [1, 1.22, 0.9, 1.1, 1],
+        transition: { duration: 0.55 },
+      });
       return;
     }
-    avatarBounce.start({ scale: [1, 1.12, 0.95, 1.04, 1], transition: { duration: 0.45 } });
+    avatarBounce.start({
+      scale: [1, 1.12, 0.95, 1.04, 1],
+      transition: { duration: 0.45 },
+    });
   }, [avatarBounce, player?.winAnimationKey, player?.winType]);
 
   if (!player) {
@@ -126,14 +140,16 @@ export default function PlayerBubble({
           whileTap={seatSelectionLocked ? undefined : { scale: 0.95 }}
           onClick={seatSelectionLocked ? undefined : onEmptyTap}
           aria-disabled={seatSelectionLocked}
-          aria-label={seatSelectionLocked
-            ? `Seat ${(emptySeatIndex ?? 0) + 1} unavailable after the game starts`
-            : `Empty seat ${(emptySeatIndex ?? 0) + 1}, tap to sit`}
+          aria-label={
+            seatSelectionLocked
+              ? `Seat ${(emptySeatIndex ?? 0) + 1} unavailable after the game starts`
+              : `Empty seat ${(emptySeatIndex ?? 0) + 1}, tap to sit`
+          }
         >
           <div
-            className={`rounded-full border-2 border-dashed flex flex-col items-center justify-center ${
+            className={`flex flex-col items-center justify-center rounded-full border-2 border-dashed ${
               seatSelectionLocked
-                ? "border-gray-400/60 dark:border-gray-600/60 bg-gray-200/25 dark:bg-gray-900/30"
+                ? "border-gray-400/60 bg-gray-200/25 dark:border-gray-600/60 dark:bg-gray-900/30"
                 : "border-gray-400 dark:border-gray-600"
             }`}
             style={{ width: avatarSize, height: avatarSize }}
@@ -160,6 +176,7 @@ export default function PlayerBubble({
     isBigBlind,
     playerCount,
   }) as Array<keyof typeof POSITION_MARKER_LABELS>;
+
   const primaryBadge = resolveMobileSeatStripPrimaryBadge({
     currentBet: player.currentBet ?? 0,
     lastAction: player.lastAction ?? undefined,
@@ -167,6 +184,7 @@ export default function PlayerBubble({
     stack: player.stack,
     isFolded,
   });
+
   const publicCards = player.holeCards ?? [null, null];
   const hasVisibleCards = Array.isArray(publicCards) && publicCards.some(Boolean);
   const hasBothPublicCards = isFullyTabled(player.holeCards);
@@ -186,7 +204,9 @@ export default function PlayerBubble({
       {hasVisibleCards && (
         <>
           {publicCards.map((card, index) => {
-            const left = (index === 0 ? -1 : 1) * MOBILE_SEAT_STRIP_METRICS.showdownCardSpreadXPx - (cardWidth / 2);
+            const left =
+              (index === 0 ? -1 : 1) * MOBILE_SEAT_STRIP_METRICS.showdownCardSpreadXPx -
+              cardWidth / 2;
             const symbol = card ? SUIT_SYMBOLS[card.suit] : "•";
             const red = isRedSuit(card?.suit);
             return (
@@ -213,22 +233,32 @@ export default function PlayerBubble({
                       red
                         ? "border-red-300 bg-white text-red-600"
                         : "border-slate-400 bg-white text-slate-900"
-                    } ${showdownCardEmphasisByIndex[index] === "dimmed" ? "opacity-45 saturate-[0.72] brightness-[0.92]" : ""}`}
+                    } ${
+                      showdownCardEmphasisByIndex[index] === "dimmed"
+                        ? "opacity-45 saturate-[0.72] brightness-[0.92]"
+                        : ""
+                    }`}
                     style={{ width: cardWidth, height: cardHeight }}
                   >
                     <span className="leading-none tracking-[-0.03em]">
-                      {displayRank(card?.rank)}{symbol}
+                      {displayRank(card?.rank)}
+                      {symbol}
                     </span>
                   </div>
                 ) : (
                   <div
-                    className={`rounded-[5px] border border-sky-100/18 shadow-[0_6px_12px_rgba(15,23,42,0.22)] ${showdownCardEmphasisByIndex[index] === "dimmed" ? "opacity-45 saturate-[0.72] brightness-[0.92]" : ""}`}
+                    className={`rounded-[5px] border border-sky-100/18 shadow-[0_6px_12px_rgba(15,23,42,0.22)] ${
+                      showdownCardEmphasisByIndex[index] === "dimmed"
+                        ? "opacity-45 saturate-[0.72] brightness-[0.92]"
+                        : ""
+                    }`}
                     style={{ width: cardWidth, height: cardHeight }}
                   >
                     <div
                       className="relative h-full w-full overflow-hidden rounded-[4px]"
                       style={{
-                        background: "linear-gradient(145deg, #1e3a5f 0%, #0f2040 50%, #1a3356 100%)",
+                        background:
+                          "linear-gradient(145deg, #1e3a5f 0%, #0f2040 50%, #1a3356 100%)",
                       }}
                     >
                       <div
@@ -281,22 +311,35 @@ export default function PlayerBubble({
         <div
           className="absolute z-30"
           style={{
-            left: -avatarRadius + MOBILE_SEAT_STRIP_METRICS.peekBadgeInsetPx + badgeOrbitOffset,
-            top: -avatarRadius + MOBILE_SEAT_STRIP_METRICS.peekBadgeInsetPx + badgeOrbitOffset,
+            left:
+              -avatarRadius +
+              MOBILE_SEAT_STRIP_METRICS.peekBadgeInsetPx +
+              badgeOrbitOffset,
+            top:
+              -avatarRadius +
+              MOBILE_SEAT_STRIP_METRICS.peekBadgeInsetPx +
+              badgeOrbitOffset,
           }}
         >
           {(() => {
             const pc = player.peekedCount ?? 0;
             const bgClass =
-              pc === 0 ? "bg-gray-700/80 border-gray-500/40" :
-              pc === 1 ? "bg-yellow-600/90 border-yellow-400/50" :
-              "bg-emerald-600/90 border-emerald-400/50";
+              pc === 0
+                ? "bg-gray-700/80 border-gray-500/40"
+                : pc === 1
+                  ? "bg-yellow-600/90 border-yellow-400/50"
+                  : "bg-emerald-600/90 border-emerald-400/50";
             return (
               <div
-                className={`rounded-full border flex items-center justify-center shadow-lg ${bgClass}`}
+                className={`flex items-center justify-center rounded-full border shadow-lg ${bgClass}`}
                 style={{ width: peekBadgeSize, height: peekBadgeSize }}
               >
-                <PeekEyeIcon count={pc} size={10} strokeWidth={2.5} className={pc === 0 ? "text-white opacity-50" : "text-white"} />
+                <PeekEyeIcon
+                  count={pc}
+                  size={10}
+                  strokeWidth={2.5}
+                  className={pc === 0 ? "text-white opacity-50" : "text-white"}
+                />
               </div>
             );
           })()}
@@ -321,74 +364,79 @@ export default function PlayerBubble({
       >
         <div className="relative h-full w-full">
           {detailSelected && (
-            <span className="absolute inset-[-4px] rounded-full pointer-events-none z-20 ring-2 ring-sky-300/85 shadow-[0_0_18px_rgba(56,189,248,0.26)]" />
+            <span className="pointer-events-none absolute inset-[-4px] z-20 rounded-full ring-2 ring-sky-300/85 shadow-[0_0_18px_rgba(56,189,248,0.26)]" />
           )}
           {player.isYou && (
-            <span className="absolute inset-[-3px] rounded-full border border-rose-300/65 shadow-[0_0_18px_rgba(244,114,182,0.18)] pointer-events-none z-10 dark:border-rose-300/28" />
+            <span className="pointer-events-none absolute inset-[-3px] z-10 rounded-full border border-rose-300/65 shadow-[0_0_18px_rgba(244,114,182,0.18)] dark:border-rose-300/28" />
           )}
           {player.isCurrentActor && (
-            <span className="absolute inset-[-3px] rounded-full pointer-events-none z-0 animate-pulse-ring" />
+            <span className="pointer-events-none absolute inset-[-3px] z-0 animate-pulse-ring rounded-full" />
           )}
           {player.winType === "full" && (
             <motion.span
-              className="absolute inset-[-6px] rounded-full pointer-events-none z-10"
+              className="pointer-events-none absolute inset-[-6px] z-10 rounded-full"
               animate={{ opacity: [0.38, 0.92, 0.38], scale: [1, 1.05, 1] }}
               transition={{ duration: 1.45, repeat: Infinity, ease: "easeInOut" }}
               style={{
                 border: "2px solid rgba(245,158,11,0.82)",
-                boxShadow: "0 0 18px rgba(245,158,11,0.72), 0 0 34px rgba(245,158,11,0.5)",
+                boxShadow:
+                  "0 0 18px rgba(245,158,11,0.72), 0 0 34px rgba(245,158,11,0.5)",
               }}
             />
           )}
           {player.winType === "partial" && (
             <motion.span
-              className="absolute inset-[-6px] rounded-full pointer-events-none z-10"
+              className="pointer-events-none absolute inset-[-6px] z-10 rounded-full"
               animate={{ opacity: [0.34, 0.82, 0.34], scale: [1, 1.04, 1] }}
               transition={{ duration: 1.3, repeat: Infinity, ease: "easeInOut" }}
               style={{
                 border: "2px solid rgba(34,197,94,0.78)",
-                boxShadow: "0 0 16px rgba(34,197,94,0.54), 0 0 30px rgba(34,197,94,0.38)",
+                boxShadow:
+                  "0 0 16px rgba(34,197,94,0.54), 0 0 30px rgba(34,197,94,0.38)",
               }}
             />
           )}
 
           <AnimatePresence>
             {player.winAnimationKey && player.winType === "full" && (
-              <motion.span
-                key={`${player.winAnimationKey}-r1`}
-                className="absolute inset-[-4px] rounded-full pointer-events-none z-20"
-                initial={{ opacity: 1, scale: 1 }}
-                animate={{ opacity: 0, scale: 1.9 }}
-                transition={{ duration: 1.15, ease: "easeOut" }}
-                style={{
-                  border: "3px solid rgba(245,158,11,0.98)",
-                  boxShadow: "0 0 18px rgba(245,158,11,0.72), 0 0 34px rgba(245,158,11,0.5)",
-                }}
-              />
-            )}
-            {player.winAnimationKey && player.winType === "full" && (
-              <motion.span
-                key={`${player.winAnimationKey}-r2`}
-                className="absolute inset-[-4px] rounded-full pointer-events-none z-20"
-                initial={{ opacity: 0.72, scale: 1 }}
-                animate={{ opacity: 0, scale: 2.35 }}
-                transition={{ duration: 1.65, ease: "easeOut", delay: 0.18 }}
-                style={{
-                  border: "2px solid rgba(245,158,11,0.72)",
-                  boxShadow: "0 0 14px rgba(245,158,11,0.48), 0 0 28px rgba(245,158,11,0.32)",
-                }}
-              />
+              <>
+                <motion.span
+                  key={`${player.winAnimationKey}-r1`}
+                  className="pointer-events-none absolute inset-[-4px] z-20 rounded-full"
+                  initial={{ opacity: 1, scale: 1 }}
+                  animate={{ opacity: 0, scale: 1.9 }}
+                  transition={{ duration: 1.15, ease: "easeOut" }}
+                  style={{
+                    border: "3px solid rgba(245,158,11,0.98)",
+                    boxShadow:
+                      "0 0 18px rgba(245,158,11,0.72), 0 0 34px rgba(245,158,11,0.5)",
+                  }}
+                />
+                <motion.span
+                  key={`${player.winAnimationKey}-r2`}
+                  className="pointer-events-none absolute inset-[-4px] z-20 rounded-full"
+                  initial={{ opacity: 0.72, scale: 1 }}
+                  animate={{ opacity: 0, scale: 2.35 }}
+                  transition={{ duration: 1.65, ease: "easeOut", delay: 0.18 }}
+                  style={{
+                    border: "2px solid rgba(245,158,11,0.72)",
+                    boxShadow:
+                      "0 0 14px rgba(245,158,11,0.48), 0 0 28px rgba(245,158,11,0.32)",
+                  }}
+                />
+              </>
             )}
             {player.winAnimationKey && player.winType === "partial" && (
               <motion.span
                 key={`${player.winAnimationKey}-r3`}
-                className="absolute inset-[-4px] rounded-full pointer-events-none z-20"
+                className="pointer-events-none absolute inset-[-4px] z-20 rounded-full"
                 initial={{ opacity: 0.92, scale: 1 }}
                 animate={{ opacity: 0, scale: 1.72 }}
                 transition={{ duration: 1.0, ease: "easeOut" }}
                 style={{
                   border: "2.5px solid rgba(34,197,94,0.96)",
-                  boxShadow: "0 0 14px rgba(34,197,94,0.44), 0 0 26px rgba(34,197,94,0.26)",
+                  boxShadow:
+                    "0 0 14px rgba(34,197,94,0.44), 0 0 26px rgba(34,197,94,0.26)",
                 }}
               />
             )}
@@ -398,17 +446,18 @@ export default function PlayerBubble({
             {runItOddsPercentage != null ? (
               <div
                 className={[
-                  "h-full w-full rounded-full flex items-center justify-center relative z-10 border text-white shadow-lg",
+                  "relative z-10 flex h-full w-full items-center justify-center rounded-full border text-white shadow-lg",
                   player.isCurrentActor ? "ring-2 ring-red-500" : "",
                 ].join(" ")}
                 style={{
-                  background: "linear-gradient(135deg, rgba(239,68,68,0.96), rgba(185,28,28,0.94))",
+                  background:
+                    "linear-gradient(135deg, rgba(239,68,68,0.96), rgba(185,28,28,0.94))",
                   borderColor: "rgba(254,226,226,0.42)",
                   boxShadow: "0 8px 20px rgba(127,29,29,0.34)",
                 }}
               >
                 <span
-                  className="font-black tabular-nums select-none leading-none tracking-[-0.02em]"
+                  className="select-none font-black leading-none tabular-nums tracking-[-0.02em]"
                   style={{ fontSize: runItOddsPercentage >= 100 ? 10 : 11 }}
                 >
                   {runItOddsPercentage.toFixed(1)}%
@@ -417,13 +466,15 @@ export default function PlayerBubble({
             ) : (
               <div
                 className={[
-                  "h-full w-full rounded-full flex items-center justify-center relative z-10",
+                  "relative z-10 flex h-full w-full items-center justify-center rounded-full",
                   player.isCurrentActor ? "ring-2 ring-red-500" : "",
                   isFolded ? "grayscale" : "",
                 ].join(" ")}
-                style={{ backgroundColor: player.isYou ? 'black' : avatarColor }}
+                style={{ backgroundColor: player.isYou ? "black" : avatarColor }}
               >
-                <span className="font-black text-white text-xs select-none">{player.isYou ? "YOU" : initials}</span>
+                <span className="select-none text-xs font-black text-white">
+                  {player.isYou ? "YOU" : initials}
+                </span>
               </div>
             )}
           </motion.div>
@@ -443,7 +494,9 @@ export default function PlayerBubble({
           transition={{ duration: 0.14 }}
         >
           <span
-            className={`inline-flex items-center justify-center rounded-full px-1.5 text-[7px] font-black leading-none shadow-[0_10px_18px_rgba(2,6,23,0.28)] ${getPrimaryBadgeClass(primaryBadge.kind)}`}
+            className={`inline-flex items-center justify-center rounded-full px-1.5 text-[7px] font-black leading-none shadow-[0_10px_18px_rgba(2,6,23,0.28)] ${getPrimaryBadgeClass(
+              primaryBadge.kind,
+            )}`}
             style={{
               height: MOBILE_SEAT_STRIP_METRICS.primaryBadgeHeightPx,
               maxWidth: MOBILE_SEAT_STRIP_METRICS.primaryBadgeMaxWidthPx,

@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { NativeCard, nativeLightTheme } from "@pokington/ui/native";
+import { NativeHoleCards, nativeLightTheme } from "@pokington/ui/native";
 import { evaluateBest } from "@pokington/engine";
 import { formatCents } from "@pokington/shared";
 import type { Card } from "@pokington/shared";
@@ -93,21 +93,20 @@ export default function HandPanel({
 
       {/* Center: hole cards */}
       <View style={styles.cardsArea}>
-        {([0, 1] as const).map((index) => {
-          const card = holeCards?.[index] ?? null;
-          return (
-            <Pressable
-              key={`hole-${index}`}
-              accessibilityRole="button"
-              accessibilityLabel={`Hole card ${index + 1}`}
-              onPress={() => onPeekCard(index)}
-              onLongPress={() => onRevealCard(index)}
-              style={styles.holeCardWrap}
-            >
-              <NativeCard card={card} hidden={!card} style={styles.holeCard} />
-            </Pressable>
-          );
-        })}
+        {holeCards ? (
+          <NativeHoleCards
+            cards={holeCards}
+            cardHeight={110}
+            autoReveal={autoPeelEnabled}
+            canRevealToOthers
+            onPeekCard={onPeekCard}
+            onRevealToOthers={onRevealCard}
+          />
+        ) : (
+          <View style={styles.noCardsWrap}>
+            <Text style={styles.noCardsText}>No cards</Text>
+          </View>
+        )}
       </View>
 
       {/* Right: hand / bet / stack */}
@@ -222,19 +221,20 @@ const styles = StyleSheet.create({
 
   cardsArea: {
     flex: 1,
-    flexDirection: "row",
-    alignItems: "stretch",
+    alignItems: "center",
     justifyContent: "center",
-    gap: 10,
   },
-  holeCardWrap: {
+  noCardsWrap: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
   },
-  holeCard: {
-    width: "100%",
-    maxWidth: 84,
+  noCardsText: {
+    color: "#6b7280",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 2,
+    textTransform: "uppercase",
   },
 
   statsCard: {

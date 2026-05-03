@@ -1,4 +1,8 @@
 export {
+  NativeHoleCards,
+  type NativeHoleCardsProps,
+} from "./components/native/NativeHoleCards";
+export {
   CommunityBoard,
   NativeBottomSheet,
   NativeButton,
