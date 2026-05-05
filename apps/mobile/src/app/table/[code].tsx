@@ -14,6 +14,7 @@ import {
   type PlayerSummary,
 } from "@pokington/ui/native";
 import { formatCents } from "@pokington/shared";
+import { LinearGradient } from "expo-linear-gradient";
 import type {
   BombPotAnteBB,
   GameEvent,
@@ -25,6 +26,7 @@ import type { Card } from "@pokington/shared";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Animated,
   AppState,
   Pressable,
   Share,
@@ -278,6 +280,7 @@ export default function TableScreen() {
   const [utilityChipLayout, setUtilityChipLayout] = useState<LayoutRect | null>(null);
   const seenFeedbackKeysRef = useRef(new Set<string>());
   const myPlayerIdRef = useRef<string | null>(null);
+  const turnGlowAnim = useRef(new Animated.Value(0)).current;
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
 
   useEffect(() => {
@@ -434,6 +437,7 @@ export default function TableScreen() {
   const canAllIn = canAct && !!viewer && viewer.stack > 0;
   const isWaiting = tableState?.phase === "waiting";
   const isShowdown = tableState?.phase === "showdown";
+  const showActiveTurnTreatment = canAct && !isWaiting && !isShowdown;
   const leaveQueued = !!myPlayerId && queuedLeavePlayerIds.includes(myPlayerId);
   const tablePot = (tableState?.pot ?? 0) + players.reduce((sum, p) => sum + p.currentBet, 0);
 
@@ -443,11 +447,46 @@ export default function TableScreen() {
 
   // Footer status: show "Waiting for X..." when it's not our turn and someone needs to act
   const footerStatusMessage = useMemo(() => {
+    if (showActiveTurnTreatment) return "Your turn";
     if (!actorId || actorId === myPlayerId) return null;
     const actorName = tablePlayers.find((p) => p.id === actorId)?.name;
     if (!actorName) return null;
     return `Waiting for ${actorName}…`;
-  }, [actorId, myPlayerId, tablePlayers]);
+  }, [actorId, myPlayerId, showActiveTurnTreatment, tablePlayers]);
+
+  useEffect(() => {
+    if (!showActiveTurnTreatment) {
+      turnGlowAnim.stopAnimation();
+      turnGlowAnim.setValue(0);
+      return;
+    }
+
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(turnGlowAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(turnGlowAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [showActiveTurnTreatment, turnGlowAnim]);
+
+  const turnWashOpacity = turnGlowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.22, 0.68],
+  });
+  const turnGlowOpacity = turnGlowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.34, 0.88],
+  });
 
   const sendEvent = useCallback((event: GameEvent, strength: "light" | "medium" | "heavy" = "light") => {
     connection?.sendAction(event);
@@ -542,6 +581,43 @@ export default function TableScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+      {showActiveTurnTreatment ? (
+        <View pointerEvents="none" style={styles.turnPerimeterLayer}>
+          <Animated.View style={[styles.turnWashLayer, { opacity: turnWashOpacity }]}>
+            <LinearGradient
+              colors={["rgba(239,68,68,0.34)", "rgba(239,68,68,0)"] as const}
+              locations={[0, 1] as const}
+              style={[styles.turnEdgeWash, styles.turnEdgeWashTop]}
+            />
+            <LinearGradient
+              colors={["rgba(239,68,68,0)", "rgba(239,68,68,0.28)"] as const}
+              locations={[0, 1] as const}
+              style={[styles.turnEdgeWash, styles.turnEdgeWashBottom]}
+            />
+            <LinearGradient
+              colors={["rgba(239,68,68,0.18)", "rgba(239,68,68,0)"] as const}
+              locations={[0, 1] as const}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={[styles.turnSideWash, styles.turnSideWashLeft]}
+            />
+            <LinearGradient
+              colors={["rgba(239,68,68,0)", "rgba(239,68,68,0.18)"] as const}
+              locations={[0, 1] as const}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={[styles.turnSideWash, styles.turnSideWashRight]}
+            />
+          </Animated.View>
+          <Animated.View style={[styles.turnGlowLayer, { opacity: turnGlowOpacity }]}>
+            <View style={[styles.turnHalo, styles.turnHaloTop]} />
+            <View style={[styles.turnHalo, styles.turnHaloBottom]} />
+            <View style={[styles.turnHaloSide, styles.turnHaloLeft]} />
+            <View style={[styles.turnHaloSide, styles.turnHaloRight]} />
+          </Animated.View>
+        </View>
+      ) : null}
+
       {/* ── Header ── */}
       <TableHeader
         tableName={tableState?.tableName ?? `Table ${roomId}`}
@@ -689,10 +765,13 @@ export default function TableScreen() {
       />
 
       {/* ── Footer status banner ── */}
-      <FooterStatusBanner message={footerStatusMessage} />
+      <FooterStatusBanner
+        message={footerStatusMessage}
+        tone={showActiveTurnTreatment ? "active" : "neutral"}
+      />
 
       {/* ── Action dock ── */}
-      <View style={styles.actionDock}>
+      <View style={[styles.actionDock, showActiveTurnTreatment && styles.actionDockActive]}>
         {isWaiting || (isShowdown && tableState?.winners?.length) ? (
           <NativeButton
             label="Start Game"
@@ -877,7 +956,80 @@ export default function TableScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    position: "relative",
+    overflow: "hidden",
     backgroundColor: "#f6f5f7",
+  },
+  turnPerimeterLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  turnWashLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  turnGlowLayer: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  turnEdgeWash: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    height: 140,
+  },
+  turnEdgeWashTop: {
+    top: -8,
+  },
+  turnEdgeWashBottom: {
+    bottom: -8,
+  },
+  turnSideWash: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    width: 86,
+  },
+  turnSideWashLeft: {
+    left: 0,
+  },
+  turnSideWashRight: {
+    right: 0,
+  },
+  turnHalo: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    height: 34,
+    borderRadius: 24,
+    backgroundColor: "rgba(248,113,113,0.2)",
+    shadowColor: "#ef4444",
+    shadowOpacity: 0.34,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 2,
+  },
+  turnHaloTop: {
+    top: 10,
+  },
+  turnHaloBottom: {
+    bottom: 10,
+  },
+  turnHaloSide: {
+    position: "absolute",
+    top: 112,
+    bottom: 112,
+    width: 28,
+    borderRadius: 20,
+    backgroundColor: "rgba(248,113,113,0.12)",
+    shadowColor: "#ef4444",
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 1,
+  },
+  turnHaloLeft: {
+    left: 8,
+  },
+  turnHaloRight: {
+    right: 8,
   },
 
   errorBanner: {
@@ -1044,6 +1196,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: 12,
+  },
+  actionDockActive: {
+    borderTopColor: "rgba(248,113,113,0.26)",
+    backgroundColor: "rgba(255,247,247,0.94)",
+    shadowColor: "#ef4444",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -5 },
+    elevation: 3,
   },
   actionRow: {
     flexDirection: "row",
