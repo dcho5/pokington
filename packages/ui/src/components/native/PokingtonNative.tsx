@@ -116,9 +116,9 @@ function getShortestAngleDelta(targetAngle: number, currentAngle: number) {
 export const nativeLightTheme = {
   colors: {
     background: "#f3f4f8",
-    header: "rgba(255,255,255,0.9)",
+    header: "rgba(255,255,255,0.86)",
     surface: "#ffffff",
-    surfaceSoft: "rgba(255,255,255,0.78)",
+    surfaceSoft: "rgba(255,255,255,0.72)",
     surfaceMuted: "#eef0f5",
     border: "#e3e6ee",
     borderStrong: "#d5d9e4",
@@ -127,35 +127,38 @@ export const nativeLightTheme = {
     faint: "#9ca3af",
     accent: "#ef4444",
     accentStrong: "#b91c1c",
+    accentTint: "rgba(239,68,68,0.16)",
+    accentTintStrong: "rgba(239,68,68,0.22)",
     danger: "#ef4444",
     tableOuter: "#32384c",
     tableInner: "#111623",
-    cardBack: "#111827",
+    cardBack: "#0d1726",
+    cardBackInner: "#162236",
     cardInk: "#111322",
     cardRed: "#dc2626",
     yellow: "#f8e600",
   },
   shadow: {
     surface: {
-      shadowColor: "#111827",
-      shadowOpacity: 0.06,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 6,
+      shadowColor: "#0b1220",
+      shadowOpacity: 0.08,
+      shadowRadius: 28,
+      shadowOffset: { width: 0, height: 14 },
+      elevation: 8,
     },
     soft: {
-      shadowColor: "#111827",
-      shadowOpacity: 0.05,
-      shadowRadius: 10,
-      shadowOffset: { width: 0, height: 4 },
+      shadowColor: "#0b1220",
+      shadowOpacity: 0.06,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
       elevation: 3,
     },
     red: {
       shadowColor: "#ef4444",
-      shadowOpacity: 0.22,
-      shadowRadius: 18,
-      shadowOffset: { width: 0, height: 8 },
-      elevation: 5,
+      shadowOpacity: 0.18,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 12 },
+      elevation: 6,
     },
   },
 } as const;
@@ -177,26 +180,30 @@ export function NativeButton({
   ...props
 }: NativeButtonProps) {
   const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
+    opacity: opacity.value,
   }));
 
   const handlePressIn = useCallback(
     (e: Parameters<NonNullable<PressableProps["onPressIn"]>>[0]) => {
       scale.value = withSpring(0.97, IOS_PRESS_SPRING);
+      opacity.value = withTiming(0.85, { duration: 80 });
       getHaptics()?.selectionAsync();
       onPressIn?.(e);
     },
-    [onPressIn, scale],
+    [onPressIn, opacity, scale],
   );
 
   const handlePressOut = useCallback(
     (e: Parameters<NonNullable<PressableProps["onPressOut"]>>[0]) => {
       scale.value = withSpring(1, IOS_PRESS_SPRING);
+      opacity.value = withTiming(1, { duration: 140 });
       onPressOut?.(e);
     },
-    [onPressOut, scale],
+    [onPressOut, opacity, scale],
   );
 
   return (
@@ -215,6 +222,9 @@ export function NativeButton({
         ]}
         {...props}
       >
+        {tone === "primary" ? (
+          <View pointerEvents="none" style={styles.buttonGloss} />
+        ) : null}
         {loading ? (
           <ActivityIndicator color={tone === "secondary" ? tokens.ios.systemBlue : "#ffffff"} />
         ) : (
@@ -246,10 +256,11 @@ export function NativePanel({ children, style, variant = "plain" }: NativePanelP
     return (
       <View style={[styles.panel, styles.panelTranslucent, style]}>
         <BlurView
-          intensity={50}
-          tint="light"
+          intensity={80}
+          tint="systemThinMaterialLight"
           style={StyleSheet.absoluteFill}
         />
+        <View pointerEvents="none" style={styles.panelTopHighlight} />
         <View>{children}</View>
       </View>
     );
@@ -263,6 +274,9 @@ export function NativePanel({ children, style, variant = "plain" }: NativePanelP
         style,
       ]}
     >
+      {variant !== "grouped" ? (
+        <View pointerEvents="none" style={styles.panelTopHighlight} />
+      ) : null}
       {children}
     </View>
   );
@@ -283,17 +297,17 @@ export function NativeTextField({
 }: NativeTextFieldProps) {
   const focus = useSharedValue(0);
 
-  const borderStyle = useAnimatedStyle(() => ({
-    borderColor: focus.value
-      ? tokens.ios.systemBlue
-      : tokens.ios.separator,
-    borderWidth: interpolate(focus.value, [0, 1], [HAIRLINE, 1.5]),
+  const wrapperStyle = useAnimatedStyle(() => ({
+    backgroundColor: focus.value > 0.5
+      ? "rgba(118,118,128,0.18)"
+      : "rgba(118,118,128,0.10)",
+    transform: [{ scale: interpolate(focus.value, [0, 1], [1, 1.005]) }],
   }));
 
   return (
     <View style={[styles.field, containerStyle]}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <ReAnimated.View style={[styles.inputWrapper, borderStyle]}>
+      <ReAnimated.View style={[styles.inputWrapper, wrapperStyle]}>
         <TextInput
           placeholderTextColor={tokens.ios.tertiaryLabel}
           autoCapitalize="characters"
@@ -594,11 +608,14 @@ export function NativeCard({
     >
       {showBack ? (
         <View style={styles.cardBackInset}>
-          <View style={styles.cardBackStripe} />
+          <View style={styles.cardBackStripe}>
+            <Text style={styles.cardBackGlyph}>♠</Text>
+          </View>
         </View>
       ) : (
         <>
           <View pointerEvents="none" style={styles.cardHighlight} />
+          <View pointerEvents="none" style={styles.cardSheen} />
           <View style={styles.cardCorner}>
             <Text style={[styles.cardRank, red && styles.redCardText]}>{rank}</Text>
             <Text style={[styles.cardSuitSmall, red && styles.redCardText]}>{suit}</Text>
@@ -651,6 +668,7 @@ export interface PlayerSummary {
 export function PlayerRow({ player }: { player: PlayerSummary }) {
   return (
     <View style={[styles.playerRow, player.isActor && styles.actorRow, player.isViewer && styles.viewerRow]}>
+      {player.isActor ? <View pointerEvents="none" style={styles.actorAccent} /> : null}
       <View style={styles.playerIdentity}>
         <Text style={styles.playerName} numberOfLines={1}>
           {player.name || `Seat ${player.seatIndex + 1}`}
@@ -806,6 +824,7 @@ export function NativeBottomSheet({
 }) {
   const translateY = useSharedValue(600);
   const scrimOpacity = useSharedValue(0);
+  const sheetScale = useSharedValue(0.985);
   const sheetHeight = useRef(0);
   const BlurView = getBlurView();
 
@@ -813,7 +832,9 @@ export function NativeBottomSheet({
     if (!visible) return;
     translateY.value = 600;
     scrimOpacity.value = 0;
+    sheetScale.value = 0.985;
     translateY.value = withSpring(0, IOS_SHEET_SPRING);
+    sheetScale.value = withSpring(1, IOS_SHEET_SPRING);
     scrimOpacity.value = withTiming(1, {
       duration: 220,
       easing: REasing.out(REasing.cubic),
@@ -821,8 +842,9 @@ export function NativeBottomSheet({
     return () => {
       cancelAnimation(translateY);
       cancelAnimation(scrimOpacity);
+      cancelAnimation(sheetScale);
     };
-  }, [translateY, scrimOpacity, visible]);
+  }, [translateY, scrimOpacity, sheetScale, visible]);
 
   const dismiss = useCallback(() => {
     onDismiss();
@@ -854,7 +876,7 @@ export function NativeBottomSheet({
     });
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
+    transform: [{ translateY: translateY.value }, { scale: sheetScale.value }],
   }));
 
   const scrimStyle = useAnimatedStyle(() => ({
@@ -876,11 +898,12 @@ export function NativeBottomSheet({
           >
             {BlurView ? (
               <BlurView
-                intensity={70}
-                tint="light"
+                intensity={92}
+                tint="systemThickMaterialLight"
                 style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}
               />
             ) : null}
+            <View pointerEvents="none" style={styles.sheetTopHighlight} />
             <View style={styles.sheetGrabber} />
             {children}
           </ReAnimated.View>
@@ -1006,18 +1029,25 @@ export function NativeIconButton({
 
 const styles = StyleSheet.create({
   button: {
-    minHeight: 50,
+    minHeight: 52,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: tokens.radii.ios.md,
+    borderRadius: tokens.radii.ios.lg,
     backgroundColor: nativeLightTheme.colors.accent,
     paddingHorizontal: tokens.spacing.md,
+    overflow: "hidden",
     ...nativeLightTheme.shadow.red,
   },
+  buttonGloss: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: "50%",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
   secondaryButton: {
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
-    backgroundColor: tokens.ios.secondarySystemBackground,
+    backgroundColor: "rgba(118,118,128,0.16)",
     shadowOpacity: 0,
     elevation: 0,
   },
@@ -1031,7 +1061,7 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 17,
     fontWeight: "600",
-    letterSpacing: -0.2,
+    letterSpacing: -0.4,
   },
   secondaryButtonText: {
     color: tokens.ios.systemBlue,
@@ -1045,19 +1075,24 @@ const styles = StyleSheet.create({
     gap: tokens.spacing.md,
     overflow: "hidden",
     backgroundColor: nativeLightTheme.colors.surface,
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
+  },
+  panelTopHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.55)",
   },
   panelTranslucent: {
-    backgroundColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(255,255,255,0.18)",
   },
   panelGrouped: {
     padding: 0,
     gap: 0,
     overflow: "hidden",
     borderRadius: tokens.radii.ios.md,
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
+    backgroundColor: tokens.ios.systemBackground,
   },
   field: {
     gap: 6,
@@ -1069,17 +1104,16 @@ const styles = StyleSheet.create({
     letterSpacing: -0.08,
   },
   inputWrapper: {
-    borderRadius: tokens.radii.ios.sm,
-    borderWidth: HAIRLINE,
-    backgroundColor: tokens.ios.secondarySystemBackground,
+    borderRadius: 12,
+    backgroundColor: "rgba(118,118,128,0.10)",
   },
   input: {
-    minHeight: 44,
+    minHeight: 46,
     color: tokens.ios.label,
     fontSize: 17,
     fontWeight: "500",
-    paddingHorizontal: 14,
-    letterSpacing: -0.2,
+    paddingHorizontal: 16,
+    letterSpacing: -0.4,
   },
   board: {
     flexDirection: "row",
@@ -1089,9 +1123,7 @@ const styles = StyleSheet.create({
   card: {
     width: 54,
     aspectRatio: 0.72,
-    borderRadius: 8,
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
+    borderRadius: 10,
     backgroundColor: "#ffffff",
     padding: 5,
     justifyContent: "space-between",
@@ -1099,7 +1131,7 @@ const styles = StyleSheet.create({
   },
   compactCard: {
     width: 42,
-    borderRadius: 6,
+    borderRadius: 8,
     padding: 4,
   },
   cardHighlight: {
@@ -1108,21 +1140,38 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.6)",
+    backgroundColor: "rgba(255,255,255,0.85)",
+  },
+  cardSheen: {
+    position: "absolute",
+    top: -10,
+    left: -10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.4)",
+    opacity: 0.45,
   },
   cardBackInset: {
     flex: 1,
-    borderRadius: 6,
+    borderRadius: 7,
     backgroundColor: nativeLightTheme.colors.cardBack,
     overflow: "hidden",
   },
   cardBackStripe: {
     flex: 1,
-    margin: 4,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-    backgroundColor: "#14233c",
+    margin: 3,
+    borderRadius: 5,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: nativeLightTheme.colors.cardBackInner,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cardBackGlyph: {
+    color: "rgba(255,255,255,0.07)",
+    fontSize: 22,
+    fontWeight: "800",
   },
   cardCorner: {
     alignSelf: "flex-start",
@@ -1134,43 +1183,51 @@ const styles = StyleSheet.create({
   },
   cardRank: {
     color: nativeLightTheme.colors.cardInk,
-    fontSize: 13,
-    lineHeight: 14,
-    fontWeight: "700",
-    letterSpacing: -0.3,
+    fontSize: 14,
+    lineHeight: 15,
+    fontWeight: "800",
+    letterSpacing: -0.4,
   },
   cardSuitSmall: {
     color: nativeLightTheme.colors.cardInk,
     fontSize: 10,
     lineHeight: 11,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   cardSuitLarge: {
     color: nativeLightTheme.colors.cardInk,
-    fontSize: 22,
-    lineHeight: 24,
-    fontWeight: "700",
+    fontSize: 26,
+    lineHeight: 28,
+    fontWeight: "800",
     textAlign: "center",
   },
   redCardText: {
     color: nativeLightTheme.colors.cardRed,
   },
   playerRow: {
-    minHeight: 56,
+    minHeight: 60,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: tokens.spacing.md,
-    borderRadius: tokens.radii.ios.sm,
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
     backgroundColor: tokens.ios.systemBackground,
     paddingHorizontal: tokens.spacing.md,
-    paddingVertical: 10,
+    paddingVertical: 12,
+    borderBottomWidth: HAIRLINE,
+    borderBottomColor: tokens.ios.separator,
   },
   actorRow: {
-    borderColor: nativeLightTheme.colors.accent,
-    borderWidth: 1,
+    backgroundColor: "rgba(239,68,68,0.06)",
+  },
+  actorAccent: {
+    position: "absolute",
+    top: 8,
+    bottom: 8,
+    left: 0,
+    width: 3,
+    borderTopRightRadius: 2,
+    borderBottomRightRadius: 2,
+    backgroundColor: nativeLightTheme.colors.accent,
   },
   viewerRow: {
     backgroundColor: tokens.ios.tertiarySystemFill,
@@ -1183,7 +1240,7 @@ const styles = StyleSheet.create({
     color: tokens.ios.label,
     fontSize: 16,
     fontWeight: "600",
-    letterSpacing: -0.2,
+    letterSpacing: -0.32,
   },
   playerMeta: {
     color: tokens.ios.secondaryLabel,
@@ -1207,19 +1264,17 @@ const styles = StyleSheet.create({
   },
   statusPill: {
     alignSelf: "flex-start",
-    height: 24,
+    height: 22,
     justifyContent: "center",
     borderRadius: 999,
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
-    backgroundColor: tokens.ios.secondarySystemBackground,
+    backgroundColor: "rgba(120,120,128,0.16)",
     paddingHorizontal: 10,
   },
   statusPillText: {
-    color: "#1C1C1E",
-    fontSize: 11,
+    color: tokens.ios.secondaryLabel,
+    fontSize: 12,
     fontWeight: "600",
-    letterSpacing: -0.05,
+    letterSpacing: -0.08,
   },
   chipContainer: {
     alignItems: "center",
@@ -1289,14 +1344,12 @@ const styles = StyleSheet.create({
   optionButton: {
     flexBasis: "47%",
     flexGrow: 1,
-    minHeight: 38,
+    minHeight: 40,
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
-    backgroundColor: tokens.ios.secondarySystemBackground,
-    paddingHorizontal: 12,
+    backgroundColor: "rgba(118,118,128,0.10)",
+    paddingHorizontal: 14,
   },
   optionButtonCompact: {
     flexBasis: 0,
@@ -1304,8 +1357,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   optionButtonActive: {
-    borderColor: nativeLightTheme.colors.accent,
-    backgroundColor: nativeLightTheme.colors.accent,
+    backgroundColor: nativeLightTheme.colors.accentTint,
   },
   optionButtonPressed: {
     opacity: 0.78,
@@ -1314,13 +1366,13 @@ const styles = StyleSheet.create({
     color: tokens.ios.label,
     fontSize: 14,
     fontWeight: "600",
-    letterSpacing: -0.1,
+    letterSpacing: -0.2,
   },
   optionTextCompact: {
     fontSize: 12,
   },
   optionTextActive: {
-    color: "#ffffff",
+    color: nativeLightTheme.colors.accentStrong,
   },
   segmentedTrack: {
     position: "relative",
@@ -1335,15 +1387,13 @@ const styles = StyleSheet.create({
     top: 2,
     bottom: 2,
     left: 2,
-    borderRadius: 7,
+    borderRadius: 8,
     backgroundColor: "#FFFFFF",
     shadowColor: "#000",
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-    borderWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
   },
   segmentedItem: {
     flex: 1,
@@ -1375,24 +1425,30 @@ const styles = StyleSheet.create({
   },
   bottomSheet: {
     gap: tokens.spacing.md,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: HAIRLINE,
-    borderColor: tokens.ios.separator,
-    backgroundColor: nativeLightTheme.colors.surface,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: "rgba(255,255,255,0.6)",
     paddingHorizontal: tokens.spacing.lg,
-    paddingTop: 12,
+    paddingTop: 14,
     paddingBottom: tokens.spacing.lg,
     overflow: "hidden",
     ...nativeLightTheme.shadow.surface,
+  },
+  sheetTopHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.5)",
   },
   sheetGrabber: {
     alignSelf: "center",
     width: 36,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: tokens.ios.tertiaryLabel,
-    marginBottom: 4,
+    backgroundColor: "rgba(60,60,67,0.3)",
+    marginBottom: 8,
   },
   listRow: {
     minHeight: 44,
@@ -1418,9 +1474,9 @@ const styles = StyleSheet.create({
   },
   listRowTitle: {
     color: tokens.ios.label,
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: "500",
-    letterSpacing: -0.2,
+    letterSpacing: -0.4,
   },
   listRowTitleDestructive: {
     color: tokens.ios.systemRed,
@@ -1442,9 +1498,9 @@ const styles = StyleSheet.create({
   iconButton: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: tokens.ios.tertiarySystemFill,
+    backgroundColor: "rgba(118,118,128,0.16)",
   },
   iconButtonTinted: {
-    backgroundColor: "rgba(255,59,48,0.12)",
+    backgroundColor: "rgba(255,59,48,0.16)",
   },
 });

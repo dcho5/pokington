@@ -25,9 +25,9 @@ export const BLIND_CENTS: Array<{ small: number; big: number }> = [
 
 /** Blind level options shown on the home / create-table UI. */
 export const BLIND_OPTIONS = [
-  "10¢ / 25¢",
-  "25¢ / 50¢",
-  "50¢ / $1",
+  "$0.10 / $0.25",
+  "$0.25 / $0.50",
+  "$0.50 / $1",
   "$1 / $2",
 ] as const;
 
@@ -52,9 +52,9 @@ export const BOMB_POT_ANTE_BB_VALUES = [2, 4, 8] as const;
 export function getBuyInPresets(bigBlindCents: number) {
   const bb = bigBlindCents / 100;
   return [
-    { label: "50×", dollars: bb * 50 },
-    { label: "100×", dollars: bb * 100 },
-    { label: "200×", dollars: bb * 200 },
+    { label: "50x", dollars: bb * 50 },
+    { label: "100x", dollars: bb * 100 },
+    { label: "200x", dollars: bb * 200 },
   ];
 }
 

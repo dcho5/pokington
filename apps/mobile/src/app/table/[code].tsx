@@ -23,7 +23,7 @@ import type {
   WinnerInfo,
 } from "@pokington/engine";
 import type { Card } from "@pokington/shared";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -581,6 +581,12 @@ export default function TableScreen() {
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+      <Stack.Screen 
+        options={{ 
+          gestureEnabled: false,
+          headerShown: false
+        }} 
+      />
       {showActiveTurnTreatment ? (
         <View pointerEvents="none" style={styles.turnPerimeterLayer}>
           <Animated.View style={[styles.turnWashLayer, { opacity: turnWashOpacity }]}>
