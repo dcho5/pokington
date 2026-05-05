@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
@@ -10,14 +10,75 @@ import {
   TextInput,
   View,
   type PressableProps,
+  type StyleProp,
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
+import ReAnimated, {
+  Easing as REasing,
+  cancelAnimation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import type { Card } from "@pokington/shared";
 import { tokens } from "../../theme/tokens";
 import { nativeThemeStyles } from "../../theme/stylesheet";
 
 type Tone = "primary" | "secondary" | "danger";
+
+const HAIRLINE = StyleSheet.hairlineWidth;
+const IOS_SPRING = tokens.motion.ios.spring;
+const IOS_PRESS_SPRING = tokens.motion.ios.pressSpring;
+const IOS_SHEET_SPRING = tokens.motion.ios.sheetSpring;
+
+let blurResolved = false;
+let cachedBlurView: React.ComponentType<any> | null = null;
+function getBlurView(): React.ComponentType<any> | null {
+  if (blurResolved) return cachedBlurView;
+  blurResolved = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    cachedBlurView = require("expo-blur").BlurView ?? null;
+  } catch {
+    cachedBlurView = null;
+  }
+  return cachedBlurView;
+}
+
+type LazyHaptics = {
+  selectionAsync: () => void;
+  impactAsync: (style: "Light" | "Medium" | "Heavy") => void;
+} | null;
+let hapticsResolved = false;
+let cachedHaptics: LazyHaptics = null;
+function getHaptics(): LazyHaptics {
+  if (hapticsResolved) return cachedHaptics;
+  hapticsResolved = true;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("expo-haptics");
+    cachedHaptics = {
+      selectionAsync: () => {
+        try {
+          mod.selectionAsync?.();
+        } catch {}
+      },
+      impactAsync: (style: "Light" | "Medium" | "Heavy") => {
+        try {
+          mod.impactAsync?.(mod.ImpactFeedbackStyle?.[style]);
+        } catch {}
+      },
+    };
+  } catch {
+    cachedHaptics = null;
+  }
+  return cachedHaptics;
+}
 
 const CHIP_ROTATE_RANGE = 1080;
 
@@ -32,12 +93,12 @@ const CHIP_BODY_LAYERS = [
 ] as const;
 
 const CHIP_GLINT_LAYERS = [
-  { scale: 1, opacity: 0.08 },
-  { scale: 0.84, opacity: 0.11 },
-  { scale: 0.68, opacity: 0.14 },
-  { scale: 0.52, opacity: 0.17 },
-  { scale: 0.36, opacity: 0.2 },
-  { scale: 0.22, opacity: 0.24 },
+  { scale: 1, opacity: 0.06 },
+  { scale: 0.84, opacity: 0.08 },
+  { scale: 0.68, opacity: 0.1 },
+  { scale: 0.52, opacity: 0.13 },
+  { scale: 0.36, opacity: 0.16 },
+  { scale: 0.22, opacity: 0.18 },
 ] as const;
 
 const CHIP_HALO_LAYERS = [
@@ -77,24 +138,24 @@ export const nativeLightTheme = {
   shadow: {
     surface: {
       shadowColor: "#111827",
-      shadowOpacity: 0.12,
-      shadowRadius: 24,
-      shadowOffset: { width: 0, height: 12 },
-      elevation: 8,
+      shadowOpacity: 0.06,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 6,
     },
     soft: {
       shadowColor: "#111827",
-      shadowOpacity: 0.08,
-      shadowRadius: 14,
-      shadowOffset: { width: 0, height: 6 },
-      elevation: 4,
+      shadowOpacity: 0.05,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 },
+      elevation: 3,
     },
     red: {
       shadowColor: "#ef4444",
-      shadowOpacity: 0.28,
-      shadowRadius: 20,
-      shadowOffset: { width: 0, height: 10 },
-      elevation: 6,
+      shadowOpacity: 0.22,
+      shadowRadius: 18,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 5,
     },
   },
 } as const;
@@ -105,37 +166,106 @@ export interface NativeButtonProps extends PressableProps {
   loading?: boolean;
 }
 
-export function NativeButton({ label, tone = "primary", loading = false, disabled, style, ...props }: NativeButtonProps) {
+export function NativeButton({
+  label,
+  tone = "primary",
+  loading = false,
+  disabled,
+  style,
+  onPressIn,
+  onPressOut,
+  ...props
+}: NativeButtonProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = useCallback(
+    (e: Parameters<NonNullable<PressableProps["onPressIn"]>>[0]) => {
+      scale.value = withSpring(0.97, IOS_PRESS_SPRING);
+      getHaptics()?.selectionAsync();
+      onPressIn?.(e);
+    },
+    [onPressIn, scale],
+  );
+
+  const handlePressOut = useCallback(
+    (e: Parameters<NonNullable<PressableProps["onPressOut"]>>[0]) => {
+      scale.value = withSpring(1, IOS_PRESS_SPRING);
+      onPressOut?.(e);
+    },
+    [onPressOut, scale],
+  );
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled || loading}
-      style={(state) => [
-        styles.button,
-        tone === "secondary" && styles.secondaryButton,
-        tone === "danger" && styles.dangerButton,
-        (disabled || loading) && styles.disabled,
-        state.pressed && !disabled && !loading && styles.pressed,
-        typeof style === "function" ? style(state) : style,
-      ]}
-      {...props}
-    >
-      {loading ? (
-        <ActivityIndicator color={tone === "secondary" ? nativeLightTheme.colors.text : "#ffffff"} />
-      ) : (
-        <Text style={[styles.buttonText, tone === "secondary" && styles.secondaryButtonText]}>{label}</Text>
-      )}
-    </Pressable>
+    <ReAnimated.View style={animatedStyle}>
+      <Pressable
+        accessibilityRole="button"
+        disabled={disabled || loading}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        style={(state) => [
+          styles.button,
+          tone === "secondary" && styles.secondaryButton,
+          tone === "danger" && styles.dangerButton,
+          (disabled || loading) && styles.disabled,
+          typeof style === "function" ? style(state) : style,
+        ]}
+        {...props}
+      >
+        {loading ? (
+          <ActivityIndicator color={tone === "secondary" ? tokens.ios.systemBlue : "#ffffff"} />
+        ) : (
+          <Text
+            style={[
+              styles.buttonText,
+              tone === "secondary" && styles.secondaryButtonText,
+              tone === "danger" && styles.dangerButtonText,
+            ]}
+          >
+            {label}
+          </Text>
+        )}
+      </Pressable>
+    </ReAnimated.View>
   );
 }
 
 export interface NativePanelProps {
   children: React.ReactNode;
   style?: ViewStyle;
+  variant?: "plain" | "grouped" | "translucent";
 }
 
-export function NativePanel({ children, style }: NativePanelProps) {
-  return <View style={[nativeThemeStyles.panel, style]}>{children}</View>;
+export function NativePanel({ children, style, variant = "plain" }: NativePanelProps) {
+  const BlurView = variant === "translucent" ? getBlurView() : null;
+
+  if (BlurView) {
+    return (
+      <View style={[styles.panel, styles.panelTranslucent, style]}>
+        <BlurView
+          intensity={50}
+          tint="light"
+          style={StyleSheet.absoluteFill}
+        />
+        <View>{children}</View>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={[
+        nativeThemeStyles.panel,
+        variant === "grouped" && styles.panelGrouped,
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
 }
 
 export interface NativeTextFieldProps extends TextInputProps {
@@ -143,17 +273,43 @@ export interface NativeTextFieldProps extends TextInputProps {
   containerStyle?: ViewStyle;
 }
 
-export function NativeTextField({ label, containerStyle, style, ...props }: NativeTextFieldProps) {
+export function NativeTextField({
+  label,
+  containerStyle,
+  style,
+  onFocus,
+  onBlur,
+  ...props
+}: NativeTextFieldProps) {
+  const focus = useSharedValue(0);
+
+  const borderStyle = useAnimatedStyle(() => ({
+    borderColor: focus.value
+      ? tokens.ios.systemBlue
+      : tokens.ios.separator,
+    borderWidth: interpolate(focus.value, [0, 1], [HAIRLINE, 1.5]),
+  }));
+
   return (
     <View style={[styles.field, containerStyle]}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <TextInput
-        placeholderTextColor={nativeLightTheme.colors.faint}
-        autoCapitalize="characters"
-        autoCorrect={false}
-        style={[styles.input, style]}
-        {...props}
-      />
+      <ReAnimated.View style={[styles.inputWrapper, borderStyle]}>
+        <TextInput
+          placeholderTextColor={tokens.ios.tertiaryLabel}
+          autoCapitalize="characters"
+          autoCorrect={false}
+          onFocus={(e) => {
+            focus.value = withTiming(1, { duration: 180 });
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            focus.value = withTiming(0, { duration: 180 });
+            onBlur?.(e);
+          }}
+          style={[styles.input, style]}
+          {...props}
+        />
+      </ReAnimated.View>
     </View>
   );
 }
@@ -428,13 +584,21 @@ export function NativeCard({
   const suit = card ? SUIT_SYMBOLS[card.suit] : "";
 
   return (
-    <View style={[styles.card, compact && styles.compactCard, style]}>
+    <View
+      style={[
+        styles.card,
+        compact && styles.compactCard,
+        !compact && nativeLightTheme.shadow.soft,
+        style,
+      ]}
+    >
       {showBack ? (
         <View style={styles.cardBackInset}>
           <View style={styles.cardBackStripe} />
         </View>
       ) : (
         <>
+          <View pointerEvents="none" style={styles.cardHighlight} />
           <View style={styles.cardCorner}>
             <Text style={[styles.cardRank, red && styles.redCardText]}>{rank}</Text>
             <Text style={[styles.cardSuitSmall, red && styles.redCardText]}>{suit}</Text>
@@ -453,11 +617,19 @@ export function NativeCard({
 export const PokerCard = NativeCard;
 
 export function CommunityBoard({ cards }: { cards: Card[] }) {
-  const paddedCards = [...cards, ...Array.from<Card | null>({ length: Math.max(0, 5 - cards.length) }).fill(null)].slice(0, 5);
+  const paddedCards = [
+    ...cards,
+    ...Array.from<Card | null>({ length: Math.max(0, 5 - cards.length) }).fill(null),
+  ].slice(0, 5);
   return (
     <View style={styles.board}>
       {paddedCards.map((card, index) => (
-        <NativeCard key={`${card?.rank ?? "empty"}-${card?.suit ?? "slot"}-${index}`} card={card} hidden={!card} compact />
+        <NativeCard
+          key={`${card?.rank ?? "empty"}-${card?.suit ?? "slot"}-${index}`}
+          card={card}
+          hidden={!card}
+          compact
+        />
       ))}
     </View>
   );
@@ -492,7 +664,9 @@ export function PlayerRow({ player }: { player: PlayerSummary }) {
       </View>
       <View style={styles.playerNumbers}>
         <Text style={styles.playerStack}>${(player.stack / 100).toFixed(2)}</Text>
-        {player.currentBet > 0 ? <Text style={styles.playerBet}>Bet ${(player.currentBet / 100).toFixed(2)}</Text> : null}
+        {player.currentBet > 0 ? (
+          <Text style={styles.playerBet}>Bet ${(player.currentBet / 100).toFixed(2)}</Text>
+        ) : null}
       </View>
     </View>
   );
@@ -502,6 +676,66 @@ export function StatusPill({ label }: { label: string }) {
   return (
     <View style={styles.statusPill}>
       <Text style={styles.statusPillText}>{label}</Text>
+    </View>
+  );
+}
+
+export interface NativeSegmentedControlProps {
+  options: readonly string[];
+  value: number;
+  onChange: (idx: number) => void;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function NativeSegmentedControl({
+  options,
+  value,
+  onChange,
+  style,
+}: NativeSegmentedControlProps) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const segmentWidth = options.length > 0 ? trackWidth / options.length : 0;
+  const offset = useSharedValue(value);
+
+  useEffect(() => {
+    offset.value = withSpring(value, IOS_SPRING);
+  }, [offset, value]);
+
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: offset.value * segmentWidth }],
+    width: segmentWidth,
+  }));
+
+  return (
+    <View
+      style={[styles.segmentedTrack, style]}
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+    >
+      {trackWidth > 0 ? (
+        <ReAnimated.View pointerEvents="none" style={[styles.segmentedThumb, thumbStyle]} />
+      ) : null}
+      {options.map((option, index) => {
+        const active = index === value;
+        return (
+          <Pressable
+            key={`${option}-${index}`}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+            onPress={() => {
+              getHaptics()?.selectionAsync();
+              onChange(index);
+            }}
+            style={styles.segmentedItem}
+          >
+            <Text
+              style={[styles.segmentedText, active && styles.segmentedTextActive]}
+              numberOfLines={1}
+            >
+              {option}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -517,6 +751,10 @@ export function NativeOptionSelector({
   onChange: (idx: number) => void;
   compact?: boolean;
 }) {
+  if (compact && options.length >= 2 && options.length <= 4) {
+    return <NativeSegmentedControl options={options} value={value} onChange={onChange} />;
+  }
+
   return (
     <View style={[styles.optionGrid, compact && styles.optionGridCompact]}>
       {options.map((option, index) => {
@@ -526,15 +764,25 @@ export function NativeOptionSelector({
             key={`${option}-${index}`}
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
-            onPress={() => onChange(index)}
+            onPress={() => {
+              getHaptics()?.selectionAsync();
+              onChange(index);
+            }}
             style={({ pressed }) => [
               styles.optionButton,
               compact && styles.optionButtonCompact,
               active && styles.optionButtonActive,
-              pressed && styles.pressed,
+              pressed && styles.optionButtonPressed,
             ]}
           >
-            <Text style={[styles.optionText, compact && styles.optionTextCompact, active && styles.optionTextActive]} numberOfLines={1}>
+            <Text
+              style={[
+                styles.optionText,
+                compact && styles.optionTextCompact,
+                active && styles.optionTextActive,
+              ]}
+              numberOfLines={1}
+            >
               {option}
             </Text>
           </Pressable>
@@ -543,6 +791,9 @@ export function NativeOptionSelector({
     </View>
   );
 }
+
+const SHEET_DISMISS_DISTANCE_RATIO = 0.25;
+const SHEET_DISMISS_VELOCITY = 800;
 
 export function NativeBottomSheet({
   visible,
@@ -553,130 +804,322 @@ export function NativeBottomSheet({
   onDismiss: () => void;
   children: React.ReactNode;
 }) {
-  const translateY = useRef(new Animated.Value(500)).current;
-  const scrimOpacity = useRef(new Animated.Value(0)).current;
+  const translateY = useSharedValue(600);
+  const scrimOpacity = useSharedValue(0);
+  const sheetHeight = useRef(0);
+  const BlurView = getBlurView();
 
   useEffect(() => {
     if (!visible) return;
-    translateY.setValue(500);
-    scrimOpacity.setValue(0);
-    Animated.parallel([
-      Animated.spring(translateY, {
-        toValue: 0,
-        tension: 65,
-        friction: 11,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scrimOpacity, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-    ]).start();
+    translateY.value = 600;
+    scrimOpacity.value = 0;
+    translateY.value = withSpring(0, IOS_SHEET_SPRING);
+    scrimOpacity.value = withTiming(1, {
+      duration: 220,
+      easing: REasing.out(REasing.cubic),
+    });
+    return () => {
+      cancelAnimation(translateY);
+      cancelAnimation(scrimOpacity);
+    };
   }, [translateY, scrimOpacity, visible]);
+
+  const dismiss = useCallback(() => {
+    onDismiss();
+  }, [onDismiss]);
+
+  const pan = Gesture.Pan()
+    .onUpdate((e) => {
+      if (e.translationY > 0) {
+        translateY.value = e.translationY;
+        const ratio = sheetHeight.current
+          ? Math.max(0, 1 - e.translationY / sheetHeight.current)
+          : 1;
+        scrimOpacity.value = ratio;
+      }
+    })
+    .onEnd((e) => {
+      const threshold = sheetHeight.current * SHEET_DISMISS_DISTANCE_RATIO;
+      if (e.translationY > threshold || e.velocityY > SHEET_DISMISS_VELOCITY) {
+        translateY.value = withTiming(sheetHeight.current || 600, {
+          duration: 220,
+          easing: REasing.out(REasing.cubic),
+        });
+        scrimOpacity.value = withTiming(0, { duration: 200 });
+        runOnJS(dismiss)();
+      } else {
+        translateY.value = withSpring(0, IOS_SHEET_SPRING);
+        scrimOpacity.value = withTiming(1, { duration: 160 });
+      }
+    });
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  const scrimStyle = useAnimatedStyle(() => ({
+    opacity: scrimOpacity.value,
+  }));
 
   return (
     <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
       <View style={styles.sheetModalRoot}>
-        <Animated.View style={[styles.sheetScrim, { opacity: scrimOpacity }]}>
+        <ReAnimated.View style={[styles.sheetScrim, scrimStyle]}>
           <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
-        </Animated.View>
-        <Animated.View style={[styles.bottomSheet, { transform: [{ translateY }] }]}>
-          {children}
-        </Animated.View>
+        </ReAnimated.View>
+        <GestureDetector gesture={pan}>
+          <ReAnimated.View
+            onLayout={(e) => {
+              sheetHeight.current = e.nativeEvent.layout.height;
+            }}
+            style={[styles.bottomSheet, sheetStyle]}
+          >
+            {BlurView ? (
+              <BlurView
+                intensity={70}
+                tint="light"
+                style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}
+              />
+            ) : null}
+            <View style={styles.sheetGrabber} />
+            {children}
+          </ReAnimated.View>
+        </GestureDetector>
       </View>
     </Modal>
   );
 }
 
+export interface NativeListRowProps {
+  title: string;
+  subtitle?: string;
+  leading?: React.ReactNode;
+  trailing?: React.ReactNode;
+  onPress?: () => void;
+  destructive?: boolean;
+  showsChevron?: boolean;
+  isLast?: boolean;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function NativeListRow({
+  title,
+  subtitle,
+  leading,
+  trailing,
+  onPress,
+  destructive = false,
+  showsChevron = false,
+  isLast = false,
+  style,
+}: NativeListRowProps) {
+  const Container: React.ComponentType<any> = onPress ? Pressable : View;
+  return (
+    <Container
+      accessibilityRole={onPress ? "button" : undefined}
+      onPress={
+        onPress
+          ? () => {
+              getHaptics()?.selectionAsync();
+              onPress();
+            }
+          : undefined
+      }
+      style={({ pressed }: { pressed?: boolean }) => [
+        styles.listRow,
+        !isLast && styles.listRowSeparator,
+        pressed && styles.listRowPressed,
+        style,
+      ]}
+    >
+      {leading ? <View style={styles.listRowLeading}>{leading}</View> : null}
+      <View style={styles.listRowContent}>
+        <Text
+          numberOfLines={1}
+          style={[styles.listRowTitle, destructive && styles.listRowTitleDestructive]}
+        >
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text numberOfLines={1} style={styles.listRowSubtitle}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {trailing ? <View style={styles.listRowTrailing}>{trailing}</View> : null}
+      {showsChevron ? <Text style={styles.listRowChevron}>›</Text> : null}
+    </Container>
+  );
+}
+
+export interface NativeIconButtonProps {
+  icon: React.ReactNode;
+  onPress?: () => void;
+  size?: number;
+  tone?: "plain" | "tinted";
+  accessibilityLabel?: string;
+  style?: StyleProp<ViewStyle>;
+  disabled?: boolean;
+}
+
+export function NativeIconButton({
+  icon,
+  onPress,
+  size = 44,
+  tone = "plain",
+  accessibilityLabel,
+  style,
+  disabled,
+}: NativeIconButtonProps) {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <ReAnimated.View style={animatedStyle}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel}
+        disabled={disabled}
+        onPressIn={() => {
+          scale.value = withSpring(0.92, IOS_PRESS_SPRING);
+          getHaptics()?.selectionAsync();
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, IOS_PRESS_SPRING);
+        }}
+        onPress={onPress}
+        style={[
+          styles.iconButton,
+          tone === "tinted" && styles.iconButtonTinted,
+          { width: size, height: size, borderRadius: size / 2 },
+          disabled && styles.disabled,
+          style,
+        ]}
+      >
+        {icon}
+      </Pressable>
+    </ReAnimated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   button: {
-    minHeight: 52,
+    minHeight: 50,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 18,
+    borderRadius: tokens.radii.ios.md,
     backgroundColor: nativeLightTheme.colors.accent,
     paddingHorizontal: tokens.spacing.md,
     ...nativeLightTheme.shadow.red,
   },
   secondaryButton: {
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: nativeLightTheme.colors.surfaceMuted,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
+    backgroundColor: tokens.ios.secondarySystemBackground,
     shadowOpacity: 0,
     elevation: 0,
   },
   dangerButton: {
-    backgroundColor: nativeLightTheme.colors.danger,
+    backgroundColor: tokens.ios.systemRed,
   },
   disabled: {
-    opacity: 0.48,
-  },
-  pressed: {
-    opacity: 0.82,
+    opacity: 0.4,
   },
   buttonText: {
     color: "#ffffff",
-    fontSize: 18,
-    fontWeight: "900",
+    fontSize: 17,
+    fontWeight: "600",
+    letterSpacing: -0.2,
   },
   secondaryButtonText: {
-    color: nativeLightTheme.colors.text,
+    color: tokens.ios.systemBlue,
+  },
+  dangerButtonText: {
+    color: "#ffffff",
+  },
+  panel: {
+    borderRadius: tokens.radii.ios.lg,
+    padding: tokens.spacing.lg,
+    gap: tokens.spacing.md,
+    overflow: "hidden",
+    backgroundColor: nativeLightTheme.colors.surface,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
+  },
+  panelTranslucent: {
+    backgroundColor: "rgba(255,255,255,0.6)",
+  },
+  panelGrouped: {
+    padding: 0,
+    gap: 0,
+    overflow: "hidden",
+    borderRadius: tokens.radii.ios.md,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
   },
   field: {
-    gap: tokens.spacing.sm,
+    gap: 6,
   },
   fieldLabel: {
-    color: nativeLightTheme.colors.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 3,
+    color: tokens.ios.secondaryLabel,
+    fontSize: 13,
+    fontWeight: "500",
+    letterSpacing: -0.08,
+  },
+  inputWrapper: {
+    borderRadius: tokens.radii.ios.sm,
+    borderWidth: HAIRLINE,
+    backgroundColor: tokens.ios.secondarySystemBackground,
   },
   input: {
-    minHeight: 56,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: nativeLightTheme.colors.surfaceSoft,
-    color: nativeLightTheme.colors.text,
-    fontSize: 18,
-    fontWeight: "800",
-    paddingHorizontal: tokens.spacing.md,
-    ...nativeLightTheme.shadow.soft,
+    minHeight: 44,
+    color: tokens.ios.label,
+    fontSize: 17,
+    fontWeight: "500",
+    paddingHorizontal: 14,
+    letterSpacing: -0.2,
   },
   board: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: tokens.spacing.sm,
+    gap: 6,
   },
   card: {
     width: 54,
     aspectRatio: 0.72,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
+    borderRadius: 8,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
     backgroundColor: "#ffffff",
     padding: 5,
     justifyContent: "space-between",
-    ...nativeLightTheme.shadow.soft,
+    overflow: "hidden",
   },
   compactCard: {
     width: 42,
-    borderRadius: 8,
+    borderRadius: 6,
     padding: 4,
+  },
+  cardHighlight: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.6)",
   },
   cardBackInset: {
     flex: 1,
-    borderRadius: 7,
+    borderRadius: 6,
     backgroundColor: nativeLightTheme.colors.cardBack,
     overflow: "hidden",
   },
   cardBackStripe: {
     flex: 1,
     margin: 4,
-    borderRadius: 5,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.08)",
     backgroundColor: "#14233c",
@@ -691,83 +1134,92 @@ const styles = StyleSheet.create({
   },
   cardRank: {
     color: nativeLightTheme.colors.cardInk,
-    fontSize: 12,
-    lineHeight: 13,
-    fontWeight: "900",
+    fontSize: 13,
+    lineHeight: 14,
+    fontWeight: "700",
+    letterSpacing: -0.3,
   },
   cardSuitSmall: {
     color: nativeLightTheme.colors.cardInk,
     fontSize: 10,
     lineHeight: 11,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   cardSuitLarge: {
     color: nativeLightTheme.colors.cardInk,
-    fontSize: 24,
-    lineHeight: 26,
-    fontWeight: "900",
+    fontSize: 22,
+    lineHeight: 24,
+    fontWeight: "700",
     textAlign: "center",
   },
   redCardText: {
     color: nativeLightTheme.colors.cardRed,
   },
   playerRow: {
-    minHeight: 64,
+    minHeight: 56,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: tokens.spacing.md,
-    borderRadius: tokens.radii.md,
-    borderWidth: 1,
-    borderColor: tokens.colors.border,
-    backgroundColor: tokens.colors.surfaceSubtle,
-    padding: tokens.spacing.md,
+    borderRadius: tokens.radii.ios.sm,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
+    backgroundColor: tokens.ios.systemBackground,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: 10,
   },
   actorRow: {
-    borderColor: tokens.colors.accent,
+    borderColor: nativeLightTheme.colors.accent,
+    borderWidth: 1,
   },
   viewerRow: {
-    backgroundColor: tokens.colors.feltOverlay,
+    backgroundColor: tokens.ios.tertiarySystemFill,
   },
   playerIdentity: {
     flex: 1,
     minWidth: 0,
   },
   playerName: {
-    color: tokens.colors.text,
+    color: tokens.ios.label,
     fontSize: 16,
-    fontWeight: "800",
+    fontWeight: "600",
+    letterSpacing: -0.2,
   },
   playerMeta: {
-    color: tokens.colors.muted,
-    fontSize: 12,
+    color: tokens.ios.secondaryLabel,
+    fontSize: 13,
     lineHeight: 18,
   },
   playerNumbers: {
     alignItems: "flex-end",
   },
   playerStack: {
-    color: tokens.colors.text,
+    color: tokens.ios.label,
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
   },
   playerBet: {
-    color: tokens.colors.accent,
+    color: nativeLightTheme.colors.accent,
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
   },
   statusPill: {
     alignSelf: "flex-start",
-    borderRadius: tokens.radii.pill,
-    backgroundColor: nativeLightTheme.colors.surfaceMuted,
-    paddingHorizontal: tokens.spacing.md,
-    paddingVertical: tokens.spacing.sm,
+    height: 24,
+    justifyContent: "center",
+    borderRadius: 999,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
+    backgroundColor: tokens.ios.secondarySystemBackground,
+    paddingHorizontal: 10,
   },
   statusPillText: {
-    color: nativeLightTheme.colors.text,
-    fontSize: 12,
-    fontWeight: "900",
-    textTransform: "uppercase",
+    color: "#1C1C1E",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: -0.05,
   },
   chipContainer: {
     alignItems: "center",
@@ -841,9 +1293,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: nativeLightTheme.colors.surfaceMuted,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
+    backgroundColor: tokens.ios.secondarySystemBackground,
     paddingHorizontal: 12,
   },
   optionButtonCompact: {
@@ -855,33 +1307,144 @@ const styles = StyleSheet.create({
     borderColor: nativeLightTheme.colors.accent,
     backgroundColor: nativeLightTheme.colors.accent,
   },
+  optionButtonPressed: {
+    opacity: 0.78,
+  },
   optionText: {
-    color: "#4b5563",
-    fontSize: 13,
-    fontWeight: "900",
+    color: tokens.ios.label,
+    fontSize: 14,
+    fontWeight: "600",
+    letterSpacing: -0.1,
   },
   optionTextCompact: {
-    fontSize: 11,
+    fontSize: 12,
   },
   optionTextActive: {
     color: "#ffffff",
+  },
+  segmentedTrack: {
+    position: "relative",
+    flexDirection: "row",
+    minHeight: 32,
+    borderRadius: 9,
+    backgroundColor: tokens.ios.tertiarySystemFill,
+    padding: 2,
+  },
+  segmentedThumb: {
+    position: "absolute",
+    top: 2,
+    bottom: 2,
+    left: 2,
+    borderRadius: 7,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOpacity: 0.12,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+    borderWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
+  },
+  segmentedItem: {
+    flex: 1,
+    minHeight: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  segmentedText: {
+    color: tokens.ios.label,
+    fontSize: 13,
+    fontWeight: "500",
+    letterSpacing: -0.08,
+  },
+  segmentedTextActive: {
+    fontWeight: "600",
   },
   sheetModalRoot: {
     flex: 1,
     justifyContent: "flex-end",
   },
   sheetScrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(15,23,42,0.35)",
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
   bottomSheet: {
     gap: tokens.spacing.md,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: HAIRLINE,
+    borderColor: tokens.ios.separator,
     backgroundColor: nativeLightTheme.colors.surface,
-    padding: tokens.spacing.lg,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingTop: 12,
+    paddingBottom: tokens.spacing.lg,
+    overflow: "hidden",
     ...nativeLightTheme.shadow.surface,
+  },
+  sheetGrabber: {
+    alignSelf: "center",
+    width: 36,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: tokens.ios.tertiaryLabel,
+    marginBottom: 4,
+  },
+  listRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: 10,
+    backgroundColor: tokens.ios.systemBackground,
+  },
+  listRowSeparator: {
+    borderBottomWidth: HAIRLINE,
+    borderBottomColor: tokens.ios.separator,
+  },
+  listRowPressed: {
+    backgroundColor: "#E5E5EA",
+  },
+  listRowLeading: {
+    marginRight: 12,
+  },
+  listRowContent: {
+    flex: 1,
+    minWidth: 0,
+  },
+  listRowTitle: {
+    color: tokens.ios.label,
+    fontSize: 16,
+    fontWeight: "500",
+    letterSpacing: -0.2,
+  },
+  listRowTitleDestructive: {
+    color: tokens.ios.systemRed,
+  },
+  listRowSubtitle: {
+    color: tokens.ios.secondaryLabel,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  listRowTrailing: {
+    marginLeft: 8,
+  },
+  listRowChevron: {
+    color: tokens.ios.tertiaryLabel,
+    fontSize: 22,
+    fontWeight: "400",
+    marginLeft: 6,
+  },
+  iconButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: tokens.ios.tertiarySystemFill,
+  },
+  iconButtonTinted: {
+    backgroundColor: "rgba(255,59,48,0.12)",
   },
 });

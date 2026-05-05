@@ -56,6 +56,12 @@ export const tokens = {
     md: 16,
     lg: 24,
     pill: 999,
+    ios: {
+      sm: 10,
+      md: 14,
+      lg: 20,
+      xl: 24,
+    },
   },
   typography: {
     label: {
@@ -72,6 +78,36 @@ export const tokens = {
       fontSize: 30,
       lineHeight: 36,
       fontWeight: "900",
+    },
+  },
+  ios: {
+    label: "#000000",
+    secondaryLabel: "rgba(60,60,67,0.6)",
+    tertiaryLabel: "rgba(60,60,67,0.3)",
+    quaternaryLabel: "rgba(60,60,67,0.18)",
+    separator: "rgba(60,60,67,0.18)",
+    hairline: "rgba(60,60,67,0.29)",
+    systemBackground: "#FFFFFF",
+    secondarySystemBackground: "#F2F2F7",
+    tertiarySystemBackground: "#FFFFFF",
+    systemGroupedBackground: "#F2F2F7",
+    systemFill: "rgba(120,120,128,0.2)",
+    secondarySystemFill: "rgba(120,120,128,0.16)",
+    tertiarySystemFill: "rgba(118,118,128,0.12)",
+    systemBlue: "#0A84FF",
+    systemRed: "#FF3B30",
+    systemGreen: "#34C759",
+    systemOrange: "#FF9500",
+  },
+  motion: {
+    ios: {
+      spring: { damping: 22, stiffness: 280, mass: 0.9 },
+      pressSpring: { damping: 26, stiffness: 380, mass: 1 },
+      sheetSpring: { damping: 26, stiffness: 240, mass: 1 },
+      timing: {
+        standard: [0.32, 0.72, 0, 1] as [number, number, number, number],
+        emphasized: [0.2, 0, 0, 1] as [number, number, number, number],
+      },
     },
   },
 } as const;
