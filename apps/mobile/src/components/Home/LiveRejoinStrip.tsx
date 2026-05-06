@@ -33,8 +33,9 @@ export interface LiveRejoinStripProps {
   onConfirmLeave: () => void;
 }
 
-const LEAVE_DIAM = 36;
-const SPLIT_GAP = 8;
+const LEAVE_DIAM = 29;
+const SPLIT_OVERLAP = 10;
+const PILL_SHIFT = LEAVE_DIAM - SPLIT_OVERLAP;
 
 function formatBlinds(record: SeatedTableRecord) {
   return `${formatCents(record.blinds.small)} / ${formatCents(record.blinds.big)}`;
@@ -123,6 +124,14 @@ export default function LiveRejoinStrip({
 
   return (
     <>
+      {revealedCode != null ? (
+        <Pressable
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          onPress={onCancelReveal}
+          style={styles.dismissBackdrop}
+        />
+      ) : null}
       {records.length > 0 ? (
         <Animated.View
           pointerEvents="box-none"
@@ -146,7 +155,7 @@ export default function LiveRejoinStrip({
               const anim = getSplitAnim(record.code);
               const pillTranslate = anim.interpolate({
                 inputRange: [0, 1],
-                outputRange: [0, LEAVE_DIAM + SPLIT_GAP],
+                outputRange: [0, PILL_SHIFT],
               });
               const leaveScale = anim.interpolate({
                 inputRange: [0, 1],
@@ -179,6 +188,7 @@ export default function LiveRejoinStrip({
                       accessibilityRole="button"
                       accessibilityLabel={`Leave ${record.tableName}`}
                       onPress={() => onRequestLeave(record)}
+                      hitSlop={8}
                       style={({ pressed }) => [
                         styles.leaveCircleHit,
                         pressed && styles.leaveCirclePressed,
@@ -232,7 +242,7 @@ export default function LiveRejoinStrip({
                         <Text numberOfLines={1} style={styles.tableName}>
                           {record.tableName}
                         </Text>
-                        <Text numberOfLines={1} style={styles.tableMeta}>
+                        <Text style={styles.tableMeta}>
                           {record.code} - {formatBlinds(record)}
                         </Text>
                       </View>
@@ -298,6 +308,14 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 30,
   },
+  dismissBackdrop: {
+    position: "absolute",
+    top: -2000,
+    bottom: -2000,
+    left: -2000,
+    right: -2000,
+    zIndex: 25,
+  },
   stripContent: {
     paddingHorizontal: 18,
     paddingVertical: 9,
@@ -305,14 +323,12 @@ const styles = StyleSheet.create({
   },
   pillWrap: {
     position: "relative",
-    paddingTop: 3,
-    paddingRight: 7,
     flexDirection: "row",
     alignItems: "center",
   },
   pill: {
     minWidth: 148,
-    maxWidth: 219,
+    maxWidth: 280,
     minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
@@ -362,20 +378,19 @@ const styles = StyleSheet.create({
   tableMeta: {
     marginTop: 2,
     color: nativeLightTheme.colors.muted,
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: "800",
     textTransform: "uppercase",
   },
   leaveCircle: {
     position: "absolute",
-    left: 0,
-    top: 3,
-    bottom: 0,
+    left: -SPLIT_OVERLAP / 2,
+    top: "50%",
+    marginTop: -LEAVE_DIAM / 2,
     width: LEAVE_DIAM,
     height: LEAVE_DIAM,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
   },
   leaveCircleHit: {
     width: LEAVE_DIAM,
@@ -386,19 +401,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: nativeLightTheme.colors.border,
     backgroundColor: "rgba(255,255,255,0.96)",
-    shadowColor: "#000000",
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
   },
   leaveCirclePressed: {
     opacity: 0.78,
   },
   leaveCircleGlyph: {
     color: nativeLightTheme.colors.text,
-    fontSize: 20,
-    lineHeight: 22,
+    fontSize: 16,
+    lineHeight: 18,
     fontWeight: "900",
   },
   errorPill: {
