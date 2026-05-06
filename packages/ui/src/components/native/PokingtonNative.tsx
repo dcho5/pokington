@@ -25,6 +25,11 @@ import ReAnimated, {
   withTiming,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import {
+  SafeAreaProvider,
+  initialWindowMetrics,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import type { Card } from "@pokington/shared";
 import { tokens } from "../../theme/tokens";
 import { nativeThemeStyles } from "../../theme/stylesheet";
@@ -812,6 +817,7 @@ export function NativeOptionSelector({
 
 const SHEET_DISMISS_DISTANCE_RATIO = 0.25;
 const SHEET_DISMISS_VELOCITY = 800;
+const SHEET_BOTTOM_GUTTER = tokens.spacing.xl * 2;
 
 export function NativeBottomSheet({
   visible,
@@ -822,6 +828,27 @@ export function NativeBottomSheet({
   onDismiss: () => void;
   children: React.ReactNode;
 }) {
+  return (
+    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
+      <SafeAreaProvider initialMetrics={initialWindowMetrics}>
+        <NativeBottomSheetFrame visible={visible} onDismiss={onDismiss}>
+          {children}
+        </NativeBottomSheetFrame>
+      </SafeAreaProvider>
+    </Modal>
+  );
+}
+
+function NativeBottomSheetFrame({
+  visible,
+  onDismiss,
+  children,
+}: {
+  visible: boolean;
+  onDismiss: () => void;
+  children: React.ReactNode;
+}) {
+  const insets = useSafeAreaInsets();
   const translateY = useSharedValue(600);
   const scrimOpacity = useSharedValue(0);
   const sheetScale = useSharedValue(0.985);
@@ -884,32 +911,34 @@ export function NativeBottomSheet({
   }));
 
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
-      <View style={styles.sheetModalRoot}>
-        <ReAnimated.View style={[styles.sheetScrim, scrimStyle]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
+    <View style={styles.sheetModalRoot}>
+      <ReAnimated.View style={[styles.sheetScrim, scrimStyle]}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onDismiss} />
+      </ReAnimated.View>
+      <GestureDetector gesture={pan}>
+        <ReAnimated.View
+          onLayout={(e) => {
+            sheetHeight.current = e.nativeEvent.layout.height;
+          }}
+          style={[
+            styles.bottomSheet,
+            { paddingBottom: Math.max(SHEET_BOTTOM_GUTTER, insets.bottom + SHEET_BOTTOM_GUTTER) },
+            sheetStyle,
+          ]}
+        >
+          {BlurView ? (
+            <BlurView
+              intensity={92}
+              tint="systemThickMaterialLight"
+              style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}
+            />
+          ) : null}
+          <View pointerEvents="none" style={styles.sheetTopHighlight} />
+          <View style={styles.sheetGrabber} />
+          {children}
         </ReAnimated.View>
-        <GestureDetector gesture={pan}>
-          <ReAnimated.View
-            onLayout={(e) => {
-              sheetHeight.current = e.nativeEvent.layout.height;
-            }}
-            style={[styles.bottomSheet, sheetStyle]}
-          >
-            {BlurView ? (
-              <BlurView
-                intensity={92}
-                tint="systemThickMaterialLight"
-                style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}
-              />
-            ) : null}
-            <View pointerEvents="none" style={styles.sheetTopHighlight} />
-            <View style={styles.sheetGrabber} />
-            {children}
-          </ReAnimated.View>
-        </GestureDetector>
-      </View>
-    </Modal>
+      </GestureDetector>
+    </View>
   );
 }
 

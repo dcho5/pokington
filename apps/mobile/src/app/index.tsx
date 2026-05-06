@@ -511,6 +511,7 @@ export default function HomeScreen() {
           leavingCode={leavingCode}
           onRejoin={handleRejoin}
           onRevealLeave={(code) => setRevealedLeaveCode((current) => (current === code ? null : code))}
+          onCancelReveal={() => setRevealedLeaveCode(null)}
           onRequestLeave={setLeaveRecord}
           onCancelLeave={() => setLeaveRecord(null)}
           onConfirmLeave={handleConfirmLeave}
