@@ -11,8 +11,10 @@ export type {
   NativeAppStateLike,
   PartyKitClientMessage,
   PartyKitServerMessage,
+  QueuedSeatLeaveResponse,
   SerializedGameAction,
   SerializedGameState,
+  TableBlinds,
 } from "./types";
 export { CLIENT_ID_STORAGE_KEY } from "./types";
 export {
@@ -29,6 +31,7 @@ export {
   getNativeTable,
   getOrCreateNativeClientId,
   requestNativeJoinToken,
+  requestNativeQueuedSeatLeave,
   resolveNativePartyKitHost,
   type CreateNativeGameConnectionOptions,
   type NativeControlPlaneOptions,

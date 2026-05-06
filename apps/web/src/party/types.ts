@@ -71,6 +71,17 @@ export interface JoinTableResponse {
   isCreator: boolean;
 }
 
+export interface QueuedSeatLeaveRequest {
+  clientId: string;
+}
+
+export interface QueuedSeatLeaveResponse {
+  ok: true;
+  tableId: string;
+  playerSessionId: string;
+  queued: true;
+}
+
 // ── Client → Server messages ──
 export type ClientMessage =
   | { type: "AUTH"; token: string; protocolVersion: number }

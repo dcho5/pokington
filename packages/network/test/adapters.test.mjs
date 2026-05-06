@@ -10,6 +10,7 @@ import {
   getNativeTable,
   getOrCreateNativeClientId,
   requestNativeJoinToken,
+  requestNativeQueuedSeatLeave,
   resolveNativePartyKitHost,
 } from "../dist/index.js";
 
@@ -188,6 +189,14 @@ test("native control plane helpers build direct PartyKit requests and surface er
     if (url.endsWith("/tables/ABC123/join-token")) {
       return new Response(JSON.stringify(joinToken), { status: 200 });
     }
+    if (url.endsWith("/tables/ABC123/leave-seat")) {
+      return new Response(JSON.stringify({
+        ok: true,
+        tableId: "ABC123",
+        playerSessionId: "session-1",
+        queued: true,
+      }), { status: 200 });
+    }
     return new Response(JSON.stringify({ exists: true, status: "active", tableName: "A", blinds: { small: 10, big: 25 } }), { status: 200 });
   };
 
@@ -212,6 +221,11 @@ test("native control plane helpers build direct PartyKit requests and surface er
 
   await getNativeTable("abc123", { explicitHost: "table.example.com", fetchImpl });
   await requestNativeJoinToken("abc123", "client-1", { explicitHost: "table.example.com", fetchImpl });
+  await requestNativeQueuedSeatLeave("abc123", "client-1", { explicitHost: "table.example.com", fetchImpl });
+
+  const leaveRequest = requests.find((request) => request.url.endsWith("/tables/ABC123/leave-seat"));
+  assert.equal(leaveRequest.init.method, "POST");
+  assert.equal(JSON.parse(leaveRequest.init.body).clientId, "client-1");
 
   await assert.rejects(
     () => getNativeTable("BAD123", { explicitHost: "table.example.com", fetchImpl }),

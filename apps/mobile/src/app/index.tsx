@@ -4,16 +4,16 @@ import {
   createNativeTable,
   getNativeTable,
   getOrCreateNativeClientId,
+  requestNativeQueuedSeatLeave,
 } from "@pokington/network";
-import { BLIND_CENTS, BLIND_OPTIONS, BOUNTY_OPTIONS, BOUNTY_VALUES } from "@pokington/shared";
+import { BLIND_CENTS, BOUNTY_VALUES } from "@pokington/shared";
 import {
-  NativeButton,
-  NativeOptionSelector,
   NativePokerChip,
-  NativeTextField,
   nativeLightTheme,
 } from "@pokington/ui/native";
-import { router } from "expo-router";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -22,13 +22,20 @@ import {
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   type LayoutRectangle,
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import CreateTablePanel from "../components/Home/CreateTablePanel";
+import JoinTablePanel from "../components/Home/JoinTablePanel";
+import LiveRejoinStrip from "../components/Home/LiveRejoinStrip";
 import { getExpoRequestHostname } from "../lib/nativePartyHost";
+import {
+  getSeatedTables,
+  removeSeatedTable,
+  type SeatedTableRecord,
+} from "../lib/seatedTables";
 
 function mapCreateError(error: unknown) {
   if (!(error instanceof Error)) return "Couldn’t create a table right now. Try again.";
@@ -58,6 +65,11 @@ export default function HomeScreen() {
   const [joinError, setJoinError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [seatedTables, setSeatedTables] = useState<SeatedTableRecord[]>([]);
+  const [revealedLeaveCode, setRevealedLeaveCode] = useState<string | null>(null);
+  const [leaveRecord, setLeaveRecord] = useState<SeatedTableRecord | null>(null);
+  const [rejoinError, setRejoinError] = useState<string | null>(null);
+  const [leavingCode, setLeavingCode] = useState<string | null>(null);
 
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
   const { height, width } = useWindowDimensions();
@@ -170,6 +182,74 @@ export default function HomeScreen() {
     extrapolate: "clamp",
   });
 
+  const liveStripTop = insets.top + 18;
+  const topBlurHeight = insets.top;
+
+  const liveStripTranslateY = useMemo((): Animated.AnimatedInterpolation<number> => {
+    const STRIP_VIS_H = 66;
+    const GUARD_GAP = 8;
+
+    const heroTopY0 = contentInset.paddingTop + firstSceneMinHeight / 2 - 29;
+    const stripBottomY0 = liveStripTop + STRIP_VIS_H;
+    const gap0 = heroTopY0 - stripBottomY0;
+
+    const SV1 = -10 / 160;
+    const SV2 = -105 / 360;
+    const HERO_V = 236 / 420 - 1;
+
+    let lockS: number;
+    if (gap0 <= GUARD_GAP) {
+      lockS = 0;
+    } else {
+      const close1 = HERO_V - SV1;
+      const gapAt160 = gap0 + close1 * 160;
+      if (gapAt160 <= GUARD_GAP) {
+        lockS = (gap0 - GUARD_GAP) / (-close1);
+      } else {
+        const close2 = HERO_V - SV2;
+        lockS = 160 + (gapAt160 - GUARD_GAP) / (-close2);
+      }
+    }
+    lockS = Math.max(0, Math.min(lockS, 520));
+
+    const tyAtLock = lockS <= 160
+      ? SV1 * lockS
+      : -10 + SV2 * (lockS - 160);
+
+    const tyAt420 = lockS < 420
+      ? tyAtLock + HERO_V * (420 - lockS)
+      : tyAtLock;
+
+    const tyAt1500 = tyAt420 - (1500 - 420);
+
+    const inp: number[] = [];
+    const out: number[] = [];
+    const add = (x: number, y: number) => {
+      if (inp.length === 0 || inp[inp.length - 1] !== x) {
+        inp.push(x);
+        out.push(y);
+      }
+    };
+
+    add(0, 0);
+    if (lockS > 160) add(160, -10);
+    add(lockS, tyAtLock);
+    if (lockS < 420) add(420, tyAt420);
+    add(1500, tyAt1500);
+
+    return scrollY.interpolate({ inputRange: inp, outputRange: out, extrapolate: "clamp" });
+  }, [scrollY, contentInset.paddingTop, firstSceneMinHeight, liveStripTop]);
+
+  const refreshSeatedTables = useCallback(async () => {
+    setSeatedTables(await getSeatedTables(AsyncStorage));
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshSeatedTables();
+    }, [refreshSeatedTables]),
+  );
+
   useEffect(() => {
     if (!logoLayoutReady) return undefined;
 
@@ -204,6 +284,11 @@ export default function HomeScreen() {
 
   const navigateToTable = useCallback((code: string) => {
     router.push(`/table/${encodeURIComponent(code.toUpperCase())}` as never);
+  }, []);
+
+  const removeSavedTable = useCallback(async (code: string) => {
+    setSeatedTables(await removeSeatedTable(AsyncStorage, code));
+    setRevealedLeaveCode((current) => (current === code ? null : current));
   }, []);
 
   const handleCreate = useCallback(async () => {
@@ -251,42 +336,51 @@ export default function HomeScreen() {
     }
   }, [navigateToTable, requestHostname, tableCode]);
 
-  const renderJoinPanel = () => (
-    <View style={styles.joinSection}>
-      <View style={styles.joinHeader}>
-        <View>
-          <Text style={styles.joinTitle}>Join</Text>
-          <Text style={styles.joinSubtitle}>Enter a 6-character code.</Text>
-        </View>
-        <Text style={styles.codeLabel}>Code</Text>
-      </View>
-      <View style={styles.joinRow}>
-        <NativeTextField
-          label=""
-          containerStyle={styles.codeField}
-          value={tableCode}
-          onChangeText={(value: string) => {
-            setTableCode(value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase());
-            if (joinError) setJoinError(null);
-          }}
-          returnKeyType="done"
-          blurOnSubmit
-          placeholder="Table code"
-          autoCapitalize="characters"
-          maxLength={6}
-          style={styles.codeInput}
-        />
-        <NativeButton
-          label={isJoining ? "..." : "Join"}
-          disabled={isJoining}
-          loading={isJoining}
-          onPress={handleJoin}
-          style={styles.joinButton}
-        />
-      </View>
-      {joinError ? <Text style={styles.errorText}>{joinError}</Text> : null}
-    </View>
-  );
+  const handleRejoin = useCallback(async (record: SeatedTableRecord) => {
+    setRejoinError(null);
+    try {
+      const table = await getNativeTable(record.code, { explicitHost: env.partyKitHost, requestHostname });
+      if (!table.exists || table.status !== "active") {
+        await removeSavedTable(record.code);
+        setRejoinError("That table is no longer live.");
+        return;
+      }
+      navigateToTable(record.code);
+    } catch (error) {
+      if (error instanceof Error && error.message === "TABLE_NOT_FOUND") {
+        await removeSavedTable(record.code);
+        setRejoinError("That table is no longer live.");
+        return;
+      }
+      setRejoinError(mapJoinError(error));
+    }
+  }, [navigateToTable, removeSavedTable, requestHostname]);
+
+  const handleConfirmLeave = useCallback(async () => {
+    if (!leaveRecord) return;
+    const code = leaveRecord.code;
+    setRejoinError(null);
+    setLeavingCode(code);
+    try {
+      const clientId = await getOrCreateNativeClientId(AsyncStorage);
+      await requestNativeQueuedSeatLeave(code, clientId, {
+        explicitHost: env.partyKitHost,
+        requestHostname,
+      });
+      await removeSavedTable(code);
+      setLeaveRecord(null);
+    } catch (error) {
+      if (error instanceof Error && (error.message === "TABLE_NOT_FOUND" || error.message === "PLAYER_NOT_SEATED")) {
+        await removeSavedTable(code);
+        setLeaveRecord(null);
+        setRejoinError("That seat is no longer live.");
+        return;
+      }
+      setRejoinError("Couldn’t leave that seat right now. Try again.");
+    } finally {
+      setLeavingCode(null);
+    }
+  }, [leaveRecord, removeSavedTable, requestHostname]);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -372,57 +466,74 @@ export default function HomeScreen() {
             ]}
           >
             <View style={styles.swipeHandle} />
-            {renderJoinPanel()}
+            <JoinTablePanel
+              tableCode={tableCode}
+              joinError={joinError}
+              isJoining={isJoining}
+              onChangeTableCode={(value) => {
+                setTableCode(value);
+                if (joinError) setJoinError(null);
+              }}
+              onJoin={handleJoin}
+            />
             <Animated.View
               style={{
                 transform: [{ translateY: createPanelCatchupTranslateY }],
               }}
             >
-              <View style={styles.createSection}>
-                <View style={styles.joinHeader}>
-                  <View>
-                    <Text style={styles.sectionTitle}>Create</Text>
-                    <Text style={styles.sectionSubtitle}>Set stakes, create, share link.</Text>
-                  </View>
-                  <Text style={styles.codeLabel}>New</Text>
-                </View>
-
-                <NativeTextField
-                  label=""
-                  value={tableName}
-                  onChangeText={setTableName}
-                  onFocus={() => {
-                    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
-                  }}
-                  returnKeyType="done"
-                  blurOnSubmit
-                  placeholder="Table name"
-                  autoCapitalize="none"
-                />
-
-                <View style={styles.selectorBlock}>
-                  <Text style={styles.selectorLabel}>Blinds</Text>
-                  <NativeOptionSelector compact options={BLIND_OPTIONS} value={blindIdx} onChange={setBlindIdx} />
-                </View>
-
-                <View style={styles.selectorBlock}>
-                  <Text style={styles.selectorLabel}>Bounty</Text>
-                  <NativeOptionSelector compact options={BOUNTY_OPTIONS} value={bountyIdx} onChange={setBountyIdx} />
-                </View>
-
-                <NativeButton
-                  label={isCreating ? "Creating..." : "Create Table"}
-                  loading={isCreating}
-                  disabled={isCreating}
-                  onPress={handleCreate}
-                  style={styles.createButton}
-                />
-                {createError ? <Text style={styles.errorText}>{createError}</Text> : null}
-              </View>
+              <CreateTablePanel
+                tableName={tableName}
+                blindIdx={blindIdx}
+                bountyIdx={bountyIdx}
+                createError={createError}
+                isCreating={isCreating}
+                onChangeTableName={setTableName}
+                onTableNameFocus={() => {
+                  setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+                }}
+                onChangeBlindIdx={setBlindIdx}
+                onChangeBountyIdx={setBountyIdx}
+                onCreate={handleCreate}
+              />
             </Animated.View>
           </Animated.View>
         </Animated.ScrollView>
       </KeyboardAvoidingView>
+      <View pointerEvents={isLaunchActive ? "none" : "box-none"} style={styles.overlayLayer}>
+        <LiveRejoinStrip
+          records={seatedTables}
+          top={liveStripTop}
+          translateY={liveStripTranslateY}
+          opacity={panelIntroOpacity}
+          revealedCode={revealedLeaveCode}
+          leaveRecord={leaveRecord}
+          error={rejoinError}
+          leavingCode={leavingCode}
+          onRejoin={handleRejoin}
+          onRevealLeave={(code) => setRevealedLeaveCode((current) => (current === code ? null : code))}
+          onRequestLeave={setLeaveRecord}
+          onCancelLeave={() => setLeaveRecord(null)}
+          onConfirmLeave={handleConfirmLeave}
+        />
+        <View pointerEvents="none" style={[styles.topBlurLayer, { height: topBlurHeight }]}>
+          <BlurView
+            intensity={42}
+            tint="systemUltraThinMaterialLight"
+            style={StyleSheet.absoluteFill}
+          />
+          <LinearGradient
+            colors={[
+              "rgba(246,245,247,0.9)",
+              "rgba(246,245,247,0.6)",
+              "rgba(246,245,247,0.28)",
+              "rgba(246,245,247,0.08)",
+              "rgba(246,245,247,0)",
+            ]}
+            locations={[0, 0.35, 0.65, 0.88, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -430,7 +541,24 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
+    position: "relative",
     backgroundColor: nativeLightTheme.colors.background,
+  },
+  overlayLayer: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 20,
+  },
+  topBlurLayer: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    overflow: "hidden",
+    zIndex: 60,
   },
   keyboard: {
     flex: 1,
@@ -481,100 +609,5 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 999,
     backgroundColor: nativeLightTheme.colors.borderStrong,
-  },
-  createSection: {
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    padding: 16,
-    gap: 12,
-    ...nativeLightTheme.shadow.surface,
-  },
-  sectionTitle: {
-    color: nativeLightTheme.colors.text,
-    fontSize: 24,
-    fontWeight: "900",
-  },
-  sectionSubtitle: {
-    marginTop: 4,
-    color: nativeLightTheme.colors.muted,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  selectorBlock: {
-    gap: 6,
-  },
-  selectorLabel: {
-    color: nativeLightTheme.colors.muted,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 6,
-    textTransform: "uppercase",
-  },
-  createButton: {
-    minHeight: 48,
-    borderRadius: 18,
-  },
-  joinSection: {
-    gap: 12,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    padding: 16,
-    ...nativeLightTheme.shadow.surface,
-  },
-  joinHeader: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: 16,
-  },
-  joinTitle: {
-    color: nativeLightTheme.colors.text,
-    fontSize: 20,
-    fontWeight: "900",
-  },
-  joinSubtitle: {
-    marginTop: 4,
-    color: nativeLightTheme.colors.muted,
-    fontSize: 13,
-    fontWeight: "800",
-  },
-  codeLabel: {
-    color: nativeLightTheme.colors.faint,
-    fontSize: 10,
-    fontWeight: "900",
-    letterSpacing: 6,
-    textTransform: "uppercase",
-  },
-  joinRow: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    gap: 10,
-  },
-  codeInput: {
-    minHeight: 50,
-    fontSize: 15,
-    fontWeight: "900",
-    letterSpacing: 1.5,
-    textTransform: "uppercase",
-  },
-  codeField: {
-    flex: 1,
-    minWidth: 0,
-  },
-  joinButton: {
-    minWidth: 78,
-    borderRadius: 18,
-    backgroundColor: nativeLightTheme.colors.text,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  errorText: {
-    color: nativeLightTheme.colors.accent,
-    fontSize: 13,
-    fontWeight: "800",
   },
 });

@@ -37,6 +37,13 @@ export interface JoinTokenResponse {
   isCreator: boolean;
 }
 
+export interface QueuedSeatLeaveResponse {
+  ok: true;
+  tableId: string;
+  playerSessionId: string;
+  queued: true;
+}
+
 export type TableStatus = "creating" | "active" | "archived" | "error";
 
 export interface TableBlinds {

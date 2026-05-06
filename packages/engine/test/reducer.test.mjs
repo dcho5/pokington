@@ -101,6 +101,29 @@ test("heads-up short small blind all-ins skip the covered big blind action", () 
   assert.deepEqual(state.communityCards, []);
 });
 
+test("queued leave players can auto-fold while preserving boundary leave request", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 1000 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "b", name: "B", seatIndex: 1, buyIn: 1000 });
+  state = gameReducer(state, { type: "SIT_DOWN", playerId: "c", name: "C", seatIndex: 2, buyIn: 1000 });
+  state = gameReducer(state, { type: "START_HAND" });
+
+  const actor = state.needsToAct[0];
+  state = gameReducer(state, {
+    type: "REQUEST_BOUNDARY_UPDATE",
+    playerId: actor,
+    leaveSeat: true,
+    moveToSeatIndex: null,
+    chipDelta: 0,
+  });
+  state = gameReducer(state, { type: "PLAYER_ACTION", playerId: actor, action: "fold" });
+
+  assert.equal(state.players[actor].isFolded, true);
+  assert.equal(state.players[actor].lastAction, "fold");
+  assert.equal(state.pendingBoundaryUpdates[actor].leaveSeat, true);
+  assert.equal(state.needsToAct.includes(actor), false);
+});
+
 test("matched all-ins do not leave the covering player with extra action", () => {
   let state = createInitialState("table", { small: 25, big: 50 });
   state = gameReducer(state, { type: "SIT_DOWN", playerId: "a", name: "A", seatIndex: 0, buyIn: 50 });

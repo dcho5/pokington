@@ -10,6 +10,7 @@ import type {
   KeyValueStorage,
   NativeAppStateLike,
   PartyKitServerMessage,
+  QueuedSeatLeaveResponse,
 } from "./types";
 import { CLIENT_ID_STORAGE_KEY } from "./types";
 
@@ -135,6 +136,18 @@ export function requestNativeJoinToken(
   options: NativeControlPlaneOptions = {},
 ): Promise<JoinTokenResponse> {
   return requestNativeControlPlane<JoinTokenResponse>(`tables/${roomId.toUpperCase()}/join-token`, {
+    ...options,
+    method: "POST",
+    body: { clientId },
+  });
+}
+
+export function requestNativeQueuedSeatLeave(
+  roomId: string,
+  clientId: string,
+  options: NativeControlPlaneOptions = {},
+): Promise<QueuedSeatLeaveResponse> {
+  return requestNativeControlPlane<QueuedSeatLeaveResponse>(`tables/${roomId.toUpperCase()}/leave-seat`, {
     ...options,
     method: "POST",
     body: { clientId },

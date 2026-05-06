@@ -60,6 +60,8 @@ import type {
   GetTableResponse,
   JoinTableRequest,
   JoinTableResponse,
+  QueuedSeatLeaveRequest,
+  QueuedSeatLeaveResponse,
   TableStatus,
   TableBlinds,
 } from "./types";
@@ -199,6 +201,7 @@ export default class PokerRoom implements Party.Server {
   private nextHandTimer: ReturnType<typeof setTimeout> | null = null;
   private lastBroadcastRevealSignature: string | null = null;
   private publicRevealCursorAt: number | null = null;
+  private pendingAutoFoldLeavePlayerIds = new Set<string>();
 
   constructor(readonly room: Party.Room) {
     this.gameState = createInitialState(room.id, { small: 25, big: 50 }, { sevenTwoBountyBB: CORE_SEVEN_TWO_BOUNTY_BB });
@@ -247,6 +250,8 @@ export default class PokerRoom implements Party.Server {
 
     this.sessionLedger = createSessionLedger(saved.sessionLedger);
     this.sessionTrackedPlayerIds = new Set(saved.sessionLedger.map((entry) => entry.playerId));
+    this.pendingAutoFoldLeavePlayerIds = new Set(saved.pendingLeavePlayerIds ?? []);
+    this.syncPendingAutoFoldLeaveIds();
     this.playerSessions = new Map(saved.playerSessions.map((session) => [session.clientId, session]));
     this.joinTokens = new Map(saved.joinTokens.map((token) => [token.token, token]));
     this.peekedCardMasks = restoreHandScopedMapEntries(
@@ -384,6 +389,9 @@ export default class PokerRoom implements Party.Server {
     if (req.method === "POST" && segments.length === 3 && segments[0] === "tables" && segments[2] === "join-token") {
       return this.handleJoinTokenIssue(segments[1].toUpperCase(), req);
     }
+    if (req.method === "POST" && segments.length === 3 && segments[0] === "tables" && segments[2] === "leave-seat") {
+      return this.handleQueuedSeatLeaveIssue(segments[1].toUpperCase(), req);
+    }
     return errorResponse("NOT_FOUND", "Unknown control-plane route", 404);
   }
 
@@ -513,6 +521,27 @@ export default class PokerRoom implements Party.Server {
     });
   }
 
+  private async handleQueuedSeatLeaveIssue(code: string, req: Party.Request) {
+    if (!TABLE_CODE_RE.test(code)) {
+      return errorResponse("INVALID_TABLE_CODE", "Invalid table code", 400);
+    }
+
+    const record = await this.room.storage.get<ControlPlaneTableRecord>(controlTableKey(code));
+    if (!record || record.status !== "active") {
+      return errorResponse("TABLE_NOT_FOUND", "Table not found", 404);
+    }
+
+    const gameplayResponse = await this.forwardToGameplayRoom(code, "internal/leave-seat", {
+      method: "POST",
+      body: await req.text(),
+    });
+    const gameplayText = await gameplayResponse.text();
+    return new Response(gameplayText, {
+      status: gameplayResponse.status,
+      headers: ROOM_HTTP_HEADERS,
+    });
+  }
+
   private async handleBootstrapLookup(code: string) {
     if (!TABLE_CODE_RE.test(code)) {
       return jsonResponse({
@@ -586,6 +615,9 @@ export default class PokerRoom implements Party.Server {
     }
     if (req.method === "POST" && segments.length === 2 && segments[0] === "internal" && segments[1] === "join-token") {
       return this.handleJoinTokenRequest(req);
+    }
+    if (req.method === "POST" && segments.length === 2 && segments[0] === "internal" && segments[1] === "leave-seat") {
+      return this.handleQueuedSeatLeaveRequest(req);
     }
     return errorResponse("NOT_FOUND", "Unknown room route", 404);
   }
@@ -697,6 +729,64 @@ export default class PokerRoom implements Party.Server {
       playerSessionId: session.playerSessionId,
       isCreator: body.clientId === this.creatorClientId,
     } satisfies JoinTableResponse);
+  }
+
+  private async handleQueuedSeatLeaveRequest(req: Party.Request) {
+    if (this.roomStatus !== "active") {
+      return errorResponse("TABLE_NOT_FOUND", "Table not found", 404);
+    }
+
+    let body: QueuedSeatLeaveRequest;
+    try {
+      body = await req.json<QueuedSeatLeaveRequest>();
+    } catch {
+      return errorResponse("INVALID_REQUEST", "Invalid leave-seat payload", 400);
+    }
+    if (!body.clientId) {
+      return errorResponse("INVALID_REQUEST", "Missing clientId", 400);
+    }
+
+    const playerSessionId = this.playerSessions.get(body.clientId)?.playerSessionId
+      ?? this.clientIdToPlayerSessionId.get(body.clientId)
+      ?? null;
+    if (!playerSessionId || !this.gameState.players[playerSessionId]) {
+      return errorResponse("PLAYER_NOT_SEATED", "Player is not seated", 409);
+    }
+
+    const event: GameEvent = {
+      type: "REQUEST_BOUNDARY_UPDATE",
+      playerId: playerSessionId,
+      leaveSeat: true,
+      moveToSeatIndex: null,
+      chipDelta: 0,
+    };
+    const prevState = this.gameState;
+    this.gameState = gameReducer(this.gameState, event);
+    this.recordBoundaryTransition({
+      playerId: playerSessionId,
+      beforePlayer: prevState.players[playerSessionId] ?? null,
+      afterPlayer: this.gameState.players[playerSessionId] ?? null,
+    });
+
+    if (this.gameState.players[playerSessionId] && this.gameState.pendingBoundaryUpdates[playerSessionId]?.leaveSeat) {
+      this.pendingAutoFoldLeavePlayerIds.add(playerSessionId);
+    }
+    this.applyAutoFoldsForQueuedLeaves();
+    this.syncPendingAutoFoldLeaveIds();
+    this.manageVotingTimer(prevState, this.gameState);
+    this.manageBombPotVotingTimer(prevState, this.gameState);
+    this.manageNextHandTimer(prevState, this.gameState);
+    this.broadcastState();
+    this.broadcastAllPrivate();
+    this.broadcastRoomPresence();
+    await this.persistRoomState();
+
+    return jsonResponse({
+      ok: true,
+      tableId: this.room.id,
+      playerSessionId,
+      queued: true,
+    } satisfies QueuedSeatLeaveResponse);
   }
 
   private async handleAuth(conn: Party.Connection, token: string, protocolVersion: number) {
@@ -817,6 +907,8 @@ export default class PokerRoom implements Party.Server {
       this.configureShowdownState(prevState, this.gameState);
     }
 
+    this.applyAutoFoldsForQueuedLeaves();
+    this.syncPendingAutoFoldLeaveIds();
     this.manageVotingTimer(prevState, this.gameState);
     this.manageBombPotVotingTimer(prevState, this.gameState);
     this.manageNextHandTimer(prevState, this.gameState);
@@ -1039,6 +1131,40 @@ export default class PokerRoom implements Party.Server {
     this.gameState = gameState;
     for (const transition of realizedTransitions) {
       this.recordBoundaryTransition(transition);
+    }
+    this.syncPendingAutoFoldLeaveIds();
+  }
+
+  private applyAutoFoldsForQueuedLeaves() {
+    for (let guard = 0; guard < 10; guard += 1) {
+      const playerId = this.gameState.needsToAct[0];
+      if (!playerId || !this.pendingAutoFoldLeavePlayerIds.has(playerId)) return;
+      if (!this.gameState.pendingBoundaryUpdates[playerId]?.leaveSeat) {
+        this.pendingAutoFoldLeavePlayerIds.delete(playerId);
+        continue;
+      }
+
+      const prevState = this.gameState;
+      const nextState = gameReducer(this.gameState, {
+        type: "PLAYER_ACTION",
+        playerId,
+        action: "fold",
+      });
+      if (nextState === prevState) return;
+
+      this.gameState = nextState;
+      this.reconcileHandScopedTracking(prevState, this.gameState);
+      if (prevState.phase !== "showdown" && this.gameState.phase === "showdown") {
+        this.configureShowdownState(prevState, this.gameState);
+      }
+    }
+  }
+
+  private syncPendingAutoFoldLeaveIds() {
+    for (const playerId of Array.from(this.pendingAutoFoldLeavePlayerIds)) {
+      if (!this.gameState.players[playerId] || !this.gameState.pendingBoundaryUpdates[playerId]?.leaveSeat) {
+        this.pendingAutoFoldLeavePlayerIds.delete(playerId);
+      }
     }
   }
 
@@ -1491,6 +1617,7 @@ export default class PokerRoom implements Party.Server {
       creatorClientId: this.creatorClientId,
       gameState: this.roomStatus === "active" ? this.gameState : null,
       sessionLedger: snapshotSessionLedger(this.sessionLedger),
+      pendingLeavePlayerIds: Array.from(this.pendingAutoFoldLeavePlayerIds),
       playerSessions: Array.from(this.playerSessions.values()),
       joinTokens: Array.from(this.joinTokens.values()),
       peekedCardMasks: Array.from(this.peekedCardMasks.entries()),

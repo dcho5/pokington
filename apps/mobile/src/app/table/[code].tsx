@@ -39,6 +39,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { playNativeFeedbackHaptic } from "../../lib/haptics";
 import { getExpoRequestHostname } from "../../lib/nativePartyHost";
+import { removeSeatedTable, upsertSeatedTable } from "../../lib/seatedTables";
 
 import TableHeader from "../../components/Table/TableHeader";
 import OpponentStrip from "../../components/Table/OpponentStrip";
@@ -406,6 +407,36 @@ export default function TableScreen() {
   );
 
   const viewer = tablePlayers.find((p) => p.id === myPlayerId) ?? null;
+  const lastPersistedSeatedKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!tableState || !myPlayerId || !roomId) return;
+    if (!viewer) {
+      lastPersistedSeatedKeyRef.current = null;
+      void removeSeatedTable(AsyncStorage, roomId);
+      return;
+    }
+
+    const persistKey = [
+      roomId,
+      viewer.id,
+      viewer.name,
+      tableState.tableName,
+      tableState.blinds.small,
+      tableState.blinds.big,
+    ].join(":");
+    if (lastPersistedSeatedKeyRef.current === persistKey) return;
+    lastPersistedSeatedKeyRef.current = persistKey;
+
+    void upsertSeatedTable(AsyncStorage, {
+      code: roomId,
+      tableName: tableState.tableName,
+      playerName: viewer.name,
+      playerSessionId: viewer.id,
+      blinds: tableState.blinds,
+    });
+  }, [myPlayerId, roomId, tableState, viewer]);
+
   const actorId = tableState?.needsToAct[0] ?? null;
   const activeSeatIndex = tablePlayers.find((p) => p.id === actorId)?.seatIndex ?? null;
 
