@@ -6,6 +6,8 @@ import {
   type NativeHapticPattern,
 } from "@pokington/ui/native";
 
+export { Haptics };
+
 export async function playNativeHapticPattern(pattern: NativeHapticPattern): Promise<void> {
   switch (pattern) {
     case "light":

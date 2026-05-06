@@ -1,5 +1,7 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
+import { BlurView } from "expo-blur";
+import { NativeIconButton } from "@pokington/ui/native";
 import { formatCents } from "@pokington/shared";
 
 interface TableHeaderProps {
@@ -11,38 +13,45 @@ interface TableHeaderProps {
 }
 
 export default function TableHeader({ tableName, blinds, sevenTwoBountyBB, onBack, onMenu }: TableHeaderProps) {
+  const hasBounty = !!(sevenTwoBountyBB ?? 0);
+
   return (
     <View style={styles.header}>
-      <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
-        <Text style={styles.backArrow}>‹</Text>
-      </Pressable>
+      <BlurView intensity={72} tint="systemUltraThinMaterialLight" style={StyleSheet.absoluteFill} />
+      <View pointerEvents="none" style={styles.headerBottomLine} />
+
+      <NativeIconButton
+        size={38}
+        icon={<Text style={styles.backArrow}>‹</Text>}
+        onPress={onBack}
+        accessibilityLabel="Go back"
+        style={styles.backButtonOffset}
+      />
 
       <Text style={styles.tableName} numberOfLines={1}>
         {tableName}
       </Text>
 
-      {!!(sevenTwoBountyBB ?? 0) && (
-        <View style={styles.bountyPill}>
-          <Text style={styles.bountyText}>7-2 {sevenTwoBountyBB}×</Text>
-        </View>
-      )}
-
-      {blinds ? (
-        <View style={styles.blindsPill}>
-          <Text style={styles.blindsText}>
-            {formatCents(blinds.small)} / {formatCents(blinds.big)}
+      {/* Stacked info column — same container regardless of bounty so tableName never shifts */}
+      <View style={styles.pillStack}>
+        {blinds ? (
+          <Text style={styles.blindsText} numberOfLines={1}>
+            {formatCents(blinds.small)}/{formatCents(blinds.big)}
           </Text>
-        </View>
-      ) : null}
+        ) : null}
+        {hasBounty ? (
+          <Text style={styles.bountyText} numberOfLines={1}>
+            7-2 · {sevenTwoBountyBB}× Bounty
+          </Text>
+        ) : null}
+      </View>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Table menu"
+      <NativeIconButton
+        size={38}
+        icon={<Text style={styles.menuDots}>⋮</Text>}
         onPress={onMenu}
-        style={styles.menuButton}
-      >
-        <Text style={styles.menuDots}>⋮</Text>
-      </Pressable>
+        accessibilityLabel="Table menu"
+      />
     </View>
   );
 }
@@ -54,23 +63,27 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(15,23,42,0.08)",
-    backgroundColor: "#fbfbfc",
+    overflow: "hidden",
+    backgroundColor: "transparent",
   },
-  backButton: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
+  headerBottomLine: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: "rgba(0,0,0,0.06)",
+  },
+  backButtonOffset: {
     marginLeft: -4,
     flexShrink: 0,
   },
   backArrow: {
     color: "#111827",
-    fontSize: 42,
-    lineHeight: 42,
+    fontSize: 28,
+    lineHeight: 30,
     fontWeight: "500",
+    marginTop: -2,
   },
   tableName: {
     flexShrink: 1,
@@ -81,56 +94,27 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: -0.4,
   },
-  bountyPill: {
+  pillStack: {
     flexShrink: 0,
-    overflow: "hidden",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(239,68,68,0.22)",
-    backgroundColor: "rgba(255,237,237,0.95)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  bountyText: {
-    color: "#ef4444",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  blindsPill: {
-    flexShrink: 0,
-    overflow: "hidden",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.22)",
-    backgroundColor: "rgba(255,255,255,0.96)",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    alignItems: "flex-end",
+    justifyContent: "center",
+    gap: 3,
   },
   blindsText: {
     color: "#6b7280",
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "800",
+    letterSpacing: -0.2,
   },
-  menuButton: {
-    flexShrink: 0,
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
-    backgroundColor: "rgba(255,255,255,0.96)",
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
+  bountyText: {
+    color: "#ef4444",
+    fontSize: 10,
+    fontWeight: "800",
   },
   menuDots: {
     color: "#111827",
-    fontSize: 28,
-    lineHeight: 28,
+    fontSize: 22,
+    lineHeight: 24,
     fontWeight: "900",
   },
 });

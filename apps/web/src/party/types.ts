@@ -126,7 +126,7 @@ export type ServerMessage =
   | { type: "TABLE_STATE"; state: PublicGameState; feedback?: GameFeedbackCueEnvelope[] }
   // Includes any currently public hole-card slots for this hand, including the
   // viewer's own public cards so reconnects can restore reveal state locally.
-  | { type: "PRIVATE_STATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]> }
+  | { type: "PRIVATE_STATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]>; peekedCardMask?: number }
   | {
       type: "ROOM_PRESENCE";
       connectedPlayerIds: string[];

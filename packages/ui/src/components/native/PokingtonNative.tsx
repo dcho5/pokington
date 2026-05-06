@@ -3,7 +3,9 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Keyboard,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -288,50 +290,46 @@ export function NativePanel({ children, style, variant = "plain" }: NativePanelP
 }
 
 export interface NativeTextFieldProps extends TextInputProps {
-  label: string;
+  label?: string;
   containerStyle?: ViewStyle;
 }
 
-export function NativeTextField({
-  label,
-  containerStyle,
-  style,
-  onFocus,
-  onBlur,
-  ...props
-}: NativeTextFieldProps) {
-  const focus = useSharedValue(0);
+export const NativeTextField = React.forwardRef<TextInput, NativeTextFieldProps>(
+  function NativeTextField({ label, containerStyle, style, onFocus, onBlur, ...props }, ref) {
+    const focus = useSharedValue(0);
 
-  const wrapperStyle = useAnimatedStyle(() => ({
-    backgroundColor: focus.value > 0.5
-      ? "rgba(118,118,128,0.18)"
-      : "rgba(118,118,128,0.10)",
-    transform: [{ scale: interpolate(focus.value, [0, 1], [1, 1.005]) }],
-  }));
+    const wrapperStyle = useAnimatedStyle(() => ({
+      backgroundColor: focus.value > 0.5
+        ? "rgba(118,118,128,0.18)"
+        : "rgba(118,118,128,0.10)",
+      transform: [{ scale: interpolate(focus.value, [0, 1], [1, 1.005]) }],
+    }));
 
-  return (
-    <View style={[styles.field, containerStyle]}>
-      {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <ReAnimated.View style={[styles.inputWrapper, wrapperStyle]}>
-        <TextInput
-          placeholderTextColor={tokens.ios.tertiaryLabel}
-          autoCapitalize="characters"
-          autoCorrect={false}
-          onFocus={(e) => {
-            focus.value = withTiming(1, { duration: 180 });
-            onFocus?.(e);
-          }}
-          onBlur={(e) => {
-            focus.value = withTiming(0, { duration: 180 });
-            onBlur?.(e);
-          }}
-          style={[styles.input, style]}
-          {...props}
-        />
-      </ReAnimated.View>
-    </View>
-  );
-}
+    return (
+      <View style={[styles.field, containerStyle]}>
+        {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
+        <ReAnimated.View style={[styles.inputWrapper, wrapperStyle]}>
+          <TextInput
+            ref={ref}
+            placeholderTextColor={tokens.ios.tertiaryLabel}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            onFocus={(e) => {
+              focus.value = withTiming(1, { duration: 180 });
+              onFocus?.(e);
+            }}
+            onBlur={(e) => {
+              focus.value = withTiming(0, { duration: 180 });
+              onBlur?.(e);
+            }}
+            style={[styles.input, style]}
+            {...props}
+          />
+        </ReAnimated.View>
+      </View>
+    );
+  }
+);
 
 const SUIT_SYMBOLS = {
   spades: "♠",
@@ -621,14 +619,16 @@ export function NativeCard({
         <>
           <View pointerEvents="none" style={styles.cardHighlight} />
           <View pointerEvents="none" style={styles.cardSheen} />
-          <View style={styles.cardCorner}>
-            <Text style={[styles.cardRank, red && styles.redCardText]}>{rank}</Text>
-            <Text style={[styles.cardSuitSmall, red && styles.redCardText]}>{suit}</Text>
+          <View style={styles.cardCenterWrap} pointerEvents="none">
+            <Text style={[styles.cardSuitLarge, red && styles.redCardText]}>{suit}</Text>
           </View>
-          <Text style={[styles.cardSuitLarge, red && styles.redCardText]}>{suit}</Text>
-          <View style={[styles.cardCorner, styles.cardCornerBottom]}>
+          <View style={[styles.cardCorner, styles.cardCornerTopLeft]}>
             <Text style={[styles.cardRank, red && styles.redCardText]}>{rank}</Text>
-            <Text style={[styles.cardSuitSmall, red && styles.redCardText]}>{suit}</Text>
+            <Text style={[styles.cardCornerSuit, red && styles.redCardText]}>{suit}</Text>
+          </View>
+          <View style={[styles.cardCorner, styles.cardCornerBottomRight]}>
+            <Text style={[styles.cardRank, red && styles.redCardText]}>{rank}</Text>
+            <Text style={[styles.cardCornerSuit, red && styles.redCardText]}>{suit}</Text>
           </View>
         </>
       )}
@@ -817,7 +817,7 @@ export function NativeOptionSelector({
 
 const SHEET_DISMISS_DISTANCE_RATIO = 0.25;
 const SHEET_DISMISS_VELOCITY = 800;
-const SHEET_BOTTOM_GUTTER = tokens.spacing.xl * 2;
+const SHEET_BOTTOM_GUTTER = tokens.spacing.xl;
 
 export function NativeBottomSheet({
   visible,
@@ -828,10 +828,22 @@ export function NativeBottomSheet({
   onDismiss: () => void;
   children: React.ReactNode;
 }) {
+  // Keep the modal mounted while the exit animation runs.
+  const [rendered, setRendered] = useState(visible);
+  useEffect(() => {
+    if (visible) setRendered(true);
+  }, [visible]);
+
+  if (!rendered) return null;
+
   return (
-    <Modal visible={visible} transparent animationType="none" onRequestClose={onDismiss}>
+    <Modal visible transparent animationType="none" onRequestClose={onDismiss}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
-        <NativeBottomSheetFrame visible={visible} onDismiss={onDismiss}>
+        <NativeBottomSheetFrame
+          visible={visible}
+          onDismiss={onDismiss}
+          onExited={() => setRendered(false)}
+        >
           {children}
         </NativeBottomSheetFrame>
       </SafeAreaProvider>
@@ -842,40 +854,70 @@ export function NativeBottomSheet({
 function NativeBottomSheetFrame({
   visible,
   onDismiss,
+  onExited,
   children,
 }: {
   visible: boolean;
   onDismiss: () => void;
+  onExited: () => void;
   children: React.ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const translateY = useSharedValue(600);
   const scrimOpacity = useSharedValue(0);
   const sheetScale = useSharedValue(0.985);
+  const keyboardOffset = useSharedValue(0);
   const sheetHeight = useRef(0);
   const BlurView = getBlurView();
+  const handleExited = useCallback(() => onExited(), [onExited]);
 
   useEffect(() => {
-    if (!visible) return;
-    translateY.value = 600;
-    scrimOpacity.value = 0;
-    sheetScale.value = 0.985;
-    translateY.value = withSpring(0, IOS_SHEET_SPRING);
-    sheetScale.value = withSpring(1, IOS_SHEET_SPRING);
-    scrimOpacity.value = withTiming(1, {
-      duration: 220,
-      easing: REasing.out(REasing.cubic),
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      keyboardOffset.value = withTiming(-e.endCoordinates.height, {
+        duration: e.duration ?? 250,
+        easing: REasing.out(REasing.cubic),
+      });
     });
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      keyboardOffset.value = withTiming(0, {
+        duration: e.duration ?? 250,
+        easing: REasing.out(REasing.cubic),
+      });
+    });
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [keyboardOffset]);
+
+  useEffect(() => {
+    if (visible) {
+      translateY.value = withSpring(0, IOS_SHEET_SPRING);
+      sheetScale.value = withSpring(1, IOS_SHEET_SPRING);
+      scrimOpacity.value = withTiming(1, {
+        duration: 220,
+        easing: REasing.out(REasing.cubic),
+      });
+    } else {
+      // Reverse of the spawn — spring back down + scrim fades out.
+      const exitTarget = sheetHeight.current || 600;
+      sheetScale.value = withSpring(0.985, IOS_SHEET_SPRING);
+      scrimOpacity.value = withTiming(0, {
+        duration: 220,
+        easing: REasing.out(REasing.cubic),
+      });
+      translateY.value = withSpring(exitTarget, IOS_SHEET_SPRING, (finished) => {
+        if (finished) runOnJS(handleExited)();
+      });
+    }
     return () => {
       cancelAnimation(translateY);
       cancelAnimation(scrimOpacity);
       cancelAnimation(sheetScale);
     };
-  }, [translateY, scrimOpacity, sheetScale, visible]);
-
-  const dismiss = useCallback(() => {
-    onDismiss();
-  }, [onDismiss]);
+  }, [translateY, scrimOpacity, sheetScale, visible, handleExited]);
 
   const pan = Gesture.Pan()
     .onUpdate((e) => {
@@ -890,12 +932,8 @@ function NativeBottomSheetFrame({
     .onEnd((e) => {
       const threshold = sheetHeight.current * SHEET_DISMISS_DISTANCE_RATIO;
       if (e.translationY > threshold || e.velocityY > SHEET_DISMISS_VELOCITY) {
-        translateY.value = withTiming(sheetHeight.current || 600, {
-          duration: 220,
-          easing: REasing.out(REasing.cubic),
-        });
-        scrimOpacity.value = withTiming(0, { duration: 200 });
-        runOnJS(dismiss)();
+        // Hand off to the exit useEffect via onDismiss → visible=false.
+        runOnJS(onDismiss)();
       } else {
         translateY.value = withSpring(0, IOS_SHEET_SPRING);
         scrimOpacity.value = withTiming(1, { duration: 160 });
@@ -903,7 +941,7 @@ function NativeBottomSheetFrame({
     });
 
   const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }, { scale: sheetScale.value }],
+    transform: [{ translateY: translateY.value + keyboardOffset.value }, { scale: sheetScale.value }],
   }));
 
   const scrimStyle = useAnimatedStyle(() => ({
@@ -1154,14 +1192,12 @@ const styles = StyleSheet.create({
     aspectRatio: 0.72,
     borderRadius: 10,
     backgroundColor: "#ffffff",
-    padding: 5,
-    justifyContent: "space-between",
     overflow: "hidden",
+    position: "relative",
   },
   compactCard: {
     width: 42,
     borderRadius: 8,
-    padding: 4,
   },
   cardHighlight: {
     position: "absolute",
@@ -1182,7 +1218,11 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   cardBackInset: {
-    flex: 1,
+    position: "absolute",
+    top: 5,
+    bottom: 5,
+    left: 5,
+    right: 5,
     borderRadius: 7,
     backgroundColor: nativeLightTheme.colors.cardBack,
     overflow: "hidden",
@@ -1203,32 +1243,51 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   cardCorner: {
-    alignSelf: "flex-start",
+    position: "absolute",
+    flexDirection: "row",
     alignItems: "center",
+    gap: 2,
   },
-  cardCornerBottom: {
-    alignSelf: "flex-end",
+  cardCornerTopLeft: {
+    top: 5,
+    left: 6,
+  },
+  cardCornerBottomRight: {
+    bottom: 5,
+    right: 6,
     transform: [{ rotate: "180deg" }],
+  },
+  cardCenterWrap: {
+    position: "absolute",
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   cardRank: {
     color: nativeLightTheme.colors.cardInk,
-    fontSize: 14,
-    lineHeight: 15,
-    fontWeight: "800",
-    letterSpacing: -0.4,
+    fontSize: 15,
+    lineHeight: 16,
+    fontWeight: "900",
+    letterSpacing: -0.6,
+    includeFontPadding: false,
   },
-  cardSuitSmall: {
+  cardCornerSuit: {
     color: nativeLightTheme.colors.cardInk,
-    fontSize: 10,
-    lineHeight: 11,
-    fontWeight: "800",
+    fontSize: 12,
+    lineHeight: 13,
+    fontWeight: "900",
+    includeFontPadding: false,
   },
   cardSuitLarge: {
     color: nativeLightTheme.colors.cardInk,
-    fontSize: 26,
-    lineHeight: 28,
-    fontWeight: "800",
+    fontSize: 32,
+    lineHeight: 34,
+    fontWeight: "900",
     textAlign: "center",
+    includeFontPadding: false,
   },
   redCardText: {
     color: nativeLightTheme.colors.cardRed,

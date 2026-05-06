@@ -65,14 +65,16 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
         }}
       >
         <div
-          className="pointer-events-none absolute left-0 right-0 top-0 rounded-[34px] shadow-[0_18px_36px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_40px_rgba(2,6,23,0.24)]"
+          className="pointer-events-none absolute left-0 right-0 top-0 overflow-hidden rounded-[34px] shadow-[0_18px_36px_rgba(15,23,42,0.08)] dark:shadow-[0_20px_40px_rgba(2,6,23,0.24)]"
           style={{
             bottom: railInsetBottomPx,
             background: isDark
-              ? "linear-gradient(180deg, rgba(50,36,36,0.94), rgba(26,18,18,0.98))"
+              ? "linear-gradient(180deg, rgba(13,31,56,0.94), rgba(6,15,30,0.98))"
               : "linear-gradient(180deg, rgba(43,58,78,0.94), rgba(17,25,39,0.98))",
           }}
-        />
+        >
+          <div className="absolute top-0 left-0 right-0 h-[2px]" style={{ background: "rgba(255,255,255,0.09)" }} />
+        </div>
         {seats.map(({ seatIndex, slot, player }) => {
           const isActive = player?.isCurrentActor === true;
           const contentKey = player?.id
@@ -131,7 +133,7 @@ const OpponentStrip: React.FC<OpponentStripProps> = ({
             top: feltInsetTopPx,
             bottom: feltInsetBottomPx,
             background: isDark
-              ? "radial-gradient(ellipse at 50% 38%, #2c1f1f 0%, #1a1212 55%, #0d0808 100%)"
+              ? "radial-gradient(ellipse at 50% 38%, #0f1e35 0%, #070e1c 55%, #030810 100%)"
               : "radial-gradient(ellipse at 50% 38%, #1e2a3a 0%, #111a26 58%, #070c14 100%)",
           }}
         >

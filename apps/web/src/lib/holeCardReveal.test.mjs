@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  canStartRevealHoldInteraction,
   canStartPublicReveal,
   createInitialPeelCardState,
   getInitialPrivateRevealState,
@@ -73,6 +74,30 @@ test("public reveal stays blocked once the card is already public", () => {
       canRevealToOthers: true,
       isRevealedToOthers: true,
       sevenTwoEligible: true,
+    }),
+    false,
+  );
+});
+
+test("reveal hold interaction can replay once the card is already public", () => {
+  assert.equal(
+    canStartRevealHoldInteraction({
+      isPrivatelyRevealed: true,
+      canRevealToOthers: true,
+      isRevealedToOthers: true,
+      sevenTwoEligible: false,
+    }),
+    true,
+  );
+});
+
+test("reveal hold interaction still respects reveal capability", () => {
+  assert.equal(
+    canStartRevealHoldInteraction({
+      isPrivatelyRevealed: true,
+      canRevealToOthers: false,
+      isRevealedToOthers: true,
+      sevenTwoEligible: false,
     }),
     false,
   );

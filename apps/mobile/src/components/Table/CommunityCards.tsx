@@ -1,10 +1,19 @@
-import React, { useRef } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useLayoutEffect, useRef } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import type { ViewStyle } from "react-native";
 import { NativeCard } from "@pokington/ui/native";
 import type { Card as CardType } from "@pokington/shared";
 import type { RunResult } from "@pokington/engine";
 import { hasAnimatedRunout } from "@pokington/engine";
+
+// ── Deal animation tuning ─────────────────────────────────────────────────────
+const DEAL_STAGGER_MS = 65;
+const DEAL_DECK_TRANSLATE_X = -32;
+const DEAL_DECK_TRANSLATE_Y = -44;
+const DEAL_INITIAL_SCALE = 0.76;
+const DEAL_INITIAL_ROTATE_DEG = -14;
+const DEAL_SPRING = { stiffness: 320, damping: 22, mass: 0.9 };
+const CARD_GAP_PX = 5;
 
 // ── Board mode helpers (mirrors apps/web/src/lib/tableVisualState.mjs) ─────────
 
@@ -116,9 +125,8 @@ function deriveVisibleRunState(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Invisible placeholder that holds the same space as a compact NativeCard. */
-function CardPlaceholder() {
-  return <View style={cardStyles.placeholder} />;
+function CardPlaceholder({ slotWidth, slotHeight }: { slotWidth: number; slotHeight: number }) {
+  return <View style={[cardStyles.placeholder, { width: slotWidth, height: slotHeight }]} />;
 }
 
 /** Board tab strip shared by bomb-pot and run-it modes. */
@@ -155,35 +163,142 @@ function TabStrip({
   );
 }
 
-/** Five-card row, with invisible placeholders for unrevealed slots. */
+function DealSlot({
+  card,
+  slotWidth,
+  slotHeight,
+  isDimmed,
+  isNewlyRevealed,
+  staggerOrder,
+}: {
+  card: CardType | undefined;
+  slotWidth: number;
+  slotHeight: number;
+  isDimmed: boolean;
+  isNewlyRevealed: boolean;
+  staggerOrder: number;
+}) {
+  const translateY = useRef(new Animated.Value(0)).current;
+  const translateX = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const rotate = useRef(new Animated.Value(0)).current;
+  const animatedCardKeyRef = useRef<string | null>(null);
+
+  const cardKey = card ? `${card.rank}:${card.suit}` : null;
+
+  useLayoutEffect(() => {
+    if (!isNewlyRevealed || !cardKey) return;
+    if (animatedCardKeyRef.current === cardKey) return;
+    animatedCardKeyRef.current = cardKey;
+
+    translateY.setValue(DEAL_DECK_TRANSLATE_Y);
+    translateX.setValue(DEAL_DECK_TRANSLATE_X);
+    scale.setValue(DEAL_INITIAL_SCALE);
+    opacity.setValue(0);
+    rotate.setValue(DEAL_INITIAL_ROTATE_DEG);
+
+    Animated.sequence([
+      Animated.delay(staggerOrder * DEAL_STAGGER_MS),
+      Animated.parallel([
+        Animated.spring(translateY, { toValue: 0, ...DEAL_SPRING, useNativeDriver: true }),
+        Animated.spring(translateX, { toValue: 0, ...DEAL_SPRING, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, ...DEAL_SPRING, useNativeDriver: true }),
+        Animated.spring(rotate, { toValue: 0, ...DEAL_SPRING, useNativeDriver: true }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 220,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+  }, [isNewlyRevealed, cardKey, staggerOrder, opacity, scale, rotate, translateX, translateY]);
+
+  const rotateDeg = rotate.interpolate({
+    inputRange: [DEAL_INITIAL_ROTATE_DEG, 0],
+    outputRange: [`${DEAL_INITIAL_ROTATE_DEG}deg`, "0deg"],
+  });
+
+  return (
+    <Animated.View
+      style={[
+        { width: slotWidth, height: slotHeight },
+        {
+          opacity,
+          transform: [{ translateX }, { translateY }, { scale }, { rotate: rotateDeg }],
+        },
+      ]}
+    >
+      <View style={isDimmed ? cardStyles.dimmed : undefined}>
+        {card ? (
+          <NativeCard card={card} style={{ width: slotWidth }} />
+        ) : (
+          <CardPlaceholder slotWidth={slotWidth} slotHeight={slotHeight} />
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
 function CardRow({
   cards,
   cardEmphasis,
   handNumber,
   boardKey,
+  slotWidth,
+  slotHeight,
+  enableDealAnimation = false,
 }: {
   cards: (CardType | undefined)[];
   cardEmphasis?: Array<Emphasis> | null;
   handNumber: number;
   boardKey: string;
+  slotWidth: number;
+  slotHeight: number;
+  enableDealAnimation?: boolean;
 }) {
+  const revealedCount = cards.reduce<number>(
+    (acc, c) => acc + (c != null ? 1 : 0),
+    0,
+  );
+  const lastHandNumberRef = useRef(handNumber);
+  const lastBoardKeyRef = useRef(boardKey);
+  const lastRevealedCountRef = useRef(revealedCount);
+
+  // Same hand + board → animate freshly added cards. Switching hand or board
+  // (e.g. reset, board tab change) → treat current cards as already settled.
+  const contextChanged =
+    lastHandNumberRef.current !== handNumber ||
+    lastBoardKeyRef.current !== boardKey;
+  const newlyRevealedFromIndex = contextChanged
+    ? revealedCount
+    : lastRevealedCountRef.current;
+
+  useEffect(() => {
+    lastHandNumberRef.current = handNumber;
+    lastBoardKeyRef.current = boardKey;
+    lastRevealedCountRef.current = revealedCount;
+  });
+
   return (
     <View style={cardStyles.row}>
       {Array.from({ length: CARD_COUNT }, (_, i) => {
         const card = cards[i];
-        const isRevealed = card != null;
         const emphasis = cardEmphasis?.[i] ?? "neutral";
+        const isNewlyRevealed =
+          enableDealAnimation && card != null && i >= newlyRevealedFromIndex;
+        const staggerOrder = isNewlyRevealed ? i - newlyRevealedFromIndex : 0;
         return (
-          <View
+          <DealSlot
             key={`${handNumber}-${boardKey}-${i}`}
-            style={[cardStyles.slot, emphasis === "dimmed" && cardStyles.dimmed]}
-          >
-            {isRevealed ? (
-              <NativeCard card={card} />
-            ) : (
-              <CardPlaceholder />
-            )}
-          </View>
+            card={card}
+            slotWidth={slotWidth}
+            slotHeight={slotHeight}
+            isDimmed={emphasis === "dimmed"}
+            isNewlyRevealed={isNewlyRevealed}
+            staggerOrder={staggerOrder}
+          />
         );
       })}
     </View>
@@ -199,6 +314,8 @@ function BombPotBoards({
   onActiveBoardChange,
   boardEmphasis,
   handNumber,
+  slotWidth,
+  slotHeight,
 }: {
   communityCards?: CardType[];
   communityCards2?: CardType[];
@@ -206,6 +323,8 @@ function BombPotBoards({
   onActiveBoardChange?: (i: number) => void;
   boardEmphasis: [Array<Emphasis> | null, Array<Emphasis> | null];
   handNumber: number;
+  slotWidth: number;
+  slotHeight: number;
 }) {
   const boards = [communityCards ?? [], communityCards2 ?? []];
 
@@ -223,6 +342,8 @@ function BombPotBoards({
           cardEmphasis={boardEmphasis[1 - activeBoard]}
           handNumber={handNumber}
           boardKey={`bomb-ghost-${activeBoard}`}
+          slotWidth={slotWidth}
+          slotHeight={slotHeight}
         />
       </View>
       <CardRow
@@ -230,6 +351,9 @@ function BombPotBoards({
         cardEmphasis={boardEmphasis[activeBoard]}
         handNumber={handNumber}
         boardKey={`bomb-b${activeBoard}`}
+        slotWidth={slotWidth}
+        slotHeight={slotHeight}
+        enableDealAnimation
       />
     </View>
   );
@@ -246,6 +370,8 @@ function RunItBoards({
   highlightedRunIndex,
   runCardEmphasis,
   runCardEmphasisByRun,
+  slotWidth,
+  slotHeight,
 }: {
   runResults: RunResult[];
   knownCardCount: number;
@@ -255,6 +381,8 @@ function RunItBoards({
   highlightedRunIndex?: number | null;
   runCardEmphasis?: Array<Emphasis> | null;
   runCardEmphasisByRun?: Array<Array<Emphasis> | null> | null;
+  slotWidth: number;
+  slotHeight: number;
 }) {
   const { currentRun, revealedCount } = deriveVisibleRunState(runResults, knownCardCount);
   const prevViewingRun = useRef(viewingRun);
@@ -306,6 +434,8 @@ function RunItBoards({
             cardEmphasis={emphasisForRun(ghostRun)}
             handNumber={handNumber}
             boardKey={`run-ghost-${ghostRun}`}
+            slotWidth={slotWidth}
+            slotHeight={slotHeight}
           />
         </View>
       )}
@@ -315,6 +445,9 @@ function RunItBoards({
           cardEmphasis={emphasisForRun(viewingRun)}
           handNumber={handNumber}
           boardKey={`run-${viewingRun}`}
+          slotWidth={slotWidth}
+          slotHeight={slotHeight}
+          enableDealAnimation
         />
       </Animated.View>
     </View>
@@ -368,6 +501,11 @@ export default function CommunityCards({
   runCardEmphasisByRun = null,
   style,
 }: CommunityCardsProps) {
+  const { width: screenWidth } = useWindowDimensions();
+  // tableMiddle has paddingHorizontal: 20 on each side — subtract 40 so cards fill and center correctly
+  const slotWidth = Math.floor((screenWidth - 4 * CARD_GAP_PX) / 5);
+  const slotHeight = Math.round(slotWidth / 0.72);
+
   const boardMode = getCenterBoardMode({
     phase,
     isBombPotHand: isBombPot,
@@ -397,6 +535,8 @@ export default function CommunityCards({
           highlightedRunIndex={highlightedRunIndex}
           runCardEmphasis={runCardEmphasis}
           runCardEmphasisByRun={runCardEmphasisByRun}
+          slotWidth={slotWidth}
+          slotHeight={slotHeight}
         />
       </View>
     );
@@ -412,6 +552,8 @@ export default function CommunityCards({
           onActiveBoardChange={onActiveBoardChange}
           boardEmphasis={bombPotCardEmphasis}
           handNumber={handNumber}
+          slotWidth={slotWidth}
+          slotHeight={slotHeight}
         />
       </View>
     );
@@ -430,6 +572,9 @@ export default function CommunityCards({
         cardEmphasis={cardEmphasis}
         handNumber={handNumber}
         boardKey="single"
+        slotWidth={slotWidth}
+        slotHeight={slotHeight}
+        enableDealAnimation
       />
     </View>
   );
@@ -444,7 +589,7 @@ const cardStyles = StyleSheet.create({
   row: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: 5,
+    gap: 2,
   },
   slot: {
     width: CARD_SLOT_WIDTH,
@@ -480,7 +625,6 @@ const boardStyles = StyleSheet.create({
 const rootStyles = StyleSheet.create({
   container: {
     alignItems: "center",
-    paddingHorizontal: 8,
   },
 });
 

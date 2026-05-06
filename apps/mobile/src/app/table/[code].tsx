@@ -9,18 +9,24 @@ import {
 import {
   NativeBottomSheet,
   NativeButton,
+  NativeListRow,
+  NativePanel,
   NativePokerChip,
+  NativeTextField,
   nativeLightTheme,
   type PlayerSummary,
 } from "@pokington/ui/native";
-import { formatCents } from "@pokington/shared";
+import { useRaiseAmount } from "@pokington/ui";
+import { BOMB_POT_ANTE_BB_VALUES, formatCents, getBuyInPresets } from "@pokington/shared";
 import { LinearGradient } from "expo-linear-gradient";
-import type {
-  BombPotAnteBB,
-  GameEvent,
-  GameFeedbackCueEnvelope,
-  RunResult,
-  WinnerInfo,
+import {
+  BOMB_POT_VOTING_TIMEOUT_MS,
+  RUN_IT_VOTING_TIMEOUT_MS,
+  type BombPotAnteBB,
+  type GameEvent,
+  type GameFeedbackCueEnvelope,
+  type RunResult,
+  type WinnerInfo,
 } from "@pokington/engine";
 import type { Card } from "@pokington/shared";
 import { router, Stack, useLocalSearchParams } from "expo-router";
@@ -28,16 +34,27 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   AppState,
+  Easing,
   Pressable,
   Share,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type LayoutChangeEvent,
 } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import ReAnimated, {
+  Easing as ReEasing,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withSpring,
+  withTiming,
+} from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { playNativeFeedbackHaptic } from "../../lib/haptics";
+import { Haptics, playNativeFeedbackHaptic } from "../../lib/haptics";
 import { getExpoRequestHostname } from "../../lib/nativePartyHost";
 import { removeSeatedTable, upsertSeatedTable } from "../../lib/seatedTables";
 
@@ -48,6 +65,15 @@ import HandPanel from "../../components/Table/HandPanel";
 import FooterStatusBanner from "../../components/Table/FooterStatusBanner";
 import OpponentDetailSheet from "../../components/Table/OpponentDetailSheet";
 import CommunityCards from "../../components/Table/CommunityCards";
+import {
+  DynamicPotPanel,
+  type BombPotDecisionAnnouncement,
+  type DynamicPotMode,
+  type LedgerSummaryInfo,
+  type PotIslandRect,
+} from "../../components/Table/DynamicPotPanel";
+import { LedgerOverlay } from "../../components/Table/LedgerOverlay";
+import { useTimedPanelVisibility } from "../../components/Table/useTimedPanelVisibility";
 
 const PROTOCOL_VERSION = 4;
 const MAX_SEATS = 10;
@@ -108,9 +134,13 @@ interface PublicTableState {
   runItVotes?: Record<string, 1 | 2 | 3>;
   runCount?: 1 | 2 | 3;
   runResults?: RunResult[];
+  runItVotingStartedAt?: number | null;
   runDealStartedAt?: number | null;
   runAnnouncement?: 1 | 2 | 3 | null;
   knownCardCount?: number;
+  knownCardCountAtRunIt?: number;
+  showdownStartedAt?: number | null;
+  nextHandStartsAt?: number | null;
   isRunItBoard?: boolean;
   isBombPot?: boolean;
   bombPotVote?: {
@@ -118,6 +148,7 @@ interface PublicTableState {
     proposedBy: string;
     votes: Record<string, boolean>;
   } | null;
+  bombPotVotingStartedAt?: number | null;
   bombPotNextHand?: { anteBB: BombPotAnteBB } | null;
   bombPotCooldown?: string[];
   pendingBoundaryUpdates?: Record<string, unknown>;
@@ -141,6 +172,14 @@ interface LedgerRow {
   isSeated: boolean;
 }
 
+interface PayoutInstruction {
+  fromPlayerId: string;
+  fromName: string;
+  toPlayerId: string;
+  toName: string;
+  amount: number;
+}
+
 interface LayoutRect {
   x: number;
   y: number;
@@ -150,7 +189,7 @@ interface LayoutRect {
 
 type MobileServerMessage =
   | PartyKitServerMessage<PublicTableState>
-  | { type: "PRIVATE_STATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]> }
+  | { type: "PRIVATE_STATE"; holeCards: [Card, Card] | null; revealedHoleCards: Record<string, [Card | null, Card | null]>; peekedCardMask?: number }
   | {
       type: "ROOM_PRESENCE";
       connectedPlayerIds: string[];
@@ -208,6 +247,9 @@ function computeMobileChipAngle({
   viewerSeatIndex?: number | null;
   totalSeats?: number;
 }) {
+  if (actorSeatIndex !== null && viewerSeatIndex !== null && actorSeatIndex === viewerSeatIndex) {
+    return computeChipFacingAngle(MOBILE_CHIP_POINT, { x: 0.5, y: 1.0 });
+  }
   const actorPoint = getMobileSeatPoint({ seatIndex: actorSeatIndex, viewerSeatIndex, totalSeats });
   if (!actorPoint) return DEFAULT_CHIP_ANGLE;
   return computeChipFacingAngle(MOBILE_CHIP_POINT, actorPoint);
@@ -226,6 +268,37 @@ function centerOf(rect: LayoutRect, origin = { x: 0, y: 0 }) {
 
 function sumAmounts(amounts: number[] | undefined): number {
   return (amounts ?? []).reduce((sum, amount) => sum + amount, 0);
+}
+
+function derivePayoutInstructions(rows: LedgerRow[]): PayoutInstruction[] {
+  const creditors = rows
+    .filter((r) => r.net > 0)
+    .map((r) => ({ ...r, rem: r.net }))
+    .sort((a, b) => b.rem - a.rem);
+  const debtors = rows
+    .filter((r) => r.net < 0)
+    .map((r) => ({ ...r, rem: -r.net }))
+    .sort((a, b) => b.rem - a.rem);
+  const payouts: PayoutInstruction[] = [];
+  let ci = 0;
+  let di = 0;
+  while (ci < creditors.length && di < debtors.length) {
+    const amount = Math.min(creditors[ci].rem, debtors[di].rem);
+    if (amount > 0) {
+      payouts.push({
+        fromPlayerId: debtors[di].playerId,
+        fromName: debtors[di].name,
+        toPlayerId: creditors[ci].playerId,
+        toName: creditors[ci].name,
+        amount,
+      });
+    }
+    creditors[ci].rem -= amount;
+    debtors[di].rem -= amount;
+    if (creditors[ci].rem === 0) ci += 1;
+    if (debtors[di].rem === 0) di += 1;
+  }
+  return payouts;
 }
 
 function deriveLedgerRows(entries: LedgerEntry[]): LedgerRow[] {
@@ -256,6 +329,277 @@ async function requestJoinToken(
   return requestNativeJoinToken(roomId, clientId, { explicitHost: env.partyKitHost, requestHostname });
 }
 
+// ── Raise panel components ────────────────────────────────────────────────
+
+const RAISE_THUMB_SIZE = 24;
+
+function NativeRaiseSlider({
+  value,
+  min,
+  max,
+  disabled,
+  onChange,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  disabled?: boolean;
+  onChange: (v: number) => void;
+}) {
+  const [trackWidth, setTrackWidth] = useState(0);
+  const widthRef = useRef(0);
+  const onChangeRef = useRef(onChange);
+  const minRef = useRef(min);
+  const maxRef = useRef(max);
+
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => { minRef.current = min; }, [min]);
+  useEffect(() => { maxRef.current = max; }, [max]);
+
+  const updateFromX = useCallback((x: number) => {
+    const ratio = Math.max(0, Math.min(1, x / widthRef.current));
+    onChangeRef.current(Math.round(minRef.current + ratio * (maxRef.current - minRef.current)));
+  }, []);
+
+  const panGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .runOnJS(true)
+        .minDistance(0)
+        .enabled(!disabled)
+        .onBegin((e) => updateFromX(e.x))
+        .onUpdate((e) => updateFromX(e.x)),
+    [disabled, updateFromX],
+  );
+
+  const pct = max > min ? (value - min) / (max - min) : 0;
+  const thumbLeft = trackWidth > 0
+    ? Math.max(0, Math.min(pct * trackWidth - RAISE_THUMB_SIZE / 2, trackWidth - RAISE_THUMB_SIZE))
+    : 0;
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <View
+        style={styles.sliderOuter}
+        onLayout={(e) => {
+          widthRef.current = e.nativeEvent.layout.width;
+          setTrackWidth(e.nativeEvent.layout.width);
+        }}
+      >
+        <View style={styles.sliderTrack}>
+          <View style={[styles.sliderFill, { width: trackWidth * pct }]} />
+        </View>
+        {trackWidth > 0 && (
+          <View style={[styles.sliderThumb, { left: thumbLeft }]} />
+        )}
+      </View>
+    </GestureDetector>
+  );
+}
+
+function NativeRaiseSheetContent({
+  pot,
+  stack,
+  currentBet,
+  minRaise,
+  bigBlind,
+  isFirstBet,
+  onConfirm,
+}: {
+  pot: number;
+  stack: number;
+  currentBet: number;
+  minRaise: number;
+  bigBlind: number;
+  isFirstBet: boolean;
+  onConfirm: (amount: number) => void;
+}) {
+  const { amount, setAmount, increment, lowerBound, presets, clamp, allInTotal } = useRaiseAmount({
+    minRaise,
+    stack,
+    pot,
+    bigBlind,
+    currentBet,
+  });
+
+  const isAllInOnly = lowerBound >= allInTotal;
+  const label = isFirstBet ? "Bet" : "Raise to";
+  const incrementLabel = formatCents(increment);
+
+  return (
+    <View style={styles.raiseSheetContent}>
+      <View style={styles.raiseAmountRow}>
+        <View style={styles.raiseStepSide}>
+          <Pressable
+            disabled={isAllInOnly}
+            onPress={() => setAmount(clamp(amount - increment))}
+            style={({ pressed }) => [
+              styles.raiseStepBtn,
+              pressed && styles.raiseStepBtnPressed,
+              isAllInOnly && styles.raiseStepBtnDisabled,
+            ]}
+          >
+            <Text style={styles.raiseStepBtnText}>−</Text>
+          </Pressable>
+          <Text style={styles.raiseStepIncrement}>-{incrementLabel}</Text>
+        </View>
+
+        <View style={styles.raiseAmountCenter}>
+          <Text style={styles.raiseAmountText}>{formatCents(amount)}</Text>
+          {isAllInOnly && <Text style={styles.raiseAllInLabel}>ALL-IN</Text>}
+        </View>
+
+        <View style={styles.raiseStepSide}>
+          <Pressable
+            disabled={isAllInOnly}
+            onPress={() => setAmount(clamp(amount + increment))}
+            style={({ pressed }) => [
+              styles.raiseStepBtn,
+              pressed && styles.raiseStepBtnPressed,
+              isAllInOnly && styles.raiseStepBtnDisabled,
+            ]}
+          >
+            <Text style={styles.raiseStepBtnText}>+</Text>
+          </Pressable>
+          <Text style={styles.raiseStepIncrement}>+{incrementLabel}</Text>
+        </View>
+      </View>
+
+      {isAllInOnly ? (
+        <View style={styles.raiseAllInFill} />
+      ) : (
+        <NativeRaiseSlider
+          value={amount}
+          min={lowerBound}
+          max={allInTotal}
+          onChange={setAmount}
+        />
+      )}
+
+      {!isAllInOnly && (
+        <View style={styles.raisePresetRow}>
+          {presets.map((p) => (
+            <Pressable
+              key={p.label}
+              onPress={() => setAmount(clamp(p.value))}
+              style={({ pressed }) => [styles.raisePreset, pressed && styles.raisePresetPressed]}
+            >
+              <Text style={styles.raisePresetText}>{p.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <Pressable
+        onPress={() => onConfirm(amount)}
+        style={({ pressed }) => [styles.raiseConfirmBtn, pressed && { opacity: 0.85 }]}
+      >
+        <LinearGradient
+          colors={["#ef4444", "#b91c1c"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.raiseConfirmGradient}
+        >
+          <Text style={styles.raiseConfirmText}>{label} {formatCents(amount)}</Text>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+// Soft glow ring rendered behind the primary (Check/Call) action button when
+// it's the user's turn. Pulses gently to draw the eye without being noisy.
+function ActionFocusRing({ active }: { active: boolean }) {
+  const presence = useSharedValue(0);
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    presence.value = withTiming(active ? 1 : 0, {
+      duration: 220,
+      easing: ReEasing.out(ReEasing.quad),
+    });
+    if (active) {
+      pulse.value = 0;
+      pulse.value = withRepeat(
+        withTiming(1, { duration: 1600, easing: ReEasing.inOut(ReEasing.quad) }),
+        -1,
+        true,
+      );
+    } else {
+      cancelAnimation(pulse);
+      pulse.value = withTiming(0, { duration: 220 });
+    }
+    return () => {
+      cancelAnimation(pulse);
+    };
+  }, [active, presence, pulse]);
+
+  const ringStyle = useAnimatedStyle(() => {
+    const breathe = 1 + pulse.value * 0.04;
+    return {
+      opacity: presence.value,
+      transform: [{ scale: 0.96 + presence.value * 0.04 * breathe }],
+      shadowOpacity: presence.value * 0.5,
+    };
+  });
+
+  return (
+    <ReAnimated.View
+      pointerEvents="none"
+      style={[styles.actionFocusRing, ringStyle]}
+    />
+  );
+}
+
+// Centered, max-width row that hosts the three action buttons. The primary
+// (Check/Call) sits in a relative slot so the focus ring can absolutely-position
+// itself behind only that button.
+function ActionRow({
+  fold,
+  primary,
+  trailing,
+  canAct,
+  focusActive,
+}: {
+  fold: React.ReactNode;
+  primary: React.ReactNode;
+  trailing: React.ReactNode;
+  canAct: boolean;
+  focusActive: boolean;
+}) {
+  const popStyle = useActionRowPopStyle(canAct);
+  return (
+    <View style={styles.actionRowOuter}>
+      <ReAnimated.View
+        style={[styles.actionRow, !canAct && styles.disabledActions, popStyle]}
+      >
+        {fold}
+        <View style={styles.primarySlot}>
+          <ActionFocusRing active={focusActive} />
+          {primary}
+        </View>
+        {trailing}
+      </ReAnimated.View>
+    </View>
+  );
+}
+
+// Brief 1 → 1.03 → 1 scale-pop on the action row when canAct flips false → true.
+function useActionRowPopStyle(canAct: boolean) {
+  const scale = useSharedValue(1);
+  const prevRef = useRef(canAct);
+  useEffect(() => {
+    if (!prevRef.current && canAct) {
+      scale.value = withSequence(
+        withSpring(1.03, { damping: 14, stiffness: 320, mass: 0.8 }),
+        withSpring(1, { damping: 18, stiffness: 280, mass: 0.9 }),
+      );
+    }
+    prevRef.current = canAct;
+  }, [canAct, scale]);
+  return useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+}
+
 export default function TableScreen() {
   const params = useLocalSearchParams<{ code?: string }>();
   const roomId = String(params.code ?? "").toUpperCase();
@@ -263,20 +607,28 @@ export default function TableScreen() {
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
   const [holeCards, setHoleCards] = useState<[Card, Card] | null>(null);
   const [revealedHoleCards, setRevealedHoleCards] = useState<Record<string, [Card | null, Card | null]>>({});
+  const [peekedCardMask, setPeekedCardMask] = useState(0);
   const [awayPlayerIds, setAwayPlayerIds] = useState<string[]>([]);
   const [peekedCounts, setPeekedCounts] = useState<Record<string, number>>({});
   const [queuedLeavePlayerIds, setQueuedLeavePlayerIds] = useState<string[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"seat" | "ledger" | "bomb" | "raise" | "menu" | null>(null);
+  const [sheet, setSheet] = useState<"seat" | "raise" | "menu" | "rebuy" | null>(null);
+  const [activePotTool, setActivePotTool] = useState<"bomb" | "ledger" | null>(null);
+  const [ledgerOverlayVisible, setLedgerOverlayVisible] = useState(false);
+  const [potIslandRect, setPotIslandRect] = useState<PotIslandRect | null>(null);
   const [selectedSeatIndex, setSelectedSeatIndex] = useState<number | null>(null);
   const [sitName, setSitName] = useState("");
-  const [buyIn, setBuyIn] = useState(String(DEFAULT_BUY_IN_CENTS / 100));
-  const [raiseTotal, setRaiseTotal] = useState("");
+  const [buyIn, setBuyIn] = useState((DEFAULT_BUY_IN_CENTS / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+  const buyInRef = useRef<any>(null);
+  const [rebuyAmount, setRebuyAmount] = useState("");
+  const rebuyRef = useRef<any>(null);
   const [autoPeelEnabled, setAutoPeelEnabled] = useState(false);
   const [detailSeatIndex, setDetailSeatIndex] = useState<number | null>(null);
   const [activeBombPotBoard, setActiveBombPotBoard] = useState(0);
   const [viewingRun, setViewingRun] = useState(0);
+  const [bombPotAnteIdx, setBombPotAnteIdx] = useState(0);
+  const [bombPotDecision, setBombPotDecision] = useState<BombPotDecisionAnnouncement | null>(null);
   const [utilityRailLayout, setUtilityRailLayout] = useState<LayoutRect | null>(null);
   const [utilityChipLayout, setUtilityChipLayout] = useState<LayoutRect | null>(null);
   const seenFeedbackKeysRef = useRef(new Set<string>());
@@ -303,12 +655,34 @@ export default function TableScreen() {
           if (seenFeedbackKeysRef.current.has(cue.key)) continue;
           seenFeedbackKeysRef.current.add(cue.key);
           playNativeFeedbackHaptic(cue, { myPlayerId: myPlayerIdRef.current });
+          if (cue.kind === "bomb_pot_scheduled") {
+            setBombPotDecision({
+              key: cue.key,
+              kind: "scheduled",
+              anteBB: cue.anteBB,
+              title: "BOMB POT!",
+              detail: `${cue.anteBB}x BB ante next hand`,
+              expiresAt: Date.now() + 3_000,
+            });
+          }
+          if (cue.kind === "bomb_pot_canceled") {
+            setBombPotDecision({
+              key: cue.key,
+              kind: "canceled",
+              anteBB: cue.anteBB,
+              title: "Bomb Pot Canceled",
+              detail: "A stack came up short, so this hand returns to standard blinds.",
+              expiresAt: Date.now() + 4_000,
+            });
+          }
         }
+        if (message.state.isBombPot) setBombPotDecision(null);
         break;
       }
       case "PRIVATE_STATE":
         setHoleCards(message.holeCards as [Card, Card] | null);
         setRevealedHoleCards((message.revealedHoleCards ?? {}) as Record<string, [Card | null, Card | null]>);
+        setPeekedCardMask(message.peekedCardMask ?? 0);
         break;
       case "ROOM_PRESENCE":
         setAwayPlayerIds(message.awayPlayerIds ?? []);
@@ -349,6 +723,13 @@ export default function TableScreen() {
   useEffect(() => {
     return () => connection?.disconnect();
   }, [connection]);
+
+  useEffect(() => {
+    if (!bombPotDecision) return;
+    const remainingMs = Math.max(0, bombPotDecision.expiresAt - Date.now());
+    const timer = setTimeout(() => setBombPotDecision(null), remainingMs);
+    return () => clearTimeout(timer);
+  }, [bombPotDecision]);
 
   // Build rich TablePlayer array (superset of PlayerSummary, includes lastAction + hasCards)
   const tablePlayers = useMemo<TablePlayer[]>(() => {
@@ -471,10 +852,63 @@ export default function TableScreen() {
   const showActiveTurnTreatment = canAct && !isWaiting && !isShowdown;
   const leaveQueued = !!myPlayerId && queuedLeavePlayerIds.includes(myPlayerId);
   const tablePot = (tableState?.pot ?? 0) + players.reduce((sum, p) => sum + p.currentBet, 0);
+  const showRunItVotingPanel = useTimedPanelVisibility({
+    visible: tableState?.phase === "voting",
+    startedAt: tableState?.runItVotingStartedAt,
+    durationMs: RUN_IT_VOTING_TIMEOUT_MS,
+  });
+  const showBombPotVotingPanel = useTimedPanelVisibility({
+    visible: tableState?.bombPotVote != null,
+    startedAt: tableState?.bombPotVotingStartedAt,
+    durationMs: BOMB_POT_VOTING_TIMEOUT_MS,
+  });
+  const animatedRunItShowdown =
+    tableState?.phase === "showdown" &&
+    !!tableState?.isRunItBoard &&
+    !tableState?.isBombPot &&
+    (tableState.runResults?.length ?? 0) > 0;
+  const hasPriorityPotMode =
+    (tableState?.bombPotVote != null && showBombPotVotingPanel) ||
+    (tableState?.phase === "voting" && showRunItVotingPanel) ||
+    tableState?.runAnnouncement != null ||
+    bombPotDecision != null ||
+    Boolean(
+      tableState?.phase === "showdown" &&
+        !animatedRunItShowdown &&
+        tableState.winners &&
+        tableState.winners.length > 0,
+    );
 
   const communityCards = tableState?.communityCards ?? [];
+  const myRevealedCardIndices = useMemo(() => {
+    const publicCards = myPlayerId ? revealedHoleCards[myPlayerId] : null;
+    const indices = new Set<0 | 1>();
+    if (publicCards?.[0]) indices.add(0);
+    if (publicCards?.[1]) indices.add(1);
+    return indices;
+  }, [myPlayerId, revealedHoleCards]);
+  const myPeekedCardIndices = useMemo(() => {
+    const indices = new Set<0 | 1>();
+    if (peekedCardMask & 1) indices.add(0);
+    if (peekedCardMask & 2) indices.add(1);
+    return indices;
+  }, [peekedCardMask]);
 
   const ledgerRows = useMemo(() => deriveLedgerRows(ledgerEntries), [ledgerEntries]);
+  const payoutInstructions = useMemo(() => derivePayoutInstructions(ledgerRows), [ledgerRows]);
+  const viewerLedgerSummary = useMemo<LedgerSummaryInfo>(() => {
+    const row = myPlayerId ? ledgerRows.find((ledgerRow) => ledgerRow.playerId === myPlayerId) : null;
+    return {
+      totalBuyIn: row?.totalBuyIn ?? 0,
+      totalCashOut: row?.totalCashOut ?? 0,
+      net: row?.net ?? 0,
+      hasLedger: !!row,
+    };
+  }, [ledgerRows, myPlayerId]);
+
+  useEffect(() => {
+    if (hasPriorityPotMode) setLedgerOverlayVisible(false);
+  }, [hasPriorityPotMode]);
 
   // Footer status: show "Waiting for X..." when it's not our turn and someone needs to act
   const footerStatusMessage = useMemo(() => {
@@ -485,6 +919,10 @@ export default function TableScreen() {
     return `Waiting for ${actorName}…`;
   }, [actorId, myPlayerId, showActiveTurnTreatment, tablePlayers]);
 
+  // Synced visual + haptic heartbeat while it's the local player's turn.
+  // Each cycle: a quick attack (the haptic thump lands here), then a slow
+  // decay back to the resting glow. Cadence: 2333ms (50% faster than the old
+  // 3500ms heartbeat); haptic upgraded from selection → light impact.
   useEffect(() => {
     if (!showActiveTurnTreatment) {
       turnGlowAnim.stopAnimation();
@@ -492,31 +930,43 @@ export default function TableScreen() {
       return;
     }
 
-    const loop = Animated.loop(
+    const PERIOD_MS = 2333;
+    const ATTACK_MS = 220;
+    const DECAY_MS = 1500;
+    let cancelled = false;
+
+    const beat = () => {
+      if (cancelled) return;
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      turnGlowAnim.stopAnimation();
       Animated.sequence([
         Animated.timing(turnGlowAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: ATTACK_MS,
+          easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
         Animated.timing(turnGlowAnim, {
           toValue: 0,
-          duration: 1000,
+          duration: DECAY_MS,
+          easing: Easing.inOut(Easing.quad),
           useNativeDriver: true,
         }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
+      ]).start();
+    };
+
+    beat();
+    const interval = setInterval(beat, PERIOD_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [showActiveTurnTreatment, turnGlowAnim]);
 
+  // Resting glow at 0.45, peak at 1.0 — the haptic lands at the peak.
   const turnWashOpacity = turnGlowAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.22, 0.68],
-  });
-  const turnGlowOpacity = turnGlowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.34, 0.88],
+    outputRange: [0.45, 1.0],
   });
 
   const sendEvent = useCallback((event: GameEvent, strength: "light" | "medium" | "heavy" = "light") => {
@@ -553,22 +1003,11 @@ export default function TableScreen() {
   const confirmSit = () => {
     const seatIndex = selectedSeatIndex;
     if (seatIndex == null || !myPlayerId) return;
-    const buyInCents = Math.max(0, Math.round(Number(buyIn || DEFAULT_BUY_IN_CENTS / 100) * 100));
+    const buyInCents = Math.max(0, Math.round(Number(buyIn.replace(/,/g, "") || DEFAULT_BUY_IN_CENTS / 100) * 100));
     sendEvent(
       { type: "TAKE_SEAT", playerId: myPlayerId, name: sitName.trim() || "Player", seatIndex, buyIn: buyInCents },
       "medium",
     );
-    setSheet(null);
-  };
-
-  const confirmRaise = () => {
-    const total = Math.round(Number(raiseTotal || minRaiseTotal / 100) * 100);
-    sendViewerEvent((playerId) => ({
-      type: "PLAYER_ACTION",
-      playerId,
-      action: "raise",
-      amount: Math.max(minRaiseTotal, total),
-    }), "medium");
     setSheet(null);
   };
 
@@ -582,8 +1021,86 @@ export default function TableScreen() {
 
   const proposeBombPot = (anteBB: BombPotAnteBB) => {
     sendViewerEvent((playerId) => ({ type: "PROPOSE_BOMB_POT", playerId, anteBB }), "medium");
+    setActivePotTool(null);
     setSheet(null);
   };
+
+  const potPanelMode = useMemo<DynamicPotMode>(() => {
+    const selectedAnteBB = BOMB_POT_ANTE_BB_VALUES[bombPotAnteIdx] ?? BOMB_POT_ANTE_BB_VALUES[0]!;
+    if (tableState?.bombPotVote && showBombPotVotingPanel) {
+      return {
+        kind: "bombVote",
+        vote: tableState.bombPotVote,
+        players,
+        viewerId: myPlayerId,
+        bigBlind: tableState.blinds.big,
+        votingStartedAt: tableState.bombPotVotingStartedAt,
+        onApprove: () => voteBombPot(true),
+        onReject: () => voteBombPot(false),
+      };
+    }
+    if (tableState?.phase === "voting" && showRunItVotingPanel) {
+      return {
+        kind: "runVote",
+        votes: tableState.runItVotes ?? {},
+        players,
+        viewerId: myPlayerId,
+        canVote: !!viewer && !viewer.isFolded,
+        votingStartedAt: tableState.runItVotingStartedAt,
+        onVote: voteRun,
+      };
+    }
+    if (tableState?.runAnnouncement != null) {
+      return { kind: "runAnnouncement", runCount: tableState.runAnnouncement };
+    }
+    if (bombPotDecision) {
+      return { kind: "bombDecision", announcement: bombPotDecision };
+    }
+    if (
+      tableState?.phase === "showdown" &&
+      !animatedRunItShowdown &&
+      tableState.winners &&
+      tableState.winners.length > 0
+    ) {
+      return { kind: "winner", winners: tableState.winners, players, viewerId: myPlayerId };
+    }
+    if (activePotTool === "bomb" && tableState && viewer) {
+      return {
+        kind: "bombProposal",
+        selectedAnteBB,
+        bigBlind: tableState.blinds.big,
+        onSelectAnte: (anteBB) => {
+          const nextIndex = BOMB_POT_ANTE_BB_VALUES.indexOf(anteBB);
+          if (nextIndex >= 0) setBombPotAnteIdx(nextIndex);
+        },
+        onPropose: () => proposeBombPot(selectedAnteBB),
+        disabled: !viewer,
+      };
+    }
+    if (activePotTool === "ledger") {
+      return {
+        kind: "ledgerSummary",
+        summary: viewerLedgerSummary,
+        onOpenLedger: () => {
+          setLedgerOverlayVisible(true);
+          playNativeFeedbackHaptic({ kind: "local_press", key: "ledger_expand" }, { myPlayerId });
+        },
+      };
+    }
+    return { kind: "compact" };
+  }, [
+    activePotTool,
+    animatedRunItShowdown,
+    bombPotDecision,
+    bombPotAnteIdx,
+    myPlayerId,
+    players,
+    showBombPotVotingPanel,
+    showRunItVotingPanel,
+    tableState,
+    viewer,
+    viewerLedgerSummary,
+  ]);
 
   const revealCard = (cardIndex: 0 | 1) => {
     connection?.revealCard(cardIndex);
@@ -620,37 +1137,19 @@ export default function TableScreen() {
       />
       {showActiveTurnTreatment ? (
         <View pointerEvents="none" style={styles.turnPerimeterLayer}>
-          <Animated.View style={[styles.turnWashLayer, { opacity: turnWashOpacity }]}>
+          {/* Single bottom-anchored breathing wash. The opacity peak is timed
+              with the heartbeat haptic so each thump is felt and seen. */}
+          <Animated.View style={[styles.turnBottomWash, { opacity: turnWashOpacity }]}>
             <LinearGradient
-              colors={["rgba(239,68,68,0.34)", "rgba(239,68,68,0)"] as const}
-              locations={[0, 1] as const}
-              style={[styles.turnEdgeWash, styles.turnEdgeWashTop]}
+              colors={[
+                "rgba(239,68,68,0)",
+                "rgba(239,68,68,0.05)",
+                "rgba(239,68,68,0.16)",
+                "rgba(239,68,68,0.34)",
+              ] as const}
+              locations={[0, 0.4, 0.78, 1] as const}
+              style={StyleSheet.absoluteFill}
             />
-            <LinearGradient
-              colors={["rgba(239,68,68,0)", "rgba(239,68,68,0.28)"] as const}
-              locations={[0, 1] as const}
-              style={[styles.turnEdgeWash, styles.turnEdgeWashBottom]}
-            />
-            <LinearGradient
-              colors={["rgba(239,68,68,0.18)", "rgba(239,68,68,0)"] as const}
-              locations={[0, 1] as const}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={[styles.turnSideWash, styles.turnSideWashLeft]}
-            />
-            <LinearGradient
-              colors={["rgba(239,68,68,0)", "rgba(239,68,68,0.18)"] as const}
-              locations={[0, 1] as const}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={[styles.turnSideWash, styles.turnSideWashRight]}
-            />
-          </Animated.View>
-          <Animated.View style={[styles.turnGlowLayer, { opacity: turnGlowOpacity }]}>
-            <View style={[styles.turnHalo, styles.turnHaloTop]} />
-            <View style={[styles.turnHalo, styles.turnHaloBottom]} />
-            <View style={[styles.turnHaloSide, styles.turnHaloLeft]} />
-            <View style={[styles.turnHaloSide, styles.turnHaloRight]} />
           </Animated.View>
         </View>
       ) : null}
@@ -685,8 +1184,8 @@ export default function TableScreen() {
         />
       </View>
 
-      {/* ── Table stage: boards + pot + overlays ── */}
-      <View style={styles.tableStage}>
+      {/* ── Middle: community cards centered between strip and pot ── */}
+      <View style={styles.tableMiddle}>
         <CommunityCards
           phase={tableState?.phase}
           communityCards={tableState?.communityCards}
@@ -694,7 +1193,7 @@ export default function TableScreen() {
           isBombPot={tableState?.isBombPot}
           isRunItBoard={tableState?.isRunItBoard}
           runResults={tableState?.runResults}
-          knownCardCount={tableState?.knownCardCount}
+          knownCardCount={tableState?.knownCardCountAtRunIt ?? tableState?.knownCardCount}
           runDealStartedAt={tableState?.runDealStartedAt}
           runAnnouncement={tableState?.runAnnouncement}
           handNumber={tableState?.handNumber}
@@ -703,57 +1202,26 @@ export default function TableScreen() {
           viewingRunIndex={viewingRun}
           onViewingRunChange={setViewingRun}
         />
-
-        {(tableState?.pot ?? 0) > 0 && (
-          <View style={styles.potPill}>
-            {players.some((p) => p.currentBet > 0) ? (
-              <>
-                <Text style={styles.potValue}>{cents(tableState?.pot ?? 0)}</Text>
-                <View style={styles.potDivider} />
-                <Text style={styles.potLabel}>Total {cents(tablePot)}</Text>
-              </>
-            ) : (
-              <>
-                <Text style={styles.potLabel}>POT</Text>
-                <Text style={styles.potValue}>{cents(tableState?.pot ?? 0)}</Text>
-              </>
-            )}
-          </View>
-        )}
-
-        {tableState?.bombPotVote ? (
-          <View style={styles.overlayCard}>
-            <Text style={styles.overlayTitle}>Bomb pot vote</Text>
-            <Text style={styles.overlayText}>{tableState.bombPotVote.anteBB} BB ante proposed</Text>
-            <View style={styles.inlineActions}>
-              <NativeButton label="Approve" onPress={() => voteBombPot(true)} style={styles.inlineButton} />
-              <NativeButton label="Reject" tone="secondary" onPress={() => voteBombPot(false)} style={styles.inlineButton} />
-            </View>
-          </View>
-        ) : null}
-
-        {tableState?.phase === "voting" ? (
-          <View style={styles.overlayCard}>
-            <Text style={styles.overlayTitle}>Run it?</Text>
-            <View style={styles.inlineActions}>
-              <NativeButton label="1×" tone="secondary" onPress={() => voteRun(1)} style={styles.inlineButton} />
-              <NativeButton label="2×" onPress={() => voteRun(2)} style={styles.inlineButton} />
-              <NativeButton label="3×" tone="secondary" onPress={() => voteRun(3)} style={styles.inlineButton} />
-            </View>
-          </View>
-        ) : null}
-
-        {tableState?.winners?.length ? (
-          <View style={styles.winnerBanner}>
-            <Text style={styles.winnerTitle}>Winner</Text>
-            <Text style={styles.winnerText}>
-              {tableState.winners
-                .map((w) => `${players.find((p) => p.id === w.playerId)?.name ?? "Player"} ${cents(w.amount)}`)
-                .join(" · ")}
-            </Text>
-          </View>
-        ) : null}
       </View>
+
+      {/* ── Dynamic pot island (sits just above chip rail) ── */}
+      {tableState != null && (
+        <DynamicPotPanel
+          pot={tableState.pot ?? 0}
+          total={tablePot}
+          hasContributions={players.some((p) => p.currentBet > 0)}
+          mode={potPanelMode}
+          onRootMeasure={setPotIslandRect}
+        />
+      )}
+
+      <LedgerOverlay
+        visible={ledgerOverlayVisible}
+        ledgerRows={ledgerRows}
+        payoutInstructions={payoutInstructions}
+        sourceRect={potIslandRect}
+        onDismiss={() => setLedgerOverlayVisible(false)}
+      />
 
       {/* ── Utility rail: bomb · chip · ledger ── */}
       <View
@@ -763,7 +1231,11 @@ export default function TableScreen() {
         <Pressable
           accessibilityRole="button"
           disabled={!viewer || !!tableState?.bombPotVote}
-          onPress={() => setSheet("bomb")}
+          onPress={() => {
+            setActivePotTool((tool) => (tool === "bomb" ? null : "bomb"));
+            setLedgerOverlayVisible(false);
+            playNativeFeedbackHaptic({ kind: "local_press", key: "bomb_tool" }, { myPlayerId });
+          }}
           style={[styles.floatingUtility, (!viewer || !!tableState?.bombPotVote) && styles.utilityDisabled]}
         >
           <Text style={styles.utilityIcon}>💣</Text>
@@ -779,7 +1251,8 @@ export default function TableScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={() => {
-            setSheet("ledger");
+            setActivePotTool((tool) => (tool === "ledger" ? null : "ledger"));
+            setLedgerOverlayVisible(false);
             playNativeFeedbackHaptic({ kind: "local_press", key: "ledger" }, { myPlayerId });
           }}
           style={styles.floatingUtility}
@@ -788,75 +1261,94 @@ export default function TableScreen() {
         </Pressable>
       </View>
 
-      {/* ── Hand Panel ── */}
-      <HandPanel
-        viewer={viewer}
-        holeCards={holeCards ?? (myPlayerId && revealedHoleCards[myPlayerId] ? revealedHoleCards[myPlayerId] as [Card, Card] : null)}
-        communityCards={communityCards}
-        leaveQueued={leaveQueued}
-        autoPeelEnabled={autoPeelEnabled}
-        onIdentityPress={toggleLeave}
-        onPeekCard={(index) => peekCard(index)}
-        onRevealCard={(index) => revealCard(index)}
-        onToggleAutoPeel={() => setAutoPeelEnabled((v) => !v)}
-      />
+      {/* ── Bottom dock (HandPanel + action dock, banner anchored here) ── */}
+      <View style={styles.bottomDock}>
+        <HandPanel
+          viewer={viewer}
+          holeCards={holeCards}
+          communityCards={communityCards}
+          autoPeelEnabled={autoPeelEnabled}
+          revealedToOthersIndices={myRevealedCardIndices}
+          peekedCardIndices={myPeekedCardIndices}
+          onIdentityPress={() => {
+            if (!viewer) return;
+            setRebuyAmount("");
+            setSheet("rebuy");
+          }}
+          onPeekCard={(index) => peekCard(index)}
+          onRevealCard={(index) => revealCard(index)}
+          onToggleAutoPeel={() => setAutoPeelEnabled((v) => !v)}
+        />
 
-      {/* ── Footer status banner ── */}
-      <FooterStatusBanner
-        message={footerStatusMessage}
-        tone={showActiveTurnTreatment ? "active" : "neutral"}
-      />
-
-      {/* ── Action dock ── */}
-      <View style={[styles.actionDock, showActiveTurnTreatment && styles.actionDockActive]}>
-        {isWaiting || (isShowdown && tableState?.winners?.length) ? (
-          <NativeButton
-            label="Start Game"
-            disabled={!viewer}
-            onPress={() => sendEvent({ type: "START_HAND" }, "medium")}
-            style={styles.fullActionButton}
-          />
-        ) : (
-          <View style={[styles.actionRow, !canAct && styles.disabledActions]}>
-            <NativeButton
-              label="Fold"
-              tone="danger"
-              disabled={!canAct}
-              onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "fold" }))}
-              style={[styles.actionButton, styles.foldAction]}
-            />
-            <NativeButton
-              label={canCheck ? "Check" : `Call ${cents(callAmount)}`}
-              disabled={!canAct}
-              onPress={() =>
-                sendViewerEvent((playerId) => ({
-                  type: "PLAYER_ACTION",
-                  playerId,
-                  action: canCheck ? "check" : "call",
-                }))
+        {/* ── Action dock ── */}
+        <View style={[styles.actionDock, showActiveTurnTreatment && styles.actionDockActive]}>
+          {isWaiting || (isShowdown && tableState?.winners?.length) ? (
+            <View style={styles.actionRowOuter}>
+              <NativeButton
+                label="Start Game"
+                disabled={!viewer}
+                onPress={() => sendEvent({ type: "START_HAND" }, "medium")}
+                style={styles.fullActionButton}
+              />
+            </View>
+          ) : (
+            <ActionRow
+              canAct={canAct}
+              focusActive={Boolean(showActiveTurnTreatment && canAct)}
+              fold={
+                <NativeButton
+                  label="Fold"
+                  tone="danger"
+                  disabled={!canAct}
+                  onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "fold" }))}
+                  style={[styles.actionButton, styles.foldAction]}
+                />
               }
-              style={styles.actionButton}
+              primary={
+                <NativeButton
+                  label={canCheck ? "Check" : `Call ${cents(callAmount)}`}
+                  disabled={!canAct}
+                  onPress={() =>
+                    sendViewerEvent((playerId) => ({
+                      type: "PLAYER_ACTION",
+                      playerId,
+                      action: canCheck ? "check" : "call",
+                    }))
+                  }
+                  style={[styles.actionButton, styles.primaryAction]}
+                />
+              }
+              trailing={
+                canRaise ? (
+                  <NativeButton
+                    label="Raise"
+                    disabled={!canRaise}
+                    onPress={() => setSheet("raise")}
+                    style={[styles.actionButton, styles.raiseAction]}
+                  />
+                ) : (
+                  <NativeButton
+                    label="All-in"
+                    disabled={!canAllIn}
+                    onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "all-in" }), "heavy")}
+                    style={[styles.actionButton, styles.raiseAction]}
+                  />
+                )
+              }
             />
-            {canRaise ? (
-              <NativeButton
-                label="Raise"
-                disabled={!canRaise}
-                onPress={() => {
-                  setRaiseTotal(String(minRaiseTotal / 100));
-                  setSheet("raise");
-                }}
-                style={[styles.actionButton, styles.raiseAction]}
-              />
-            ) : (
-              <NativeButton
-                label="All-in"
-                disabled={!canAllIn}
-                onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "all-in" }), "heavy")}
-                style={[styles.actionButton, styles.raiseAction]}
-              />
-            )}
+          )}
+        </View>
+
+        {/* ── Footer status banner — bottom is relative to bottomDock, not SafeAreaView ── */}
+        {footerStatusMessage ? (
+          <View pointerEvents="none" style={styles.statusBannerAnchor}>
+            <FooterStatusBanner
+              message={footerStatusMessage}
+              tone={showActiveTurnTreatment ? "active" : "neutral"}
+              isFloating
+            />
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* ── Opponent detail sheet ── */}
@@ -877,112 +1369,179 @@ export default function TableScreen() {
       <NativeBottomSheet visible={sheet != null} onDismiss={() => setSheet(null)}>
         {sheet === "menu" ? (
           <>
-            <Text style={styles.sheetTitle}>Table Menu</Text>
-            <NativeButton
-              label="Share Table Code"
-              tone="secondary"
-              onPress={() => {
-                Share.share({ message: roomId });
-                playNativeFeedbackHaptic({ kind: "local_press", key: "share_code" }, { myPlayerId });
-              }}
-            />
-            {viewer ? (
-              <NativeButton
-                label={leaveQueued ? "Cancel Leave" : "Leave Next Hand"}
-                tone="secondary"
-                onPress={() => { toggleLeave(); setSheet(null); }}
+            <Text style={styles.sheetTitle}>Table</Text>
+            <NativePanel variant="grouped">
+              <NativeListRow
+                title="Share Table Code"
+                trailing={<Text style={styles.codeChip}>{roomId}</Text>}
+                showsChevron
+                isLast={!viewer}
+                onPress={() => {
+                  Share.share({ message: roomId });
+                  playNativeFeedbackHaptic({ kind: "local_press", key: "share_code" }, { myPlayerId });
+                }}
               />
-            ) : null}
+              {viewer ? (
+                <NativeListRow
+                  title={leaveQueued ? "Cancel Leave" : "Leave Next Hand"}
+                  destructive={leaveQueued}
+                  showsChevron
+                  isLast
+                  onPress={() => { toggleLeave(); setSheet(null); }}
+                />
+              ) : null}
+            </NativePanel>
           </>
         ) : null}
 
         {sheet === "seat" ? (
           <>
             <Text style={styles.sheetTitle}>Seat {(selectedSeatIndex ?? 0) + 1}</Text>
-            <TextInput
+
+            <NativeTextField
+              label="Your name"
               value={sitName}
               onChangeText={setSitName}
-              placeholder="Your name"
-              placeholderTextColor={nativeLightTheme.colors.muted}
-              style={styles.input}
+              placeholder="Player"
+              autoCapitalize="words"
+              autoCorrect={false}
+              returnKeyType="next"
             />
-            <TextInput
-              value={buyIn}
-              onChangeText={setBuyIn}
-              placeholder="Buy-in dollars"
-              keyboardType="number-pad"
-              placeholderTextColor={nativeLightTheme.colors.muted}
-              style={styles.input}
-            />
+
+            <Text style={styles.buyInSectionLabel}>BUY-IN</Text>
+            <View style={styles.buyInAmountRow}>
+              <Text style={styles.buyInDollarSign}>$</Text>
+              <NativeTextField
+                ref={buyInRef}
+                value={buyIn}
+                onChangeText={(text) => {
+                  const m = text.replace(/,/g, "").match(/^\d*\.?\d{0,2}/);
+                  const valid = m ? m[0] : "";
+                  if (valid !== text) buyInRef.current?.setNativeProps({ text: valid });
+                  setBuyIn(valid);
+                }}
+                onBlur={() => {
+                  const n = parseFloat(buyIn.replace(/,/g, "") || String(DEFAULT_BUY_IN_CENTS / 100));
+                  if (!isNaN(n) && n > 0) setBuyIn(n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }}
+                placeholder={(DEFAULT_BUY_IN_CENTS / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                keyboardType="decimal-pad"
+                containerStyle={styles.buyInFieldFlex}
+              />
+            </View>
+
+            <View style={styles.rebuyPresetRow}>
+              {getBuyInPresets(tableState?.blinds?.big ?? DEFAULT_BUY_IN_CENTS).map((preset) => {
+                const label = preset.dollars % 1 === 0
+                  ? `$${preset.dollars.toFixed(0)}`
+                  : `$${preset.dollars.toFixed(2)}`;
+                const selected = parseFloat(buyIn.replace(/,/g, "")) === preset.dollars;
+                return (
+                  <Pressable
+                    key={preset.label}
+                    onPress={() => setBuyIn(preset.dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+                    style={[styles.rebuyPreset, selected && styles.rebuyPresetSelected]}
+                  >
+                    <Text style={[styles.rebuyPresetLabel, selected && styles.rebuyPresetLabelSelected]}>
+                      {label}
+                    </Text>
+                    <Text style={[styles.rebuyPresetSub, selected && styles.rebuyPresetSubSelected]}>
+                      {preset.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <NativeButton label="Sit Down" onPress={confirmSit} />
           </>
         ) : null}
 
-        {sheet === "ledger" ? (
-          <>
-            <Text style={styles.sheetTitle}>Session Ledger</Text>
-            {ledgerRows.length > 0 ? (
-              <View style={styles.ledgerTable}>
-                <View style={styles.ledgerHeader}>
-                  <Text style={styles.ledgerHeaderPlayerText}>Player</Text>
-                  <Text style={styles.ledgerHeaderText}>Buy-in</Text>
-                  <Text style={styles.ledgerHeaderText}>Out</Text>
-                  <Text style={styles.ledgerHeaderText}>Net</Text>
-                </View>
-                {ledgerRows.map((row) => {
-                  const netPrefix = row.net > 0 ? "+" : row.net < 0 ? "-" : "";
-                  const netColor =
-                    row.net > 0 ? "#16a34a" : row.net < 0 ? nativeLightTheme.colors.accent : nativeLightTheme.colors.muted;
-                  return (
-                    <View key={row.playerId} style={styles.ledgerRow}>
-                      <View style={styles.ledgerPlayerCell}>
-                        <Text style={styles.ledgerName} numberOfLines={1}>{row.name}</Text>
-                        {row.isSeated ? <Text style={styles.ledgerSeated}>seated</Text> : null}
-                      </View>
-                      <Text style={styles.ledgerAmount}>{cents(row.totalBuyIn)}</Text>
-                      <Text style={styles.ledgerAmount}>{cents(row.totalCashOut)}</Text>
-                      <Text style={[styles.ledgerNet, { color: netColor }]}>
-                        {netPrefix}{cents(Math.abs(row.net))}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={styles.sheetText}>No players have sat down yet.</Text>
-            )}
-          </>
-        ) : null}
-
-        {sheet === "bomb" ? (
-          <>
-            <Text style={styles.sheetTitle}>Bomb Pot</Text>
-            <View style={styles.inlineActions}>
-              {[2, 4, 8].map((ante) => (
-                <NativeButton
-                  key={ante}
-                  label={`${ante} BB`}
-                  onPress={() => proposeBombPot(ante as BombPotAnteBB)}
-                  style={styles.inlineButton}
-                />
-              ))}
-            </View>
-          </>
-        ) : null}
-
         {sheet === "raise" ? (
+          <NativeRaiseSheetContent
+            pot={tablePot}
+            stack={viewer?.stack ?? 0}
+            currentBet={viewer?.currentBet ?? 0}
+            minRaise={minRaiseTotal}
+            bigBlind={tableState?.blinds.big ?? 25}
+            isFirstBet={(tableState?.roundBet ?? 0) === 0}
+            onConfirm={(amount) => {
+              sendViewerEvent((playerId) => ({
+                type: "PLAYER_ACTION",
+                playerId,
+                action: "raise",
+                amount,
+              }), "medium");
+              setSheet(null);
+            }}
+          />
+        ) : null}
+
+        {sheet === "rebuy" && viewer ? (
           <>
-            <Text style={styles.sheetTitle}>Raise Total</Text>
-            <Text style={styles.sheetText}>Minimum {cents(minRaiseTotal)}</Text>
-            <TextInput
-              value={raiseTotal}
-              onChangeText={setRaiseTotal}
-              placeholder="Total bet dollars"
-              keyboardType="number-pad"
-              placeholderTextColor={nativeLightTheme.colors.muted}
-              style={styles.input}
+            <Text style={styles.sheetTitle}>{viewer.name}</Text>
+
+            <Text style={styles.buyInSectionLabel}>ADD CHIPS</Text>
+            <View style={styles.buyInAmountRow}>
+              <Text style={styles.buyInDollarSign}>$</Text>
+              <NativeTextField
+                ref={rebuyRef}
+                value={rebuyAmount}
+                onChangeText={(text) => {
+                  const m = text.replace(/,/g, "").match(/^\d*\.?\d{0,2}/);
+                  const valid = m ? m[0] : "";
+                  if (valid !== text) rebuyRef.current?.setNativeProps({ text: valid });
+                  setRebuyAmount(valid);
+                }}
+                onBlur={() => {
+                  const n = parseFloat(rebuyAmount.replace(/,/g, "") || "0");
+                  if (!isNaN(n) && n > 0) setRebuyAmount(n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+                }}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                containerStyle={styles.buyInFieldFlex}
+              />
+            </View>
+
+            <View style={styles.rebuyPresetRow}>
+              {getBuyInPresets(tableState?.blinds?.big ?? DEFAULT_BUY_IN_CENTS).map((preset) => {
+                const label = preset.dollars % 1 === 0
+                  ? `$${preset.dollars.toFixed(0)}`
+                  : `$${preset.dollars.toFixed(2)}`;
+                const selected = parseFloat(rebuyAmount.replace(/,/g, "")) === preset.dollars;
+                return (
+                  <Pressable
+                    key={preset.label}
+                    onPress={() => setRebuyAmount(preset.dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
+                    style={[styles.rebuyPreset, selected && styles.rebuyPresetSelected]}
+                  >
+                    <Text style={[styles.rebuyPresetLabel, selected && styles.rebuyPresetLabelSelected]}>
+                      {label}
+                    </Text>
+                    <Text style={[styles.rebuyPresetSub, selected && styles.rebuyPresetSubSelected]}>
+                      {preset.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <NativeButton
+              label="Buy In"
+              onPress={() => {
+                const dollars = parseFloat(rebuyAmount.replace(/,/g, "") || "0");
+                const buyInCents = Math.max(0, Math.round(dollars * 100));
+                if (buyInCents <= 0) return;
+                sendViewerEvent((playerId) => ({
+                  type: "REQUEST_BOUNDARY_UPDATE",
+                  playerId,
+                  leaveSeat: false,
+                  moveToSeatIndex: null,
+                  chipDelta: buyInCents,
+                }), "medium");
+                setSheet(null);
+              }}
             />
-            <NativeButton label="Raise" onPress={confirmRaise} />
           </>
         ) : null}
       </NativeBottomSheet>
@@ -1000,75 +1559,26 @@ const styles = StyleSheet.create({
   turnPerimeterLayer: {
     ...StyleSheet.absoluteFillObject,
   },
-  turnWashLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  turnGlowLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  turnEdgeWash: {
+  // Single soft red wash anchored at the bottom of the screen — focuses
+  // attention near the action bar without busying up the whole frame.
+  turnBottomWash: {
     position: "absolute",
     left: 0,
     right: 0,
-    height: 140,
-  },
-  turnEdgeWashTop: {
-    top: -8,
-  },
-  turnEdgeWashBottom: {
-    bottom: -8,
-  },
-  turnSideWash: {
-    position: "absolute",
-    top: 0,
     bottom: 0,
-    width: 86,
+    height: "55%",
   },
-  turnSideWashLeft: {
+  bottomDock: {
+    // Wrapper for HandPanel + actionDock so statusBannerAnchor is relative to this, not SafeAreaView
+  },
+  statusBannerAnchor: {
+    position: "absolute",
+    bottom: 74,
     left: 0,
-  },
-  turnSideWashRight: {
     right: 0,
+    zIndex: 20,
+    alignItems: "center",
   },
-  turnHalo: {
-    position: "absolute",
-    left: 16,
-    right: 16,
-    height: 34,
-    borderRadius: 24,
-    backgroundColor: "rgba(248,113,113,0.2)",
-    shadowColor: "#ef4444",
-    shadowOpacity: 0.34,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
-  },
-  turnHaloTop: {
-    top: 10,
-  },
-  turnHaloBottom: {
-    bottom: 10,
-  },
-  turnHaloSide: {
-    position: "absolute",
-    top: 112,
-    bottom: 112,
-    width: 28,
-    borderRadius: 20,
-    backgroundColor: "rgba(248,113,113,0.12)",
-    shadowColor: "#ef4444",
-    shadowOpacity: 0.2,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 1,
-  },
-  turnHaloLeft: {
-    left: 8,
-  },
-  turnHaloRight: {
-    right: 8,
-  },
-
   errorBanner: {
     marginHorizontal: 16,
     marginTop: 8,
@@ -1094,98 +1604,12 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  tableStage: {
+  tableMiddle: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "flex-start",
-    paddingHorizontal: 20,
-    paddingTop: 8,
-  },
-  potPill: {
-    minWidth: 140,
-    alignItems: "center",
-    borderRadius: 20,
-    backgroundColor: "#ef4444",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    marginTop: 10,
-    shadowColor: "#ef4444",
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-  },
-  potValue: {
-    color: "#ffffff",
-    fontSize: 26,
-    fontWeight: "900",
-    letterSpacing: -0.5,
-  },
-  potDivider: {
-    width: "100%",
-    height: 1,
-    marginVertical: 6,
-    backgroundColor: "rgba(255,255,255,0.22)",
-  },
-  potLabel: {
-    color: "rgba(255,255,255,0.75)",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 3,
-    textTransform: "uppercase",
-  },
-
-  overlayCard: {
-    width: "100%",
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    padding: 14,
-    gap: 10,
-    marginTop: 14,
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  overlayTitle: {
-    color: nativeLightTheme.colors.text,
-    fontSize: 15,
-    fontWeight: "900",
-    textAlign: "center",
-  },
-  overlayText: {
-    color: nativeLightTheme.colors.muted,
-    fontSize: 13,
-    textAlign: "center",
-  },
-  winnerBanner: {
-    width: "100%",
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    padding: 14,
-    alignItems: "center",
-    marginTop: 14,
-    shadowColor: "#0f172a",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
-  },
-  winnerTitle: {
-    color: nativeLightTheme.colors.accent,
-    fontSize: 11,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 2,
-  },
-  winnerText: {
-    color: nativeLightTheme.colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-    textAlign: "center",
+    justifyContent: "center",
+    paddingHorizontal: 2,
+    gap: 14,
   },
 
   utilityRail: {
@@ -1194,8 +1618,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 18,
-    marginTop: 4,
-    marginBottom: 4,
   },
   utilityChipSlot: {
     width: 54,
@@ -1231,21 +1653,43 @@ const styles = StyleSheet.create({
     borderTopColor: "rgba(148,163,184,0.14)",
     backgroundColor: "rgba(255,255,255,0.88)",
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 12,
+    paddingTop: 12,
+    paddingBottom: 14,
   },
   actionDockActive: {
-    borderTopColor: "rgba(248,113,113,0.26)",
-    backgroundColor: "rgba(255,247,247,0.94)",
+    borderTopColor: "rgba(248,113,113,0.18)",
+    backgroundColor: "rgba(255,247,247,0.82)",
     shadowColor: "#ef4444",
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: -5 },
-    elevation: 3,
+    shadowOpacity: 0.1,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 4,
+  },
+  actionRowOuter: {
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
   },
   actionRow: {
     flexDirection: "row",
     gap: 10,
+  },
+  primarySlot: {
+    flex: 1,
+    position: "relative",
+  },
+  actionFocusRing: {
+    position: "absolute",
+    top: -6,
+    bottom: -6,
+    left: -4,
+    right: -4,
+    borderRadius: 24,
+    backgroundColor: "rgba(239,68,68,0.10)",
+    shadowColor: "#ef4444",
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 0 },
+    zIndex: 0,
   },
   disabledActions: {
     opacity: 0.55,
@@ -1256,18 +1700,13 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   foldAction: {},
+  primaryAction: {
+    zIndex: 1,
+  },
   raiseAction: {},
   fullActionButton: {
     minHeight: 56,
     borderRadius: 20,
-  },
-
-  inlineActions: {
-    flexDirection: "row",
-    gap: 10,
-  },
-  inlineButton: {
-    flex: 1,
   },
 
   sheetTitle: {
@@ -1281,6 +1720,88 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
+  },
+
+  // ── Rebuy / add-chips sheet ─────────────────────────────────────────────
+  rebuyHeader: {
+    alignItems: "center",
+    marginBottom: 6,
+    gap: 6,
+  },
+  rebuyEyebrow: {
+    color: nativeLightTheme.colors.muted,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 4,
+  },
+  rebuyTitle: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 26,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  rebuySubtitle: {
+    color: nativeLightTheme.colors.muted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: "center",
+    paddingHorizontal: 12,
+  },
+  buyInSectionLabel: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  buyInAmountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  buyInDollarSign: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 22,
+    fontWeight: "700",
+  },
+  buyInFieldFlex: {
+    flex: 1,
+  },
+  rebuyPresetRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  rebuyPreset: {
+    flex: 1,
+    minHeight: 64,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.28)",
+    backgroundColor: "rgba(15,23,42,0.04)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  rebuyPresetSelected: {
+    borderColor: "rgba(239,68,68,0.45)",
+    backgroundColor: "rgba(239,68,68,0.10)",
+  },
+  rebuyPresetLabel: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  rebuyPresetLabelSelected: {
+    color: nativeLightTheme.colors.accent,
+  },
+  rebuyPresetSub: {
+    color: nativeLightTheme.colors.muted,
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.4,
+  },
+  rebuyPresetSubSelected: {
+    color: nativeLightTheme.colors.accent,
   },
 
   ledgerTable: { gap: 6 },
@@ -1357,16 +1878,271 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "right",
   },
-
-  input: {
-    minHeight: 56,
-    borderRadius: 18,
+  ledgerPayouts: {
+    marginTop: 12,
+    gap: 6,
+  },
+  ledgerPayoutsTitle: {
+    color: nativeLightTheme.colors.faint,
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+    paddingHorizontal: 10,
+    marginBottom: 2,
+  },
+  ledgerPayoutRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: nativeLightTheme.colors.border,
     backgroundColor: nativeLightTheme.colors.surfaceMuted,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+  },
+  ledgerPayoutFrom: {
+    flex: 1,
+    minWidth: 0,
+    color: nativeLightTheme.colors.accent,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  ledgerPayoutArrow: {
+    color: nativeLightTheme.colors.muted,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  ledgerPayoutTo: {
+    flex: 1,
+    minWidth: 0,
+    color: "#16a34a",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right",
+  },
+  ledgerPayoutAmount: {
     color: nativeLightTheme.colors.text,
-    fontSize: 18,
+    fontSize: 13,
+    fontWeight: "900",
+    marginLeft: 4,
+  },
+
+  codeChip: {
+    color: nativeLightTheme.colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: 1,
+  },
+
+  // ── Bomb pot sheet ───────────────────────────────────────────────────────
+  bombHeader: {
+    gap: 4,
+    paddingBottom: 4,
+  },
+  bombLabel: {
+    color: "#4f46e5",
+    fontSize: 13,
+    fontWeight: "900",
+    letterSpacing: 3,
+    textTransform: "uppercase",
+  },
+  bombSubtitle: {
+    color: "#312e81",
+    fontSize: 19,
+    fontWeight: "600",
+    letterSpacing: -0.3,
+    lineHeight: 24,
+  },
+  bombHelper: {
+    color: "rgba(79,70,229,0.55)",
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 2,
+  },
+  bombOptions: {
+    flexDirection: "row",
+    gap: 10,
+  },
+  bombOption: {
+    flex: 1,
+    minHeight: 100,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    backgroundColor: "rgba(99,102,241,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(99,102,241,0.20)",
+  },
+  bombOptionSelected: {
+    backgroundColor: "rgba(99,102,241,0.16)",
+    borderColor: "rgba(99,102,241,0.44)",
+  },
+  bombOptionPressed: {
+    opacity: 0.78,
+  },
+  bombOptionMultiplier: {
+    color: "#4338ca",
+    fontSize: 26,
+    fontWeight: "900",
+    letterSpacing: -0.5,
+    lineHeight: 28,
+  },
+  bombOptionTextSelected: {
+    color: "#312e81",
+  },
+  bombOptionBBLabel: {
+    color: "#6366f1",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+  bombOptionAmount: {
+    color: "#6366f1",
+    fontSize: 13,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+    marginTop: 4,
+  },
+  bombOptionAmountSelected: {
+    color: "#4338ca",
+  },
+
+  // ── Raise panel ──────────────────────────────────────────────────────────
+  raiseSheetContent: {
+    gap: 16,
+  },
+  raiseAmountRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  raiseStepSide: {
+    alignItems: "center",
+    gap: 6,
+    width: 64,
+  },
+  raiseStepBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  raiseStepBtnPressed: {
+    backgroundColor: "#e5e7eb",
+  },
+  raiseStepBtnDisabled: {
+    opacity: 0.3,
+  },
+  raiseStepBtnText: {
+    color: "#111827",
+    fontSize: 26,
+    fontWeight: "700",
+    lineHeight: 30,
+  },
+  raiseStepIncrement: {
+    color: "#6b7280",
+    fontSize: 11,
+    fontWeight: "700",
+    fontVariant: ["tabular-nums"],
+  },
+  raiseAmountCenter: {
+    flex: 1,
+    alignItems: "center",
+  },
+  raiseAmountText: {
+    color: "#111827",
+    fontSize: 32,
+    fontWeight: "900",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: -0.5,
+  },
+  raiseAllInLabel: {
+    color: "#ef4444",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
+  sliderOuter: {
+    height: 40,
+    justifyContent: "center",
+    position: "relative",
+  },
+  sliderTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#e5e7eb",
+    overflow: "hidden",
+  },
+  sliderFill: {
+    height: 6,
+    backgroundColor: "#ef4444",
+    borderRadius: 3,
+  },
+  sliderThumb: {
+    position: "absolute",
+    width: RAISE_THUMB_SIZE,
+    height: RAISE_THUMB_SIZE,
+    borderRadius: RAISE_THUMB_SIZE / 2,
+    backgroundColor: "#ef4444",
+    top: (40 - RAISE_THUMB_SIZE) / 2,
+    shadowColor: "#ef4444",
+    shadowRadius: 8,
+    shadowOpacity: 0.4,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  raiseAllInFill: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#ef4444",
+  },
+  raisePresetRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  raisePreset: {
+    flex: 1,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  raisePresetPressed: {
+    backgroundColor: "#e5e7eb",
+  },
+  raisePresetText: {
+    color: "#374151",
+    fontSize: 11,
     fontWeight: "800",
-    paddingHorizontal: 16,
+    letterSpacing: 0.3,
+  },
+  raiseConfirmBtn: {
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  raiseConfirmGradient: {
+    height: 60,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  raiseConfirmText: {
+    color: "#ffffff",
+    fontSize: 17,
+    fontWeight: "900",
+    letterSpacing: 0.2,
   },
 });

@@ -37,6 +37,7 @@ export type { RaisePreset } from "./hooks/useRaiseAmount";
 export { useRunAnimationTicker } from "./hooks/useRunAnimationTicker";
 export { useTimedPanelVisibility } from "./hooks/useTimedPanelVisibility";
 export {
+  canStartRevealHoldInteraction,
   canStartPublicReveal,
   createInitialPeelCardState,
   getInitialPrivateRevealState,

@@ -20,6 +20,12 @@ export function canStartPublicReveal({
   return isPrivatelyRevealed || sevenTwoEligible;
 }
 
+export function canStartRevealHoldInteraction(options: PublicRevealOptions) {
+  if (!options.canRevealToOthers) return false;
+  if (options.isRevealedToOthers) return true;
+  return canStartPublicReveal(options);
+}
+
 export function readPersistedPeelState(persistenceKey: string | null | undefined): [boolean, boolean] | null {
   if (!persistenceKey || typeof window === "undefined") return null;
   try {

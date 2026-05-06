@@ -1,5 +1,6 @@
 import React from "react";
 import { StyleSheet, View, type DimensionValue } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import PlayerBubble, { type TablePlayer } from "./PlayerBubble";
 
 const MOBILE_SEAT_STRIP_HEIGHT_PX = 152;
@@ -70,12 +71,23 @@ export default function OpponentStrip({
 
   return (
     <View style={styles.strip}>
-      {/* Outer felt rail — Solid deep mahogany with subtle top rim */}
+      {/* ── Rail (walnut surround) ─────────────────────────────────────────── */}
       <View style={[styles.rail, { bottom: railBottomInsetPx }]}>
-        <View style={styles.railTopRim} />
+        {/* Cool dark-navy gradient — matches app deep-navy palette */}
+        <LinearGradient
+          colors={["#0d1f38", "#060f1e", "#020609"]}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+        {/* Ice-white shimmer at top edge */}
+        <View style={styles.railTopShimmer} />
+        {/* Hard shadow line just below shimmer for depth */}
+        <View style={styles.railTopShadow} />
       </View>
 
-      {/* Inner table felt — Native Radial Glow Simulation */}
+      {/* ── Inner felt (baize) ─────────────────────────────────────────────── */}
       <View
         style={[
           styles.felt,
@@ -87,11 +99,30 @@ export default function OpponentStrip({
           },
         ]}
       >
-        {/* The "Spotlight": A massive circle centered to create a soft radial gradient feel */}
-        <View style={styles.feltRadialGlow} />
-        
-        {/* Subtle top inner edge highlight */}
-        <View style={styles.feltInnerRim} />
+        {/* Overhead-light gradient — lighter navy at top fades to transparent */}
+        <LinearGradient
+          colors={["rgba(58,98,190,0.62)", "rgba(28,55,118,0.0)"] as const}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 0.7 }}
+        />
+        {/* Side vignette — subtle edge darkening */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.10)", "transparent", "rgba(0,0,0,0.10)"] as const}
+          locations={[0, 0.5, 1] as const}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+        />
+        {/* Bottom depth shadow — felt recedes into the rail */}
+        <LinearGradient
+          colors={["transparent", "rgba(0,0,0,0.34)"] as const}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0.5, y: 0.55 }}
+          end={{ x: 0.5, y: 1 }}
+        />
+        {/* Ice-blue top rim — subtle reflected light off the rail */}
+        <View style={styles.feltTopEdge} />
       </View>
 
       {seats.map(({ seatIndex, slot, player }) => {
@@ -157,43 +188,39 @@ const styles = StyleSheet.create({
     left: 4,
     right: 4,
     top: 0,
-    backgroundColor: "#1a1010",
     borderRadius: 34,
     overflow: "hidden",
     shadowColor: "#000",
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 6,
+    shadowOpacity: 0.42,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 7,
   },
-  railTopRim: {
-    height: 3,
-    backgroundColor: "rgba(255, 255, 255, 0.08)",
+  railTopShimmer: {
+    height: 2,
+    backgroundColor: "rgba(255,255,255,0.09)",
+    width: "100%",
+  },
+  railTopShadow: {
+    height: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
     width: "100%",
   },
   felt: {
     position: "absolute",
-    backgroundColor: "#0f172a", // Deep Navy Base
+    backgroundColor: "#0b1628",
     borderRadius: 28,
     overflow: "hidden",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     alignItems: "center",
   },
-  feltRadialGlow: {
-    position: "absolute",
-    width: 600, // Large enough to span the container
-    height: 600,
-    borderRadius: 300,
-    backgroundColor: "rgba(31, 51, 108, 0.35)", // Subtle indigo "light"
-    top: "-150%", // Offset to put the "glow" in the upper-middle
-  },
-  feltInnerRim: {
+  feltTopEdge: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
     height: 1,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    backgroundColor: "rgba(120,160,255,0.09)",
   },
   seatSlot: {
     position: "absolute",

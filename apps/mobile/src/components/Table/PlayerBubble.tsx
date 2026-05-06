@@ -28,10 +28,10 @@ const METRICS = {
   avatarSize: 48,
   badgeSize: 22,
   badgeInset: -2,
-  showdownCardWidth: 16,
-  showdownCardHeight: 20,
+  showdownCardWidth: 20,
+  showdownCardHeight: 17,
   showdownCardSpreadX: 9,
-  showdownCardOffsetY: 8,
+  showdownCardOffsetY: 4,
   primaryBadgeHeight: 18,
   primaryBadgeOffsetY: -12, // overlaps avatar
 };
@@ -118,20 +118,47 @@ export default function PlayerBubble({
   const winBurstOpacity = useRef(new Animated.Value(0)).current;
   const prevWinAnimKey = useRef<string | null | undefined>(undefined);
 
+  const initiallyVisible = !!(player?.holeCards?.some(Boolean));
+  const showdownRevealAnim = useRef(new Animated.Value(initiallyVisible ? 1 : 0)).current;
+  const prevVisibleHoleCardsRef = useRef<boolean>(initiallyVisible);
+
+  // Pop-in when a player first occupies a seat (key change causes remount)
+  const mountScale = useRef(new Animated.Value(player ? 0.55 : 1)).current;
+  const mountOpacity = useRef(new Animated.Value(player ? 0 : 1)).current;
+
+  useEffect(() => {
+    if (!player) return;
+    Animated.parallel([
+      Animated.spring(mountScale, {
+        toValue: 1,
+        tension: 280,
+        friction: 16,
+        useNativeDriver: true,
+      }),
+      Animated.timing(mountOpacity, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (player?.isActor) {
       const loop = Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, {
             toValue: 1,
-            duration: 700,
+            duration: 900,
             useNativeDriver: true,
           }),
           Animated.timing(pulseAnim, {
             toValue: 0,
-            duration: 700,
+            duration: 0,
             useNativeDriver: true,
           }),
+          Animated.delay(350),
         ]),
       );
       loop.start();
@@ -198,6 +225,23 @@ export default function PlayerBubble({
     winBurstOpacity,
   ]);
 
+  const visibleNow = !!(player?.holeCards?.some(Boolean));
+  useEffect(() => {
+    const wasVisible = prevVisibleHoleCardsRef.current;
+    prevVisibleHoleCardsRef.current = visibleNow;
+    if (visibleNow && !wasVisible) {
+      showdownRevealAnim.setValue(0);
+      Animated.spring(showdownRevealAnim, {
+        toValue: 1,
+        tension: 340,
+        friction: 15,
+        useNativeDriver: true,
+      }).start();
+    } else if (!visibleNow) {
+      showdownRevealAnim.setValue(0);
+    }
+  }, [visibleNow, showdownRevealAnim]);
+
   if (!player) {
     return (
       <Pressable
@@ -217,8 +261,8 @@ export default function PlayerBubble({
             seatSelectionLocked && styles.emptySeatCircleLocked,
           ]}
         >
-          <Text style={styles.emptySeatLabel}>Seat</Text>
-          <Text style={styles.emptySeatNumber}>{seatIndex + 1}</Text>
+          <Text style={[styles.emptySeatLabel, seatSelectionLocked && styles.emptySeatTextLocked]}>Seat</Text>
+          <Text style={[styles.emptySeatNumber, seatSelectionLocked && styles.emptySeatTextLocked]}>{seatIndex + 1}</Text>
         </View>
       </Pressable>
     );
@@ -231,17 +275,21 @@ export default function PlayerBubble({
 
   const pulseScale = pulseAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.15],
+    outputRange: [1.0, 1.45],
+  });
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 0.12, 1],
+    outputRange: [0, 0.55, 0],
   });
   const winGlowScale = winGlowAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 1.08],
   });
 
-  const visibleHoleCards =
-    player.holeCards?.some(Boolean) ? player.holeCards : null;
+  const visibleHoleCards = visibleNow ? player.holeCards : null;
 
   return (
+    <Animated.View style={{ transform: [{ scale: mountScale }], opacity: mountOpacity }}>
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Seat ${seatIndex + 1}, ${player.name}`}
@@ -254,7 +302,7 @@ export default function PlayerBubble({
     >
       <View style={styles.avatarContainer}>
         {/* Glow / Pulse Effects */}
-        {player.isActor && <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseScale }] }]} />}
+        {player.isActor && <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />}
         {!!player.winType && <Animated.View style={[styles.winGlowRing, { transform: [{ scale: winGlowScale }] }]} />}
 
         {/* Selection Rings */}
@@ -290,13 +338,24 @@ export default function PlayerBubble({
 
         {/* Showdown hole cards overlay */}
         {visibleHoleCards && (
-          <View style={styles.showdownRow}>
+          <Animated.View style={[
+            styles.showdownRow,
+            {
+              opacity: showdownRevealAnim,
+              transform: [{
+                scale: showdownRevealAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.55, 1],
+                }),
+              }],
+            },
+          ]}>
             {visibleHoleCards.map((card, index) => (
               <View key={index} style={[styles.showdownCard, card ? (isRedSuit(card.suit) ? styles.showdownCardRed : styles.showdownCardBlack) : styles.showdownCardBack]}>
-                {card && <Text style={[styles.showdownCardText, isRedSuit(card.suit) && styles.showdownCardTextRed]}>{card.rank}{SUIT_SYMBOLS[card.suit]}</Text>}
+                {card && <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.showdownCardText, isRedSuit(card.suit) && styles.showdownCardTextRed]}>{card.rank}{SUIT_SYMBOLS[card.suit]}</Text>}
               </View>
             ))}
-          </View>
+          </Animated.View>
         )}
       </View>
 
@@ -309,6 +368,7 @@ export default function PlayerBubble({
         </View>
       )}
     </Pressable>
+    </Animated.View>
   );
 }
 
@@ -346,17 +406,21 @@ const styles = StyleSheet.create({
     borderRadius: METRICS.badgeSize / 2,
     backgroundColor: "#0b1427",
     borderWidth: 2,
-    borderColor: "#f3d742",
+    borderColor: "rgba(255,255,255,0.35)",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
+    elevation: 3,
   },
   roleDealer: {
-    backgroundColor: "#ffffff",
     borderColor: "#ef4444",
+    shadowColor: "#ef4444",
+    shadowOpacity: 0.5,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
   },
   roleText: {
-    color: "#f3d742",
+    color: "#ffffff",
     fontSize: 9,
     fontWeight: "900",
   },
@@ -459,30 +523,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptySeatCircleLocked: {
-    backgroundColor: "rgba(255,255,255,0.05)",
+    backgroundColor: "rgba(7,17,29,0.65)",
+    borderColor: "rgba(255,255,255,0.08)",
+    borderStyle: "solid",
   },
   emptySeatLabel: { color: "#9ca3af", fontSize: 6, fontWeight: "900" },
   emptySeatNumber: { color: "#ffffff", fontSize: 14, fontWeight: "900" },
+  emptySeatTextLocked: { color: "rgba(255,255,255,0.32)" },
 
   showdownRow: {
     position: "absolute",
     flexDirection: "row",
     gap: 1,
     zIndex: 30,
-    top: METRICS.showdownCardOffsetY,
+    top: METRICS.avatarSize / 2 + METRICS.showdownCardOffsetY,
+    left: (METRICS.avatarSize - (METRICS.showdownCardWidth * 2 + 1)) / 2,
   },
   showdownCard: {
     width: METRICS.showdownCardWidth,
     height: METRICS.showdownCardHeight,
-    borderRadius: 3,
+    borderRadius: 4,
     backgroundColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
     elevation: 3,
+    overflow: "hidden",
   },
   showdownCardBack: { backgroundColor: "#1e3a5f" },
   showdownCardRed: { borderWidth: 1, borderColor: "#fca5a5" },
   showdownCardBlack: { borderWidth: 1, borderColor: "#94a3b8" },
-  showdownCardText: { fontSize: 8, fontWeight: "900", color: "#000" },
+  showdownCardText: { fontSize: 10, fontWeight: "900", color: "#000", lineHeight: 10, includeFontPadding: false },
   showdownCardTextRed: { color: "#ef4444" },
 });

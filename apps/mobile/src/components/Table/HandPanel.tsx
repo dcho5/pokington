@@ -1,5 +1,5 @@
 import React, { useMemo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { NativeHoleCards, nativeLightTheme } from "@pokington/ui/native";
 import { evaluateBest } from "@pokington/engine";
 import { formatCents } from "@pokington/shared";
@@ -19,8 +19,10 @@ interface HandPanelProps {
   viewer: HandPanelPlayer | null;
   holeCards: [Card, Card] | null;
   communityCards: Card[];
-  leaveQueued: boolean;
   autoPeelEnabled: boolean;
+  revealedToOthersIndices?: Set<0 | 1>;
+  peekedCardIndices?: Set<0 | 1>;
+  /** Tapping the identity card opens the add-chips / rebuy sheet. */
   onIdentityPress: () => void;
   onPeekCard: (index: 0 | 1) => void;
   onRevealCard: (index: 0 | 1) => void;
@@ -43,13 +45,20 @@ export default function HandPanel({
   viewer,
   holeCards,
   communityCards,
-  leaveQueued,
   autoPeelEnabled,
+  revealedToOthersIndices,
+  peekedCardIndices,
   onIdentityPress,
   onPeekCard,
   onRevealCard,
   onToggleAutoPeel,
 }: HandPanelProps) {
+  const { width: screenWidth } = useWindowDimensions();
+  // cardsArea width = screenWidth - 2*8 (panel padding) - 2*78 (side cards) - 2*8 (gaps)
+  const cardAreaWidth = screenWidth - 188;
+  const cardWidth = Math.floor((cardAreaWidth - 5) / 2);
+  const cardHeight = Math.min(142, Math.round(cardWidth * 7 / 5));
+
   const handLabel = useMemo(
     () => computeHandLabel(holeCards, communityCards),
     [holeCards, communityCards],
@@ -60,34 +69,45 @@ export default function HandPanel({
 
   return (
     <View style={styles.panel}>
-      {/* Left: identity + auto-peel */}
+      {/* Left: identity */}
       <Pressable
         accessibilityRole={viewer ? "button" : undefined}
         onPress={onIdentityPress}
         style={styles.identityCard}
       >
-        {viewer ? (
-          <View style={styles.youBadgeWrap}>
-            <Text style={styles.youBadge}>YOU</Text>
-          </View>
-        ) : null}
-
         <View style={[styles.viewerAvatar, { backgroundColor: avatarColor }]}>
           <Text style={styles.viewerAvatarText}>{initials}</Text>
+          {viewer ? (
+            <View style={styles.youDot} pointerEvents="none">
+              <Text style={styles.youDotText}>YOU</Text>
+            </View>
+          ) : null}
         </View>
 
         <Text style={styles.viewerName} numberOfLines={1}>
           {viewer?.name ?? "Not seated"}
         </Text>
 
-        <Pressable onPress={onToggleAutoPeel} style={[styles.autoPeelPill, autoPeelEnabled && styles.autoPeelPillActive]}>
-          <Text style={[styles.autoPeelText, autoPeelEnabled && styles.autoPeelTextActive]}>
-            AUTO PEEL
+        <Pressable
+          onPress={onToggleAutoPeel}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: autoPeelEnabled }}
+          accessibilityLabel="Auto peel"
+          hitSlop={6}
+          style={[styles.autoPeelToggle, autoPeelEnabled && styles.autoPeelToggleActive]}
+        >
+          <Text
+            style={[
+              styles.autoPeelGlyph,
+              autoPeelEnabled && styles.autoPeelGlyphActive,
+            ]}
+          >
+            👁
           </Text>
         </Pressable>
 
         <Text style={styles.viewerMeta} numberOfLines={1}>
-          {viewer ? (leaveQueued ? "LEAVING" : "TAP TO LEAVE") : "tap an open seat"}
+          {viewer ? "ADD CHIPS" : "tap a seat"}
         </Text>
       </Pressable>
 
@@ -96,9 +116,11 @@ export default function HandPanel({
         {holeCards ? (
           <NativeHoleCards
             cards={holeCards}
-            cardHeight={110}
+            cardHeight={cardHeight}
             autoReveal={autoPeelEnabled}
             canRevealToOthers
+            revealedToOthersIndices={revealedToOthersIndices}
+            peekedCardIndices={peekedCardIndices}
             onPeekCard={onPeekCard}
             onRevealToOthers={onRevealCard}
           />
@@ -109,22 +131,27 @@ export default function HandPanel({
         )}
       </View>
 
-      {/* Right: hand / bet / stack */}
+      {/* Right: stack / hand / bet */}
       <View style={styles.statsCard}>
+        <Text style={styles.statsLabel}>STACK</Text>
+        <Text style={styles.stackValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+          {viewer ? formatCents(viewer.stack) : "--"}
+        </Text>
+
+        <View style={styles.statsDivider} />
+
         <Text style={styles.statsLabel}>HAND</Text>
-        <Text style={styles.statsValue} numberOfLines={1}>{handLabel}</Text>
+        <Text style={styles.statsValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+          {handLabel}
+        </Text>
 
         {(viewer?.currentBet ?? 0) > 0 ? (
-          <>
-            <Text style={styles.statsLabel}>BET</Text>
-            <View style={styles.betPill}>
-              <Text style={styles.betPillText}>{formatCents(viewer!.currentBet)}</Text>
-            </View>
-          </>
+          <View style={styles.betPill}>
+            <Text style={styles.betPillText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              {formatCents(viewer!.currentBet)}
+            </Text>
+          </View>
         ) : null}
-
-        <Text style={styles.statsLabel}>STACK</Text>
-        <Text style={styles.stackValue}>{viewer ? formatCents(viewer.stack) : "--"}</Text>
       </View>
     </View>
   );
@@ -135,80 +162,83 @@ const styles = StyleSheet.create({
     height: 154,
     flexDirection: "row",
     alignItems: "stretch",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
+    gap: 8,
+    paddingHorizontal: 8,
   },
 
   identityCard: {
-    width: 110,
-    minWidth: 110,
+    width: 78,
+    minWidth: 78,
     alignItems: "center",
-    justifyContent: "space-between",
-    borderRadius: 24,
+    justifyContent: "space-evenly",
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.18)",
     backgroundColor: "rgba(255,255,255,0.96)",
-    paddingHorizontal: 8,
-    paddingVertical: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 8,
     shadowColor: "#0f172a",
     shadowOpacity: 0.06,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
-  youBadgeWrap: {
-    alignSelf: "stretch",
-    alignItems: "flex-start",
-  },
-  youBadge: {
-    overflow: "hidden",
-    borderRadius: 7,
-    backgroundColor: "#fee2e2",
-    color: nativeLightTheme.colors.accent,
-    fontSize: 10,
-    fontWeight: "900",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    textTransform: "uppercase",
-  },
   viewerAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
   viewerAvatarText: {
     color: "#ffffff",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
+  },
+  // Small "YOU" badge tucked at the avatar's bottom-right corner.
+  youDot: {
+    position: "absolute",
+    bottom: -3,
+    right: -8,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 7,
+    backgroundColor: nativeLightTheme.colors.accent,
+    borderWidth: 1.5,
+    borderColor: "#ffffff",
+  },
+  youDotText: {
+    color: "#ffffff",
+    fontSize: 8,
+    fontWeight: "900",
+    letterSpacing: 0.5,
   },
   viewerName: {
     maxWidth: "100%",
     color: nativeLightTheme.colors.text,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: "900",
+    textAlign: "center",
   },
-  autoPeelPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
+  autoPeelToggle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.3)",
-    backgroundColor: "rgba(15,23,42,0.06)",
+    backgroundColor: "rgba(15,23,42,0.05)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  autoPeelPillActive: {
+  autoPeelToggleActive: {
     backgroundColor: "#0f172a",
     borderColor: "transparent",
   },
-  autoPeelText: {
+  autoPeelGlyph: {
+    fontSize: 13,
     color: nativeLightTheme.colors.muted,
-    fontSize: 8,
-    fontWeight: "800",
-    letterSpacing: 0.5,
   },
-  autoPeelTextActive: {
+  autoPeelGlyphActive: {
     color: "#fbbf24",
   },
   viewerMeta: {
@@ -216,7 +246,8 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
+    textAlign: "center",
   },
 
   cardsArea: {
@@ -238,17 +269,17 @@ const styles = StyleSheet.create({
   },
 
   statsCard: {
-    width: 100,
-    minWidth: 100,
+    width: 78,
+    minWidth: 78,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.18)",
     backgroundColor: "rgba(255,255,255,0.96)",
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 10,
-    gap: 3,
+    gap: 2,
     shadowColor: "#0f172a",
     shadowOpacity: 0.06,
     shadowRadius: 12,
@@ -257,16 +288,23 @@ const styles = StyleSheet.create({
   },
   statsLabel: {
     color: "#9ca3af",
-    fontSize: 9,
+    fontSize: 8,
     fontWeight: "900",
-    letterSpacing: 2.5,
+    letterSpacing: 2,
     textTransform: "uppercase",
   },
   statsValue: {
+    maxWidth: "100%",
     color: nativeLightTheme.colors.text,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
     textAlign: "center",
+  },
+  statsDivider: {
+    height: 1,
+    width: "70%",
+    backgroundColor: "rgba(148,163,184,0.22)",
+    marginVertical: 4,
   },
   betPill: {
     overflow: "hidden",
@@ -274,15 +312,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#facc15",
     paddingHorizontal: 8,
     paddingVertical: 2,
+    marginTop: 4,
+    maxWidth: "100%",
   },
   betPillText: {
     color: "#000000",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "900",
   },
   stackValue: {
+    maxWidth: "100%",
     color: nativeLightTheme.colors.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900",
+    textAlign: "center",
   },
 });

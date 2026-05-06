@@ -1644,8 +1644,9 @@ export default class PokerRoom implements Party.Server {
       gameState: this.gameState,
       publicShownCardMasks: this.publicShownCardMasks,
     }) as Record<string, [Card | null, Card | null]>;
+    const peekedCardMask = playerId ? (this.peekedCardMasks.get(playerId) ?? 0) : 0;
 
-    this.send(conn, { type: "PRIVATE_STATE", holeCards, revealedHoleCards });
+    this.send(conn, { type: "PRIVATE_STATE", holeCards, revealedHoleCards, peekedCardMask });
   }
 
   private promoteFullyShownCardsAtShowdown(playerIds?: string[]) {

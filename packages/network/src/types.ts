@@ -19,7 +19,7 @@ export type PartyKitClientMessage<TGameAction = SerializedGameAction> =
 export type PartyKitServerMessage<TGameState = SerializedGameState> =
   | { type: "WELCOME"; playerSessionId: string; isCreator: boolean }
   | { type: "TABLE_STATE"; state: TGameState; feedback?: unknown[] }
-  | { type: "PRIVATE_STATE"; holeCards: unknown; revealedHoleCards: Record<string, unknown> }
+  | { type: "PRIVATE_STATE"; holeCards: unknown; revealedHoleCards: Record<string, unknown>; peekedCardMask?: number }
   | {
       type: "ROOM_PRESENCE";
       connectedPlayerIds: string[];

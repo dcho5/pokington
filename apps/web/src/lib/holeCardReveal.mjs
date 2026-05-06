@@ -1,4 +1,5 @@
 export {
+  canStartRevealHoldInteraction,
   canStartPublicReveal,
   createInitialPeelCardState,
   getInitialPrivateRevealState,
