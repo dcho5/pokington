@@ -34,7 +34,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Animated,
   AppState,
-  Easing,
   Pressable,
   Share,
   StyleSheet,
@@ -919,10 +918,7 @@ export default function TableScreen() {
     return `Waiting for ${actorName}…`;
   }, [actorId, myPlayerId, showActiveTurnTreatment, tablePlayers]);
 
-  // Synced visual + haptic heartbeat while it's the local player's turn.
-  // Each cycle: a quick attack (the haptic thump lands here), then a slow
-  // decay back to the resting glow. Cadence: 2333ms (50% faster than the old
-  // 3500ms heartbeat); haptic upgraded from selection → light impact.
+  // Feather-light rolling purr while it's the local player's turn.
   useEffect(() => {
     if (!showActiveTurnTreatment) {
       turnGlowAnim.stopAnimation();
@@ -930,40 +926,44 @@ export default function TableScreen() {
       return;
     }
 
-    const PERIOD_MS = 2333;
-    const ATTACK_MS = 220;
-    const DECAY_MS = 1500;
+    const PURR_LOOP_MS = 2298;
+    const PURR_TICK_OFFSETS_MS = [260, 370, 490, 620, 760, 910, 1070, 1245, 1435, 1640, 1860, 2095, 2250];
     let cancelled = false;
+    const purrTimers = new Set<ReturnType<typeof setTimeout>>();
 
-    const beat = () => {
-      if (cancelled) return;
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      turnGlowAnim.stopAnimation();
-      Animated.sequence([
-        Animated.timing(turnGlowAnim, {
-          toValue: 1,
-          duration: ATTACK_MS,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(turnGlowAnim, {
-          toValue: 0,
-          duration: DECAY_MS,
-          easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
-        }),
-      ]).start();
+    const clearPurrTimers = () => {
+      for (const timer of purrTimers) clearTimeout(timer);
+      purrTimers.clear();
+    };
+    const playPurrTick = () => {
+      Haptics.selectionAsync().catch(() => {});
     };
 
-    beat();
-    const interval = setInterval(beat, PERIOD_MS);
+    const schedulePurrCycle = () => {
+      if (cancelled) return;
+
+      for (const offsetMs of PURR_TICK_OFFSETS_MS) {
+        const purrTimer = setTimeout(() => {
+          purrTimers.delete(purrTimer);
+          if (cancelled) return;
+          playPurrTick();
+        }, offsetMs);
+        purrTimers.add(purrTimer);
+      }
+    };
+
+    turnGlowAnim.stopAnimation();
+    turnGlowAnim.setValue(0);
+    schedulePurrCycle();
+    const purrLoop = setInterval(schedulePurrCycle, PURR_LOOP_MS);
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(purrLoop);
+      clearPurrTimers();
     };
   }, [showActiveTurnTreatment, turnGlowAnim]);
 
-  // Resting glow at 0.45, peak at 1.0 — the haptic lands at the peak.
+  // Resting turn wash stays present without a periodic heartbeat pulse.
   const turnWashOpacity = turnGlowAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0.45, 1.0],
