@@ -651,7 +651,7 @@ export default function TableScreen() {
   const [queuedLeavePlayerIds, setQueuedLeavePlayerIds] = useState<string[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"seat" | "raise" | "menu" | "rebuy" | null>(null);
+  const [sheet, setSheet] = useState<"seat" | "raise" | "menu" | "rebuy" | "foldConfirm" | null>(null);
   const [activePotTool, setActivePotTool] = useState<"bomb" | "ledger" | null>(null);
   const [ledgerOverlayVisible, setLedgerOverlayVisible] = useState(false);
   const [potIslandRect, setPotIslandRect] = useState<PotIslandRect | null>(null);
@@ -1436,7 +1436,13 @@ export default function TableScreen() {
                   label="Fold"
                   tone="danger"
                   disabled={!canAct}
-                  onPress={() => sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "fold" }))}
+                  onPress={() => {
+                    if (canCheck) {
+                      setSheet("foldConfirm");
+                      return;
+                    }
+                    sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "fold" }));
+                  }}
                   style={[styles.actionButton, styles.foldAction]}
                 />
               }
@@ -1611,6 +1617,32 @@ export default function TableScreen() {
               setSheet(null);
             }}
           />
+        ) : null}
+
+        {sheet === "foldConfirm" ? (
+          <View style={styles.confirmSheetContent}>
+            <Text style={styles.sheetTitle}>Fold hand?</Text>
+            <Text style={[styles.sheetText, styles.confirmSheetText]}>
+              You can check for free. Folding will give up this hand.
+            </Text>
+            <View style={styles.confirmSheetActions}>
+              <NativeButton
+                label="Cancel"
+                tone="secondary"
+                onPress={() => setSheet(null)}
+                style={styles.confirmSheetButton}
+              />
+              <NativeButton
+                label="Fold"
+                tone="danger"
+                onPress={() => {
+                  sendViewerEvent((playerId) => ({ type: "PLAYER_ACTION", playerId, action: "fold" }));
+                  setSheet(null);
+                }}
+                style={styles.confirmSheetButton}
+              />
+            </View>
+          </View>
         ) : null}
 
         {sheet === "rebuy" && viewer ? (
@@ -1856,6 +1888,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
+  },
+  confirmSheetContent: {
+    alignItems: "center",
+    gap: 18,
+    paddingHorizontal: 16,
+  },
+  confirmSheetText: {
+    maxWidth: 320,
+  },
+  confirmSheetActions: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignSelf: "center",
+    gap: 12,
+    width: "100%",
+    maxWidth: 320,
+  },
+  confirmSheetButton: {
+    width: 140,
+    minHeight: 48,
+    borderRadius: 18,
   },
 
   // ── Rebuy / add-chips sheet ─────────────────────────────────────────────
