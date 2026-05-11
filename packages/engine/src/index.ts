@@ -1,5 +1,28 @@
 export { gameReducer } from "./reducer";
 export { evaluate7, evaluateBest, compareHands } from "./evaluator";
+export {
+  RUN_IT_ODDS_STREETS,
+  buildRunItOddsContext,
+  calculateExactRunItOdds,
+  calculateFinalRunItOdds,
+  cardKey,
+  createMonteCarloOddsAccumulator,
+  createSeededRng,
+  getFullyRevealedHoleCards,
+  getLiveRunItPlayers,
+  getRunItOddsContenders,
+  getRunItOddsStreet,
+  hashSeed,
+  resolveRunItOddsCalculationMode,
+  shouldShowRunItOddsPanel,
+} from "./runItOdds";
+export type {
+  RunItOddsCalculationMode,
+  RunItOddsContext,
+  RunItOddsContender,
+  RunItOddsPlayerLike,
+  RunItOddsStreet,
+} from "./runItOdds";
 export { createDeck, shuffle } from "./deck";
 export { deriveFeedbackFromTransition } from "./feedback";
 export { shouldQueueLeave } from "./leaveQueue";

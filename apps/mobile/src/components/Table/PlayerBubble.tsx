@@ -287,6 +287,8 @@ export default function PlayerBubble({
   });
 
   const visibleHoleCards = visibleNow ? player.holeCards : null;
+  const showRunItOdds =
+    runItOddsPercentage != null && Number.isFinite(runItOddsPercentage);
 
   return (
     <Animated.View style={{ transform: [{ scale: mountScale }], opacity: mountOpacity }}>
@@ -332,8 +334,29 @@ export default function PlayerBubble({
         )}
 
         {/* Main Avatar Circle */}
-        <View style={[styles.avatar, { backgroundColor: player.isViewer ? "#000000" : avatarColor }]}>
-          <Text style={styles.avatarText}>{player.isViewer ? "YOU" : initials}</Text>
+        <View
+          style={[
+            styles.avatar,
+            showRunItOdds
+              ? styles.runItOddsAvatar
+              : { backgroundColor: player.isViewer ? "#000000" : avatarColor },
+          ]}
+        >
+          {showRunItOdds ? (
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.78}
+              style={[
+                styles.runItOddsAvatarText,
+                runItOddsPercentage >= 100 && styles.runItOddsAvatarTextCompact,
+              ]}
+            >
+              {runItOddsPercentage.toFixed(1)}%
+            </Text>
+          ) : (
+            <Text style={styles.avatarText}>{player.isViewer ? "YOU" : initials}</Text>
+          )}
         </View>
 
         {/* Showdown hole cards overlay */}
@@ -511,6 +534,25 @@ const styles = StyleSheet.create({
     color: "#ffffff",
     fontSize: 14,
     fontWeight: "900",
+  },
+  runItOddsAvatar: {
+    backgroundColor: "#dc2626",
+    borderWidth: 1,
+    borderColor: "rgba(254,226,226,0.46)",
+    shadowColor: "#7f1d1d",
+    shadowOpacity: 0.34,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 5,
+  },
+  runItOddsAvatarText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "900",
+    includeFontPadding: false,
+  },
+  runItOddsAvatarTextCompact: {
+    fontSize: 10,
   },
   emptySeatCircle: {
     width: METRICS.avatarSize,

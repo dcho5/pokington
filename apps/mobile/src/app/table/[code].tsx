@@ -22,6 +22,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   BOMB_POT_VOTING_TIMEOUT_MS,
   RUN_IT_VOTING_TIMEOUT_MS,
+  buildRunItOddsContext,
+  calculateExactRunItOdds,
+  calculateFinalRunItOdds,
+  createMonteCarloOddsAccumulator,
+  createSeededRng,
+  hashSeed,
+  shouldShowRunItOddsPanel,
   type BombPotAnteBB,
   type GameEvent,
   type GameFeedbackCueEnvelope,
@@ -81,6 +88,9 @@ const DEG_PER_RAD = 180 / Math.PI;
 const CHIP_HIGHLIGHT_BASE_ANGLE = Math.atan2(35 - 50, 62 - 50) * DEG_PER_RAD;
 const DEFAULT_CHIP_ANGLE = -90 - CHIP_HIGHLIGHT_BASE_ANGLE;
 const MOBILE_CHIP_POINT = { x: 0.5, y: 0.66 };
+const RUN_IT_ODDS_SAMPLE_COUNT = 20_000;
+const RUN_IT_ODDS_SAMPLE_BATCH_SIZE = 1_000;
+const RUN_IT_BOARD_CARD_COUNT = 5;
 
 const MOBILE_VIEWPORT_COLUMN_X = [0.1, 0.3, 0.5, 0.7, 0.9];
 const MOBILE_VIEWPORT_ROW_Y = [0.13, 0.205];
@@ -256,6 +266,35 @@ function computeMobileChipAngle({
 
 function rectsMatch(a: LayoutRect | null, b: LayoutRect) {
   return !!a && a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+}
+
+function clampRunItCardCount(count: number | null | undefined) {
+  return Math.max(0, Math.min(RUN_IT_BOARD_CARD_COUNT, count ?? 0));
+}
+
+function deriveRunItOddsVisibleRunState(
+  runResults: RunResult[],
+  knownCardCount: number,
+  totalRuns = Math.max(1, runResults.length),
+) {
+  if (runResults.length === 0) {
+    return { currentRun: 0, revealedCount: knownCardCount };
+  }
+
+  const clampedKnownCardCount = clampRunItCardCount(knownCardCount);
+  const counts = Array.from({ length: Math.max(1, totalRuns) }, (_, runIndex) => {
+    const runBoardLength = runResults[runIndex]?.board?.length;
+    return clampRunItCardCount(runBoardLength ?? clampedKnownCardCount);
+  });
+  const activeRun = counts.reduce<number>(
+    (current, count, runIndex) => (count > clampedKnownCardCount ? runIndex : current),
+    -1,
+  );
+
+  return {
+    currentRun: activeRun === -1 ? 0 : activeRun,
+    revealedCount: counts[activeRun === -1 ? 0 : activeRun] ?? clampedKnownCardCount,
+  };
 }
 
 function centerOf(rect: LayoutRect, origin = { x: 0, y: 0 }) {
@@ -769,6 +808,102 @@ export default function TableScreen() {
     return seats;
   }, [tablePlayers]);
 
+  const runItOddsSessionKey = useMemo(() => {
+    if (!tableState) return "no-table";
+    return [
+      tableState.handNumber,
+      tableState.showdownStartedAt ?? "no-showdown",
+      tableState.runDealStartedAt ?? "no-run-deal",
+    ].join(":");
+  }, [tableState?.handNumber, tableState?.runDealStartedAt, tableState?.showdownStartedAt]);
+
+  const runItOddsContext = useMemo(() => {
+    if (!tableState) return null;
+    const runResults = tableState.runResults ?? [];
+    const panelVisible = shouldShowRunItOddsPanel({
+      phase: tableState.phase,
+      players: seatPlayers,
+      runResults,
+    });
+    if (!panelVisible) return null;
+
+    const { currentRun } = deriveRunItOddsVisibleRunState(
+      runResults,
+      tableState.knownCardCountAtRunIt ?? tableState.knownCardCount ?? 0,
+      Math.max(tableState.runCount ?? 1, runResults.length, 1),
+    );
+    return buildRunItOddsContext({
+      players: seatPlayers,
+      runResults,
+      currentRun,
+    });
+  }, [
+    seatPlayers,
+    tableState?.handNumber,
+    tableState?.isBombPot,
+    tableState?.isRunItBoard,
+    tableState?.knownCardCount,
+    tableState?.knownCardCountAtRunIt,
+    tableState?.phase,
+    tableState?.runCount,
+    tableState?.runResults,
+  ]);
+
+  const [runItOddsPercentagesByPlayerId, setRunItOddsPercentagesByPlayerId] = useState<Record<string, number | null>>({});
+  const runItOddsGenerationRef = useRef(0);
+
+  useEffect(() => {
+    runItOddsGenerationRef.current += 1;
+    setRunItOddsPercentagesByPlayerId({});
+  }, [runItOddsSessionKey]);
+
+  useEffect(() => {
+    runItOddsGenerationRef.current += 1;
+    const generation = runItOddsGenerationRef.current;
+
+    if (!runItOddsContext) {
+      setRunItOddsPercentagesByPlayerId({});
+      return;
+    }
+
+    const publishPercentages = (percentages: Record<string, number>) => {
+      if (runItOddsGenerationRef.current !== generation) return;
+      setRunItOddsPercentagesByPlayerId(percentages);
+    };
+
+    if (runItOddsContext.mode === "final") {
+      publishPercentages(calculateFinalRunItOdds(runItOddsContext));
+      return;
+    }
+
+    if (runItOddsContext.mode === "exact") {
+      publishPercentages(calculateExactRunItOdds(runItOddsContext));
+      return;
+    }
+
+    setRunItOddsPercentagesByPlayerId({});
+    const calcKey = `${runItOddsSessionKey}:${runItOddsContext.contextKey}`;
+    const accumulator = createMonteCarloOddsAccumulator(runItOddsContext, {
+      sampleCount: RUN_IT_ODDS_SAMPLE_COUNT,
+      rng: createSeededRng(hashSeed(calcKey)),
+    });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const step = () => {
+      if (runItOddsGenerationRef.current !== generation) return;
+      const result = accumulator.runBatch(RUN_IT_ODDS_SAMPLE_BATCH_SIZE);
+      publishPercentages(result.percentages);
+      if (!result.done) {
+        timer = setTimeout(step, 0);
+      }
+    };
+
+    step();
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [runItOddsContext, runItOddsSessionKey]);
+
   // Legacy PlayerSummary subset for remaining logic
   const players = useMemo<PlayerSummary[]>(() =>
     tablePlayers.map((p) => ({
@@ -1181,6 +1316,7 @@ export default function TableScreen() {
           onEmptySeatTap={openSeat}
           onPlayerTap={(seatIndex) => setDetailSeatIndex(seatIndex)}
           selectedDetailSeatIndex={detailSeatIndex}
+          runItOddsPercentagesByPlayerId={runItOddsPercentagesByPlayerId}
         />
       </View>
 
