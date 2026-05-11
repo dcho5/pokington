@@ -150,3 +150,24 @@ test("auto peel preference round-trips through local storage", () => {
   writePersistedAutoPeelPreference(false);
   assert.equal(readPersistedAutoPeelPreference(), false);
 });
+
+test("auto peel preference round-trips through async storage", async () => {
+  const storage = createLocalStorage();
+  const asyncStorage = {
+    async getItem(key) {
+      return storage.getItem(key);
+    },
+    async setItem(key, value) {
+      storage.setItem(key, value);
+    },
+    async removeItem(key) {
+      storage.removeItem(key);
+    },
+  };
+
+  assert.equal(await readPersistedAutoPeelPreference(asyncStorage), false);
+  await writePersistedAutoPeelPreference(true, asyncStorage);
+  assert.equal(await readPersistedAutoPeelPreference(asyncStorage), true);
+  await writePersistedAutoPeelPreference(false, asyncStorage);
+  assert.equal(await readPersistedAutoPeelPreference(asyncStorage), false);
+});

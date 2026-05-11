@@ -1,6 +1,12 @@
 const PEEL_STORAGE_PREFIX = "pokington_card_peel_state:";
 const AUTO_PEEL_STORAGE_KEY = "pokington_auto_peel_enabled";
 
+interface AutoPeelStorageAdapter {
+  getItem(key: string): string | null | Promise<string | null>;
+  setItem(key: string, value: string): void | Promise<void>;
+  removeItem(key: string): void | Promise<void>;
+}
+
 interface PublicRevealOptions {
   isPrivatelyRevealed: boolean;
   canRevealToOthers?: boolean;
@@ -82,25 +88,54 @@ export function createInitialPeelCardState({ revealed = false } = {}) {
   };
 }
 
-export function readPersistedAutoPeelPreference() {
-  if (typeof window === "undefined") return false;
+function parsePersistedAutoPeelPreference(raw: string | null) {
+  if (!raw) return false;
   try {
-    const raw = window.localStorage.getItem(AUTO_PEEL_STORAGE_KEY);
-    if (!raw) return false;
     return JSON.parse(raw) === true;
   } catch {
     return false;
   }
 }
 
-export function writePersistedAutoPeelPreference(enabled: boolean) {
+export function readPersistedAutoPeelPreference(): boolean;
+export function readPersistedAutoPeelPreference(storage: AutoPeelStorageAdapter): Promise<boolean>;
+export function readPersistedAutoPeelPreference(storage?: AutoPeelStorageAdapter): boolean | Promise<boolean> {
+  if (storage) {
+    return Promise.resolve()
+      .then(() => storage.getItem(AUTO_PEEL_STORAGE_KEY))
+      .then(parsePersistedAutoPeelPreference)
+      .catch(() => false);
+  }
+
+  if (typeof window === "undefined") return false;
+  try {
+    return parsePersistedAutoPeelPreference(window.localStorage.getItem(AUTO_PEEL_STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
+export function writePersistedAutoPeelPreference(enabled: boolean): void;
+export function writePersistedAutoPeelPreference(enabled: boolean, storage: AutoPeelStorageAdapter): Promise<void>;
+export function writePersistedAutoPeelPreference(
+  enabled: boolean,
+  storage?: AutoPeelStorageAdapter,
+): void | Promise<void> {
+  if (storage) {
+    return Promise.resolve()
+      .then(() => {
+        if (!enabled) return storage.removeItem(AUTO_PEEL_STORAGE_KEY);
+        return storage.setItem(AUTO_PEEL_STORAGE_KEY, JSON.stringify(true));
+      })
+      .catch(() => {
+        // Ignore storage failures; the in-memory preference still applies.
+      });
+  }
+
   if (typeof window === "undefined") return;
   try {
-    if (!enabled) {
-      window.localStorage.removeItem(AUTO_PEEL_STORAGE_KEY);
-      return;
-    }
-    window.localStorage.setItem(AUTO_PEEL_STORAGE_KEY, JSON.stringify(true));
+    if (!enabled) window.localStorage.removeItem(AUTO_PEEL_STORAGE_KEY);
+    else window.localStorage.setItem(AUTO_PEEL_STORAGE_KEY, JSON.stringify(true));
   } catch {
     // Ignore storage failures; the in-memory preference still applies.
   }

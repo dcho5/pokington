@@ -17,6 +17,10 @@ import {
   type PlayerSummary,
 } from "@pokington/ui/native";
 import { useRaiseAmount } from "@pokington/ui";
+import {
+  readPersistedAutoPeelPreference,
+  writePersistedAutoPeelPreference,
+} from "@pokington/ui/lib/holeCardReveal";
 import { BOMB_POT_ANTE_BB_VALUES, formatCents, getBuyInPresets } from "@pokington/shared";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -682,6 +686,24 @@ export default function TableScreen() {
     ({ clientId }: { clientId: string; roomId: string }) => requestJoinToken(roomId, clientId, requestHostname),
     [requestHostname, roomId],
   );
+
+  useEffect(() => {
+    let isMounted = true;
+    void readPersistedAutoPeelPreference(AsyncStorage).then((enabled) => {
+      if (isMounted) setAutoPeelEnabled(enabled);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggleAutoPeel = useCallback(() => {
+    setAutoPeelEnabled((enabled) => {
+      const nextEnabled = !enabled;
+      void writePersistedAutoPeelPreference(nextEnabled, AsyncStorage);
+      return nextEnabled;
+    });
+  }, []);
 
   const handleMessage = useCallback((message: MobileServerMessage) => {
     switch (message.type) {
@@ -1413,7 +1435,7 @@ export default function TableScreen() {
           }}
           onPeekCard={(index) => peekCard(index)}
           onRevealCard={(index) => revealCard(index)}
-          onToggleAutoPeel={() => setAutoPeelEnabled((v) => !v)}
+          onToggleAutoPeel={handleToggleAutoPeel}
         />
 
         {/* ── Action dock ── */}
