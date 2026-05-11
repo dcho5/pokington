@@ -13,6 +13,7 @@ import {
   NativePanel,
   NativePokerChip,
   NativeTextField,
+  deriveNativeBoundaryControl,
   nativeLightTheme,
   type PlayerSummary,
 } from "@pokington/ui/native";
@@ -299,6 +300,19 @@ function deriveRunItOddsVisibleRunState(
     currentRun: activeRun === -1 ? 0 : activeRun,
     revealedCount: counts[activeRun === -1 ? 0 : activeRun] ?? clampedKnownCardCount,
   };
+}
+
+function isPublicShowdownRevealComplete(state: PublicTableState | null) {
+  if (!state || state.phase !== "showdown") return false;
+  const runResults = state.runResults ?? [];
+  if (runResults.length === 0) return true;
+
+  const expectedRuns = Math.max(state.runCount ?? 1, runResults.length, 1);
+  if (runResults.length < expectedRuns) return false;
+
+  return runResults
+    .slice(0, expectedRuns)
+    .every((run) => (run.board?.length ?? 0) >= RUN_IT_BOARD_CARD_COUNT);
 }
 
 function centerOf(rect: LayoutRect, origin = { x: 0, y: 0 }) {
@@ -647,6 +661,7 @@ export default function TableScreen() {
   const roomId = String(params.code ?? "").toUpperCase();
   const [tableState, setTableState] = useState<PublicTableState | null>(null);
   const [myPlayerId, setMyPlayerId] = useState<string | null>(null);
+  const [isCreator, setIsCreator] = useState(false);
   const [holeCards, setHoleCards] = useState<[Card, Card] | null>(null);
   const [revealedHoleCards, setRevealedHoleCards] = useState<Record<string, [Card | null, Card | null]>>({});
   const [peekedCardMask, setPeekedCardMask] = useState(0);
@@ -655,6 +670,7 @@ export default function TableScreen() {
   const [queuedLeavePlayerIds, setQueuedLeavePlayerIds] = useState<string[]>([]);
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [sheet, setSheet] = useState<"seat" | "raise" | "menu" | "rebuy" | "foldConfirm" | null>(null);
   const [activePotTool, setActivePotTool] = useState<"bomb" | "ledger" | null>(null);
   const [ledgerOverlayVisible, setLedgerOverlayVisible] = useState(false);
@@ -675,12 +691,17 @@ export default function TableScreen() {
   const [utilityChipLayout, setUtilityChipLayout] = useState<LayoutRect | null>(null);
   const seenFeedbackKeysRef = useRef(new Set<string>());
   const myPlayerIdRef = useRef<string | null>(null);
+  const actionErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const turnGlowAnim = useRef(new Animated.Value(0)).current;
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
 
   useEffect(() => {
     myPlayerIdRef.current = myPlayerId;
   }, [myPlayerId]);
+
+  useEffect(() => () => {
+    if (actionErrorTimerRef.current) clearTimeout(actionErrorTimerRef.current);
+  }, []);
 
   const join = useCallback(
     ({ clientId }: { clientId: string; roomId: string }) => requestJoinToken(roomId, clientId, requestHostname),
@@ -707,6 +728,10 @@ export default function TableScreen() {
 
   const handleMessage = useCallback((message: MobileServerMessage) => {
     switch (message.type) {
+      case "WELCOME":
+        setMyPlayerId(message.playerSessionId);
+        setIsCreator(message.isCreator);
+        break;
       case "TABLE_STATE": {
         setTableState(message.state);
         setError(null);
@@ -753,6 +778,16 @@ export default function TableScreen() {
         setLedgerEntries((message.entries ?? []) as LedgerEntry[]);
         break;
       case "ERROR":
+        if (message.code === "ACTION_REJECTED") {
+          if (actionErrorTimerRef.current) clearTimeout(actionErrorTimerRef.current);
+          setActionError(message.message || "Action rejected");
+          actionErrorTimerRef.current = setTimeout(() => {
+            setActionError(null);
+            actionErrorTimerRef.current = null;
+          }, 3_000);
+          playNativeFeedbackHaptic({ kind: "action_error", key: `${Date.now()}:${message.code}` }, { myPlayerId: myPlayerIdRef.current });
+          break;
+        }
         setError(message.message || message.code);
         playNativeFeedbackHaptic({ kind: "action_error", key: `${Date.now()}:${message.code}` }, { myPlayerId: myPlayerIdRef.current });
         break;
@@ -771,6 +806,7 @@ export default function TableScreen() {
     join,
     onJoin: (joinToken) => {
       setMyPlayerId(joinToken.playerSessionId);
+      setIsCreator(joinToken.isCreator);
       setError(null);
     },
     onJoinError: (nextError) => {
@@ -1005,6 +1041,27 @@ export default function TableScreen() {
   const canAllIn = canAct && !!viewer && viewer.stack > 0;
   const isWaiting = tableState?.phase === "waiting";
   const isShowdown = tableState?.phase === "showdown";
+  const eligiblePlayerCount = players.filter((player) => player.stack > 0).length;
+  const publicShowdownRevealComplete = useMemo(
+    () => isPublicShowdownRevealComplete(tableState),
+    [tableState],
+  );
+  const boundaryControl = useMemo(
+    () => deriveNativeBoundaryControl({
+      phase: tableState?.phase,
+      isCreator,
+      eligiblePlayerCount,
+      nextHandStartsAt: tableState?.nextHandStartsAt ?? null,
+      publicShowdownRevealComplete,
+    }),
+    [
+      eligiblePlayerCount,
+      isCreator,
+      publicShowdownRevealComplete,
+      tableState?.nextHandStartsAt,
+      tableState?.phase,
+    ],
+  );
   const showActiveTurnTreatment = canAct && !isWaiting && !isShowdown;
   const leaveQueued = !!myPlayerId && queuedLeavePlayerIds.includes(myPlayerId);
   const tablePot = (tableState?.pot ?? 0) + players.reduce((sum, p) => sum + p.currentBet, 0);
@@ -1074,6 +1131,8 @@ export default function TableScreen() {
     if (!actorName) return null;
     return `Waiting for ${actorName}…`;
   }, [actorId, myPlayerId, showActiveTurnTreatment, tablePlayers]);
+  const footerDisplayMessage = actionError ?? footerStatusMessage;
+  const footerDisplayTone = actionError ? "active" : showActiveTurnTreatment ? "active" : "neutral";
 
   // Feather-light rolling purr while it's the local player's turn.
   useEffect(() => {
@@ -1440,16 +1499,16 @@ export default function TableScreen() {
 
         {/* ── Action dock ── */}
         <View style={[styles.actionDock, showActiveTurnTreatment && styles.actionDockActive]}>
-          {isWaiting || (isShowdown && tableState?.winners?.length) ? (
+          {boundaryControl ? (
             <View style={styles.actionRowOuter}>
               <NativeButton
-                label="Start Game"
-                disabled={!viewer}
-                onPress={() => sendEvent({ type: "START_HAND" }, "medium")}
+                label={boundaryControl.label}
+                disabled={boundaryControl.disabled}
+                onPress={boundaryControl.disabled ? undefined : () => sendEvent({ type: "START_HAND" }, "medium")}
                 style={styles.fullActionButton}
               />
             </View>
-          ) : (
+          ) : isWaiting || isShowdown ? null : (
             <ActionRow
               canAct={canAct}
               focusActive={Boolean(showActiveTurnTreatment && canAct)}
@@ -1504,11 +1563,11 @@ export default function TableScreen() {
         </View>
 
         {/* ── Footer status banner — bottom is relative to bottomDock, not SafeAreaView ── */}
-        {footerStatusMessage ? (
+        {footerDisplayMessage ? (
           <View pointerEvents="none" style={styles.statusBannerAnchor}>
             <FooterStatusBanner
-              message={footerStatusMessage}
-              tone={showActiveTurnTreatment ? "active" : "neutral"}
+              message={footerDisplayMessage}
+              tone={footerDisplayTone}
               isFloating
             />
           </View>

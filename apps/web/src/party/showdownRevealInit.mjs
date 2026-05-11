@@ -1,3 +1,7 @@
+export function getPublicShowdownRunCount(state) {
+  return Math.max(0, state?.runResults?.length ?? 0);
+}
+
 export function deriveKnownCardCountAtShowdown(prev, next) {
   const prevKnownCount = Math.max(prev?.communityCards?.length ?? 0, prev?.communityCards2?.length ?? 0);
   if (prevKnownCount > 0) return prevKnownCount;

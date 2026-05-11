@@ -3,16 +3,17 @@ import {
   shouldRevealRunsConcurrently,
 } from "@pokington/engine";
 import { getTimedVisibleRunCounts } from "../lib/showdownRevealState.mjs";
+import { getPublicShowdownRunCount } from "./showdownRevealInit.mjs";
 
 function shouldRedactAnimatedShowdown(state) {
   if (!state || state.phase !== "showdown") return false;
   if (state.showdownStartedAt == null && state.runDealStartedAt == null) return false;
-  const runCount = Math.max(1, state.runResults?.length ?? 0);
+  const runCount = getPublicShowdownRunCount(state);
   return runCount > 0 && hasAnimatedRunout(state.knownCardCountAtRunIt ?? 0, runCount);
 }
 
 function getRunVisibleCounts(state, now) {
-  const runCount = Math.max(1, state.runResults?.length ?? 0);
+  const runCount = getPublicShowdownRunCount(state);
   const revealRunsConcurrently = shouldRevealRunsConcurrently(state.isBombPot ?? false, runCount);
   return getTimedVisibleRunCounts({
     knownCardCount: state.knownCardCountAtRunIt ?? 0,

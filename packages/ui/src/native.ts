@@ -33,3 +33,8 @@ export {
   type NativeHapticFeedbackEvent,
   type NativeHapticPattern,
 } from "./lib/nativeHaptics";
+export {
+  deriveNativeBoundaryControl,
+  type NativeBoundaryControl,
+  type NativeBoundaryControlOptions,
+} from "./lib/nativeBoundaryControls";

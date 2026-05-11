@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { deriveKnownCardCountAtShowdown } from "./showdownRevealInit.mjs";
+import {
+  deriveKnownCardCountAtShowdown,
+  getPublicShowdownRunCount,
+} from "./showdownRevealInit.mjs";
 
 function makeState(overrides = {}) {
   return {
@@ -36,4 +39,11 @@ test("preserves both bomb-pot flops when a hand jumps from waiting directly to s
   });
 
   assert.equal(deriveKnownCardCountAtShowdown(prev, next), 3);
+});
+
+test("does not invent a public runout for uncontested no-board showdowns", () => {
+  assert.equal(getPublicShowdownRunCount(makeState({
+    phase: "showdown",
+    runResults: [],
+  })), 0);
 });

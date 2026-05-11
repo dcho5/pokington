@@ -128,3 +128,20 @@ test("public bomb-pot showdown state redacts both boards until the server reveal
   assert.equal(publicState.communityCards2.length, 4);
   assert.deepEqual(publicState.runResults.map((run) => run.board.length), [4, 4]);
 });
+
+test("public uncontested showdown state is not treated as an animated runout", () => {
+  const publicState = buildPublicGameState(
+    createAnimatedShowdownState({
+      communityCards: [],
+      knownCardCountAtRunIt: 0,
+      runCount: 1,
+      runResults: [],
+      showdownKind: "uncontested",
+      winners: [{ playerId: "p1", amount: 100, hand: null }],
+    }),
+    2000,
+  );
+
+  assert.deepEqual(publicState.communityCards, []);
+  assert.deepEqual(publicState.runResults, []);
+});

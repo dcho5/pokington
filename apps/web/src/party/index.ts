@@ -44,7 +44,7 @@ import {
   snapshotSessionLedger,
   syncSessionLedgerStacks,
 } from "./sessionLedger.mjs";
-import { deriveKnownCardCountAtShowdown } from "./showdownRevealInit.mjs";
+import { deriveKnownCardCountAtShowdown, getPublicShowdownRunCount } from "./showdownRevealInit.mjs";
 import {
   getTimedVisibleRunCounts,
   getNextTimedRevealAt,
@@ -1188,12 +1188,12 @@ export default class PokerRoom implements Party.Server {
 
     if (next.phase !== "showdown") return;
 
-    const runCount = Math.max(1, next.runResults.length);
+    const runCount = getPublicShowdownRunCount(next);
     const knownCardCount = deriveKnownCardCountAtShowdown(prev, next);
     const now = Date.now();
     next.knownCardCountAtRunIt = knownCardCount;
     next.showdownStartedAt = now;
-    if (hasAnimatedRunout(knownCardCount, runCount)) {
+    if (runCount > 0 && hasAnimatedRunout(knownCardCount, runCount)) {
       const shouldDelayRevealStart =
         prev.phase === "voting" ||
         (next.isBombPot && prev.phase === "waiting");
@@ -1206,9 +1206,9 @@ export default class PokerRoom implements Party.Server {
 
     if (this.gameState.phase !== "showdown") return;
 
-    const runCount = Math.max(1, this.gameState.runResults.length);
+    const runCount = getPublicShowdownRunCount(this.gameState);
     const knownCardCount = this.gameState.knownCardCountAtRunIt;
-    if (!hasAnimatedRunout(knownCardCount, runCount)) return;
+    if (runCount <= 0 || !hasAnimatedRunout(knownCardCount, runCount)) return;
     const revealRunsConcurrently = shouldRevealRunsConcurrently(this.gameState.isBombPot, runCount);
 
     const handNumber = this.gameState.handNumber;
@@ -1298,8 +1298,8 @@ export default class PokerRoom implements Party.Server {
     if (next.phase !== "showdown" || !next.autoRevealWinningHands) return null;
 
     const knownCardCount = next.knownCardCountAtRunIt;
-    const runCount = Math.max(1, next.runResults.length);
-    if (!hasAnimatedRunout(knownCardCount, runCount)) return Date.now();
+    const runCount = getPublicShowdownRunCount(next);
+    if (runCount <= 0 || !hasAnimatedRunout(knownCardCount, runCount)) return Date.now();
     const revealRunsConcurrently = shouldRevealRunsConcurrently(next.isBombPot, runCount);
 
     return Date.now() + getAllInShowdownRevealDelayMs(knownCardCount, runCount, { revealRunsConcurrently });
@@ -1308,8 +1308,8 @@ export default class PokerRoom implements Party.Server {
   private computeNextHandStartAt(state: GameState): number | null {
     if (state.phase !== "showdown") return null;
 
-    const runCount = Math.max(1, state.runResults.length);
-    const animatedShowdownReveal = hasAnimatedRunout(state.knownCardCountAtRunIt, runCount);
+    const runCount = getPublicShowdownRunCount(state);
+    const animatedShowdownReveal = runCount > 0 && hasAnimatedRunout(state.knownCardCountAtRunIt, runCount);
     const revealRunsConcurrently = shouldRevealRunsConcurrently(state.isBombPot, runCount);
     return getNextHandAutoStartAt({
       phase: state.phase,
@@ -1541,8 +1541,8 @@ export default class PokerRoom implements Party.Server {
 
   private isAnimatedPublicReveal(state = this.gameState): boolean {
     if (state.phase !== "showdown") return false;
-    const runCount = Math.max(1, state.runResults.length);
-    return hasAnimatedRunout(state.knownCardCountAtRunIt, runCount);
+    const runCount = getPublicShowdownRunCount(state);
+    return runCount > 0 && hasAnimatedRunout(state.knownCardCountAtRunIt, runCount);
   }
 
   private getPublicBroadcastNow(now = Date.now()): number {
@@ -1557,7 +1557,7 @@ export default class PokerRoom implements Party.Server {
   }
 
   private getPublicRevealVisibleCounts(now = this.getPublicBroadcastNow()): number[] {
-    const runCount = Math.max(1, this.gameState.runResults.length);
+    const runCount = getPublicShowdownRunCount(this.gameState);
     const revealRunsConcurrently = shouldRevealRunsConcurrently(this.gameState.isBombPot, runCount);
     return getTimedVisibleRunCounts({
       knownCardCount: this.gameState.knownCardCountAtRunIt,
@@ -1592,9 +1592,9 @@ export default class PokerRoom implements Party.Server {
   private getTimedRevealSignature(state: GameState, now = Date.now()): string | null {
     if (state.phase !== "showdown") return null;
 
-    const runCount = Math.max(1, state.runResults.length);
+    const runCount = getPublicShowdownRunCount(state);
     const knownCardCount = state.knownCardCountAtRunIt;
-    if (!hasAnimatedRunout(knownCardCount, runCount) || state.runDealStartedAt == null) {
+    if (runCount <= 0 || !hasAnimatedRunout(knownCardCount, runCount) || state.runDealStartedAt == null) {
       return null;
     }
 
