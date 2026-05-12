@@ -464,7 +464,7 @@ export function deriveTableScene({
   return {
     code,
     tableNotFound,
-    showReconnectIndicator: connectionStatus === "disconnected" && isFirstStateReceived,
+    showReconnectIndicator: connectionStatus !== "connected" && isFirstStateReceived,
     showBlockingConnectionOverlay,
     blockingConnectionTitle,
     blockingConnectionMessage,

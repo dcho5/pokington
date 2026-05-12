@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createNativeGameConnection, type CreateNativeGameConnectionOptions } from "./partykit-native";
 import { createWebGameConnection, type CreateWebGameConnectionOptions } from "./partykit-web";
@@ -21,6 +23,8 @@ export type UseGameConnectionOptions<TServerMessage, TGameAction> =
 export interface UseGameConnectionResult<TServerMessage, TGameAction> {
   connection: GameConnection<TServerMessage, TGameAction> | null;
   status: ConnectionStatus;
+  terminalError: Error | null;
+  firstStateReceived: boolean;
 }
 
 export function useGameConnection<
@@ -31,6 +35,8 @@ export function useGameConnection<
 ): UseGameConnectionResult<TServerMessage, TGameAction> {
   const [connection, setConnection] = useState<GameConnection<TServerMessage, TGameAction> | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>("idle");
+  const [terminalError, setTerminalError] = useState<Error | null>(null);
+  const [firstStateReceived, setFirstStateReceived] = useState(false);
   const enabled = options.enabled ?? true;
   const optionsRef = useRef(options);
   const lifecycleRef = useRef({
@@ -39,6 +45,7 @@ export function useGameConnection<
     onMessage: options.onMessage,
     onJoinError: options.onJoinError,
     onSocketError: options.onSocketError,
+    onTerminalError: options.onTerminalError,
   });
 
   useEffect(() => {
@@ -49,6 +56,7 @@ export function useGameConnection<
       onMessage: options.onMessage,
       onJoinError: options.onJoinError,
       onSocketError: options.onSocketError,
+      onTerminalError: options.onTerminalError,
     };
   });
 
@@ -80,12 +88,16 @@ export function useGameConnection<
     if (!enabled) {
       setConnection(null);
       setStatus("idle");
+      setTerminalError(null);
+      setFirstStateReceived(false);
       return () => {
         cancelled = true;
       };
     }
 
     setStatus("connecting");
+    setTerminalError(null);
+    setFirstStateReceived(false);
     const onStatusChange = (nextStatus: ConnectionStatus) => {
       if (cancelled) return;
       setStatus(nextStatus);
@@ -97,6 +109,7 @@ export function useGameConnection<
         lifecycleRef.current.onJoin?.(join);
       },
       onMessage: (message: TServerMessage) => {
+        if (message.type === "TABLE_STATE") setFirstStateReceived(true);
         lifecycleRef.current.onMessage?.(message);
       },
       onJoinError: (error: Error) => {
@@ -104,6 +117,11 @@ export function useGameConnection<
       },
       onSocketError: (error: unknown) => {
         lifecycleRef.current.onSocketError?.(error);
+      },
+      onTerminalError: (error: Error) => {
+        if (cancelled) return;
+        setTerminalError(error);
+        lifecycleRef.current.onTerminalError?.(error);
       },
     };
 
@@ -142,12 +160,12 @@ export function useGameConnection<
           return latestOptions.join();
         },
         createSocket: connectionOptions.createSocket
-          ? (host, roomId) => {
+          ? (url) => {
               const latestOptions = optionsRef.current;
               if (latestOptions.adapter === "native" || !latestOptions.createSocket) {
-                return connectionOptions.createSocket!(host, roomId);
+                return connectionOptions.createSocket!(url);
               }
-              return latestOptions.createSocket(host, roomId);
+              return latestOptions.createSocket(url);
             }
           : undefined,
         ...lifecycle,
@@ -162,5 +180,5 @@ export function useGameConnection<
     };
   }, [connectionKey, enabled]);
 
-  return { connection, status };
+  return { connection, status, terminalError, firstStateReceived };
 }

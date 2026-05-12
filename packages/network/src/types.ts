@@ -12,9 +12,7 @@ export type PartyKitClientMessage<TGameAction = SerializedGameAction> =
   | { type: "GAME_EVENT"; event: TGameAction }
   | { type: "REVEAL_CARD"; cardIndex: CardIndex }
   | { type: "SET_AWAY"; away: boolean }
-  | { type: "PEEK_CARD"; cardIndex: CardIndex; handNumber: number }
-  | { type: "QUEUE_LEAVE" }
-  | { type: "CANCEL_QUEUE_LEAVE" };
+  | { type: "PEEK_CARD"; cardIndex: CardIndex; handNumber: number };
 
 export type PartyKitServerMessage<TGameState = SerializedGameState> =
   | { type: "WELCOME"; playerSessionId: string; isCreator: boolean }
@@ -76,13 +74,13 @@ export interface GameConnection<TServerMessage = PartyKitServerMessage, TGameAct
   readonly status: ConnectionStatus;
   readonly clientId: string;
   readonly roomId: string;
+  readonly terminalError: Error | null;
+  readonly firstStateReceived: boolean;
   sendAction: (action: TGameAction) => void;
   sendMessage: (message: PartyKitClientMessage<TGameAction>) => void;
   revealCard: (cardIndex: CardIndex) => void;
   peekCard: (cardIndex: CardIndex, handNumber: number) => void;
   setAway: (away: boolean) => void;
-  queueLeave: () => void;
-  cancelQueuedLeave: () => void;
   subscribeToState: (listener: (state: SerializedGameState) => void) => () => void;
   subscribeToMessage: (listener: (message: TServerMessage) => void) => () => void;
   subscribeToStatus: (listener: (status: ConnectionStatus) => void) => () => void;
@@ -95,6 +93,7 @@ export interface GameConnectionLifecycle<TServerMessage = PartyKitServerMessage>
   onMessage?: (message: TServerMessage) => void;
   onJoinError?: (error: Error) => void;
   onSocketError?: (error: unknown) => void;
+  onTerminalError?: (error: Error) => void;
 }
 
 export interface KeyValueStorage {

@@ -2,14 +2,19 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   CLIENT_ID_STORAGE_KEY,
+  buildDirectControlPlaneUrlForTest,
   buildNativeControlPlaneUrlForTest,
   buildPartyKitWebSocketUrl,
+  createTable,
   createNativeTable,
   createNativeGameConnection,
   createWebGameConnection,
+  getTable,
   getNativeTable,
   getOrCreateNativeClientId,
+  requestJoinToken,
   requestNativeJoinToken,
+  requestQueuedSeatLeave,
   requestNativeQueuedSeatLeave,
   resolveNativePartyKitHost,
 } from "../dist/index.js";
@@ -71,9 +76,8 @@ test("web adapter authenticates and dispatches messages through the shared contr
     protocolVersion: 4,
     join: async () => joinToken,
     getInitialAway: () => true,
-    createSocket: (host, roomId) => {
-      assert.equal(host, "localhost:1999");
-      assert.equal(roomId, "ABC123");
+    createSocket: (url) => {
+      assert.equal(url, "ws://localhost:1999/parties/main/ABC123");
       return socket;
     },
     onStatusChange: (status) => statuses.push(status),
@@ -148,8 +152,6 @@ test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppS
   await tick();
   socket.emit("open", {});
   appStateListeners[0]("active");
-  connection.queueLeave();
-  connection.cancelQueuedLeave();
 
   assert.equal(storage.get(CLIENT_ID_STORAGE_KEY), "native-client");
   assert.deepEqual(urls, ["wss://example.com/parties/main/ROOM%201"]);
@@ -157,9 +159,76 @@ test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppS
     { type: "AUTH", token: "join-token", protocolVersion: 4 },
     { type: "SET_AWAY", away: true },
     { type: "SET_AWAY", away: false },
-    { type: "QUEUE_LEAVE" },
-    { type: "CANCEL_QUEUE_LEAVE" },
   ]);
+});
+
+test("connection reconnects with a fresh join token after a non-terminal close", async () => {
+  const sockets = [new MockSocket(), new MockSocket()];
+  const joins = [];
+  const statuses = [];
+
+  const connection = createWebGameConnection({
+    host: "localhost:1999",
+    roomId: "ABC123",
+    clientId: "client-1",
+    protocolVersion: 4,
+    reconnectBackoffMs: () => 0,
+    join: async () => {
+      const token = `join-token-${joins.length + 1}`;
+      joins.push(token);
+      return { ...joinToken, token };
+    },
+    createSocket: () => sockets[joins.length - 1],
+    onStatusChange: (status) => statuses.push(status),
+  });
+
+  await tick();
+  sockets[0].emit("open", {});
+  sockets[0].emit("close", {});
+  await tick();
+  await tick();
+  sockets[1].emit("open", {});
+
+  assert.deepEqual(joins, ["join-token-1", "join-token-2"]);
+  assert.deepEqual(sockets[0].sent.slice(0, 1), [
+    { type: "AUTH", token: "join-token-1", protocolVersion: 4 },
+  ]);
+  assert.deepEqual(sockets[1].sent.slice(0, 1), [
+    { type: "AUTH", token: "join-token-2", protocolVersion: 4 },
+  ]);
+  assert.equal(connection.status, "connected");
+  assert.ok(statuses.includes("disconnected"));
+});
+
+test("connection treats terminal server errors as non-retriable", async () => {
+  const socket = new MockSocket();
+  const terminalErrors = [];
+  let joinCount = 0;
+
+  const connection = createWebGameConnection({
+    host: "localhost:1999",
+    roomId: "ABC123",
+    clientId: "client-1",
+    protocolVersion: 4,
+    reconnectBackoffMs: () => 0,
+    join: async () => {
+      joinCount += 1;
+      return joinToken;
+    },
+    createSocket: () => socket,
+    onTerminalError: (error) => terminalErrors.push(error.message),
+  });
+
+  await tick();
+  socket.emit("open", {});
+  socket.emit("message", { data: JSON.stringify({ type: "ERROR", code: "TABLE_NOT_ACTIVE", message: "Table is not active" }) });
+  socket.emit("close", {});
+  await tick();
+
+  assert.equal(joinCount, 1);
+  assert.equal(connection.status, "disconnected");
+  assert.equal(connection.terminalError?.message, "TABLE_NOT_ACTIVE");
+  assert.deepEqual(terminalErrors, ["TABLE_NOT_ACTIVE"]);
 });
 
 test("native helpers normalize host and persist existing client ids", async () => {
@@ -205,6 +274,10 @@ test("native control plane helpers build direct PartyKit requests and surface er
     "https://table.example.com/parties/main/__control__/tables/ABC123",
   );
   assert.equal(
+    buildDirectControlPlaneUrlForTest("tables/ABC123", { explicitHost: "https://table.example.com/" }),
+    "https://table.example.com/parties/main/__control__/tables/ABC123",
+  );
+  assert.equal(
     buildNativeControlPlaneUrlForTest("tables/ABC123", { requestHostname: "192.168.1.146:8081" }),
     "http://192.168.1.146:1999/parties/main/__control__/tables/ABC123",
   );
@@ -219,6 +292,14 @@ test("native control plane helpers build direct PartyKit requests and surface er
   assert.equal(requests[0].url, "http://127.0.0.1:1999/parties/main/__control__/tables");
   assert.equal(JSON.parse(requests[0].init.body).tableName, "Friday");
 
+  await createTable({
+    tableName: "Shared",
+    blinds: { small: 10, big: 25 },
+    creatorClientId: "client-1",
+  }, { explicitHost: "127.0.0.1:1999", fetchImpl });
+  await getTable("abc123", { explicitHost: "table.example.com", fetchImpl });
+  await requestJoinToken("abc123", "client-1", { explicitHost: "table.example.com", fetchImpl });
+  await requestQueuedSeatLeave("abc123", "client-1", { explicitHost: "table.example.com", fetchImpl });
   await getNativeTable("abc123", { explicitHost: "table.example.com", fetchImpl });
   await requestNativeJoinToken("abc123", "client-1", { explicitHost: "table.example.com", fetchImpl });
   await requestNativeQueuedSeatLeave("abc123", "client-1", { explicitHost: "table.example.com", fetchImpl });

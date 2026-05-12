@@ -88,9 +88,7 @@ export type ClientMessage =
   | { type: "GAME_EVENT"; event: GameEvent }
   | { type: "REVEAL_CARD"; cardIndex: 0 | 1 }
   | { type: "SET_AWAY"; away: boolean }
-  | { type: "PEEK_CARD"; cardIndex: 0 | 1; handNumber: number }
-  | { type: "QUEUE_LEAVE" }
-  | { type: "CANCEL_QUEUE_LEAVE" };
+  | { type: "PEEK_CARD"; cardIndex: 0 | 1; handNumber: number };
 
 // ── Session ledger ──
 

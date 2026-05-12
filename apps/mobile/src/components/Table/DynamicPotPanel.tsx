@@ -20,11 +20,11 @@ const POT_PILL_SHIFT = 13;
 const RUN_LABELS = ["once", "twice", "three times"] as const;
 const RUN_BUTTON_LABELS = ["Once", "Twice", "3x"] as const;
 const DEFAULT_BASE_GRADIENT_COLORS = ["#0d1f38", "#060f1e", "#020609"] as const;
-const POT_BASE_GRADIENT_COLORS = ["#ff5a5f", "#dc2626", "#6f0707"] as const;
+const POT_BASE_GRADIENT_COLORS = ["#ff7a7d", "#ef4444", "#9f1239"] as const;
 const DEFAULT_SIDE_SHADE_COLORS = ["rgba(0,0,0,0.14)", "transparent", "rgba(0,0,0,0.18)"] as const;
 const POT_SIDE_SHADE_COLORS = ["rgba(127,29,29,0.06)", "transparent", "rgba(127,29,29,0.14)"] as const;
 const DEFAULT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(0,0,0,0.34)"] as const;
-const POT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(127,29,29,0.24)"] as const;
+const POT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(127,29,29,0.16)"] as const;
 
 type PotIslandTone = "pot" | "violet" | "sky" | "amber" | "gold";
 
@@ -104,7 +104,7 @@ const TONE_INDEX: Record<PotIslandTone, number> = {
 };
 
 const TONE_STOPS = [0, 1, 2, 3, 4] as const;
-const ROOT_COLORS = ["#ef4444", "#101526", "#0b1724", "#21160c", "#1c160c"] as const;
+const ROOT_COLORS = ["#f43f5e", "#101526", "#0b1724", "#21160c", "#1c160c"] as const;
 const BORDER_COLORS = [
   "rgba(248,113,113,0.52)",
   "rgba(199,210,254,0.27)",

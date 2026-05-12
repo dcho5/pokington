@@ -12,6 +12,7 @@ import {
   NativeListRow,
   NativePanel,
   NativePokerChip,
+  NativeSegmentedControl,
   NativeTextField,
   deriveNativeBoundaryControl,
   nativeLightTheme,
@@ -165,7 +166,7 @@ interface PublicTableState {
   bombPotVotingStartedAt?: number | null;
   bombPotNextHand?: { anteBB: BombPotAnteBB } | null;
   bombPotCooldown?: string[];
-  pendingBoundaryUpdates?: Record<string, unknown>;
+  pendingBoundaryUpdates?: Record<string, PendingBoundaryUpdate>;
 }
 
 interface LedgerEntry {
@@ -175,6 +176,14 @@ interface LedgerEntry {
   cashOuts: number[];
   isSeated: boolean;
   currentStack: number;
+}
+
+interface PendingBoundaryUpdate {
+  playerId: string;
+  leaveSeat: boolean;
+  moveToSeatIndex: number | null;
+  chipDelta: number;
+  requestedAt?: number;
 }
 
 interface LedgerRow {
@@ -563,6 +572,189 @@ function NativeRaiseSheetContent({
   );
 }
 
+type SeatManagerMode = "add" | "cash";
+
+function describePendingBoundaryUpdate(update: PendingBoundaryUpdate | null | undefined): string | null {
+  if (!update) return null;
+  if (update.leaveSeat) return "Leaving at the next hand boundary.";
+  if (update.moveToSeatIndex != null && update.chipDelta > 0) {
+    return `Moving to Seat ${update.moveToSeatIndex + 1} and adding ${formatCents(update.chipDelta)}.`;
+  }
+  if (update.moveToSeatIndex != null && update.chipDelta < 0) {
+    return `Moving to Seat ${update.moveToSeatIndex + 1} and cashing out ${formatCents(Math.abs(update.chipDelta))}.`;
+  }
+  if (update.moveToSeatIndex != null) return `Moving to Seat ${update.moveToSeatIndex + 1}.`;
+  if (update.chipDelta > 0) return `Adding ${formatCents(update.chipDelta)}.`;
+  if (update.chipDelta < 0) return `Cashing out ${formatCents(Math.abs(update.chipDelta))}.`;
+  return null;
+}
+
+function parseDollarInputToCents(value: string): number {
+  return Math.max(0, Math.round(Number(value.replace(/,/g, "") || "0") * 100));
+}
+
+function formatPresetDollars(dollars: number): string {
+  return dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function NativeSeatManagerContent({
+  viewer,
+  targetSeatIndex,
+  seatPlayers,
+  bigBlind,
+  pendingUpdate,
+  applyImmediately,
+  amount,
+  onAmountChange,
+  mode,
+  onModeChange,
+  onTargetSeatChange,
+  onSubmit,
+  onCancelPending,
+  onDismiss,
+}: {
+  viewer: TablePlayer;
+  targetSeatIndex: number | null;
+  seatPlayers: Array<TablePlayer | null>;
+  bigBlind: number;
+  pendingUpdate: PendingBoundaryUpdate | null;
+  applyImmediately: boolean;
+  amount: string;
+  onAmountChange: (value: string) => void;
+  mode: SeatManagerMode;
+  onModeChange: (mode: SeatManagerMode) => void;
+  onTargetSeatChange: (seatIndex: number) => void;
+  onSubmit: (update: { leaveSeat?: boolean; moveToSeatIndex?: number | null; chipDelta?: number }) => void;
+  onCancelPending: () => void;
+  onDismiss: () => void;
+}) {
+  const presets = getBuyInPresets(bigBlind);
+  const selectedSeat = targetSeatIndex != null ? targetSeatIndex : viewer.seatIndex;
+  const openSeats = seatPlayers
+    .map((player, seatIndex) => ({ player, seatIndex }))
+    .filter(({ player, seatIndex }) => !player || seatIndex === viewer.seatIndex)
+    .map(({ seatIndex }) => seatIndex);
+  const pendingCopy = describePendingBoundaryUpdate(pendingUpdate);
+  const parsedCents = parseDollarInputToCents(amount);
+  const signedChipDelta = mode === "cash" ? -parsedCents : parsedCents;
+  const hasSeatChange = selectedSeat !== viewer.seatIndex;
+  const hasChipChange = parsedCents > 0;
+  const cashOutTooLarge = mode === "cash" && hasChipChange && parsedCents >= viewer.stack;
+  const canSubmit = (hasSeatChange || hasChipChange) && !cashOutTooLarge;
+  const amountLabel = mode === "cash" ? "Cash Out Amount" : "Add Chips";
+  const submitLabel = applyImmediately ? "Apply Now" : "Queue Update";
+
+  return (
+    <View style={styles.seatManagerContent}>
+      <Text style={styles.sheetTitle}>{viewer.name}</Text>
+      <Text style={styles.sheetText}>
+        Seat {viewer.seatIndex + 1} · Stack {formatCents(viewer.stack)}
+      </Text>
+
+      {pendingCopy ? (
+        <View style={styles.pendingUpdateBox}>
+          <Text style={styles.pendingUpdateLabel}>QUEUED UPDATE</Text>
+          <Text style={styles.pendingUpdateText}>{pendingCopy}</Text>
+          <NativeButton
+            label="Cancel Pending Update"
+            tone="secondary"
+            onPress={onCancelPending}
+            style={styles.pendingCancelButton}
+          />
+        </View>
+      ) : null}
+
+      <Text style={styles.buyInSectionLabel}>SEAT</Text>
+      <View style={styles.seatChoiceGrid}>
+        {openSeats.map((seatIndex) => {
+          const selected = seatIndex === selectedSeat;
+          return (
+            <Pressable
+              key={seatIndex}
+              onPress={() => onTargetSeatChange(seatIndex)}
+              style={[styles.seatChoice, selected && styles.seatChoiceSelected]}
+            >
+              <Text style={[styles.seatChoiceText, selected && styles.seatChoiceTextSelected]}>
+                {seatIndex + 1}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <NativeSegmentedControl
+        options={["Add", "Cash Out"]}
+        value={mode === "add" ? 0 : 1}
+        onChange={(idx) => onModeChange(idx === 0 ? "add" : "cash")}
+        style={styles.seatManagerSegment}
+      />
+
+      <Text style={styles.buyInSectionLabel}>{amountLabel}</Text>
+      <View style={styles.buyInAmountRow}>
+        <Text style={styles.buyInDollarSign}>$</Text>
+        <NativeTextField
+          value={amount}
+          onChangeText={(text) => {
+            const m = text.replace(/,/g, "").match(/^\d*\.?\d{0,2}/);
+            onAmountChange(m ? m[0] : "");
+          }}
+          onBlur={() => {
+            const centsValue = parseDollarInputToCents(amount);
+            if (centsValue > 0) onAmountChange(formatPresetDollars(centsValue / 100));
+          }}
+          keyboardType="decimal-pad"
+          placeholder="0.00"
+          containerStyle={styles.buyInFieldFlex}
+        />
+      </View>
+
+      <View style={styles.rebuyPresetRow}>
+        {presets.map((preset) => {
+          const selected = amount === formatPresetDollars(preset.dollars);
+          return (
+            <Pressable
+              key={preset.label}
+              onPress={() => onAmountChange(formatPresetDollars(preset.dollars))}
+              style={[styles.rebuyPreset, selected && styles.rebuyPresetSelected]}
+            >
+              <Text style={[styles.rebuyPresetLabel, selected && styles.rebuyPresetLabelSelected]}>
+                ${preset.dollars % 1 === 0 ? preset.dollars.toFixed(0) : preset.dollars.toFixed(2)}
+              </Text>
+              <Text style={[styles.rebuyPresetSub, selected && styles.rebuyPresetSubSelected]}>
+                {preset.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {cashOutTooLarge ? (
+        <Text style={styles.seatManagerWarning}>Leave seat to cash out the full stack.</Text>
+      ) : null}
+
+      <View style={styles.seatManagerActions}>
+        <NativeButton
+          label="Leave Seat"
+          tone="danger"
+          onPress={() => onSubmit({ leaveSeat: true, moveToSeatIndex: null, chipDelta: 0 })}
+          style={styles.seatManagerButton}
+        />
+        <NativeButton
+          label={submitLabel}
+          disabled={!canSubmit}
+          onPress={() => onSubmit({
+            leaveSeat: false,
+            moveToSeatIndex: hasSeatChange ? selectedSeat : null,
+            chipDelta: hasChipChange ? signedChipDelta : 0,
+          })}
+          style={styles.seatManagerButton}
+        />
+      </View>
+
+      <NativeButton label="Done" tone="secondary" onPress={onDismiss} />
+    </View>
+  );
+}
+
 // Soft glow ring rendered behind the primary (Check/Call) action button when
 // it's the user's turn. Pulses gently to draw the eye without being noisy.
 function ActionFocusRing({ active }: { active: boolean }) {
@@ -671,7 +863,7 @@ export default function TableScreen() {
   const [ledgerEntries, setLedgerEntries] = useState<LedgerEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [sheet, setSheet] = useState<"seat" | "raise" | "menu" | "rebuy" | "foldConfirm" | null>(null);
+  const [sheet, setSheet] = useState<"seat" | "raise" | "menu" | "seatManager" | "foldConfirm" | null>(null);
   const [activePotTool, setActivePotTool] = useState<"bomb" | "ledger" | null>(null);
   const [ledgerOverlayVisible, setLedgerOverlayVisible] = useState(false);
   const [potIslandRect, setPotIslandRect] = useState<PotIslandRect | null>(null);
@@ -680,7 +872,7 @@ export default function TableScreen() {
   const [buyIn, setBuyIn] = useState((DEFAULT_BUY_IN_CENTS / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   const buyInRef = useRef<any>(null);
   const [rebuyAmount, setRebuyAmount] = useState("");
-  const rebuyRef = useRef<any>(null);
+  const [seatManagerMode, setSeatManagerMode] = useState<SeatManagerMode>("add");
   const [autoPeelEnabled, setAutoPeelEnabled] = useState(false);
   const [detailSeatIndex, setDetailSeatIndex] = useState<number | null>(null);
   const [activeBombPotBoard, setActiveBombPotBoard] = useState(0);
@@ -793,7 +985,12 @@ export default function TableScreen() {
     }
   }, []);
 
-  const { connection } = useGameConnection<MobileServerMessage, GameEvent>({
+  const {
+    connection,
+    status: connectionStatus,
+    terminalError,
+    firstStateReceived,
+  } = useGameConnection<MobileServerMessage, GameEvent>({
     adapter: "native",
     enabled: roomId.length > 0,
     roomId,
@@ -811,6 +1008,12 @@ export default function TableScreen() {
     onJoinError: (nextError) => {
       setError(nextError.message);
       playNativeFeedbackHaptic({ kind: "action_error", key: `join:${nextError.message}` }, { myPlayerId: myPlayerIdRef.current });
+    },
+    onStatusChange: (status) => {
+      if (status === "connected") setError(null);
+    },
+    onTerminalError: (nextError) => {
+      setError(nextError.message);
     },
     onMessage: handleMessage,
   });
@@ -841,11 +1044,11 @@ export default function TableScreen() {
         stack: player.stack,
         currentBet: player.currentBet,
         isFolded: player.isFolded,
-        isAllIn: player.isAllIn,
+        isAllIn: player.isAllIn && player.hasCards !== false && !player.sitOutUntilBB,
         isAway: awayPlayerIds.includes(player.id),
         isActor: actorId === player.id,
         isViewer: myPlayerId === player.id,
-        hasCards: player.hasCards,
+        hasCards: player.hasCards && !player.isFolded,
         lastAction: player.lastAction ?? null,
         peekedCount: peekedCounts[player.id] ?? 0,
         holeCards: (revealedHoleCards[player.id] ?? null) as [Card | null, Card | null] | null,
@@ -1045,6 +1248,37 @@ export default function TableScreen() {
     () => isPublicShowdownRevealComplete(tableState),
     [tableState],
   );
+  useEffect(() => {
+    const runResults = tableState?.runResults ?? [];
+    if (
+      tableState?.phase !== "showdown" ||
+      !tableState.isRunItBoard ||
+      tableState.isBombPot ||
+      runResults.length === 0 ||
+      publicShowdownRevealComplete
+    ) {
+      return;
+    }
+    const { currentRun } = deriveRunItOddsVisibleRunState(
+      runResults,
+      tableState.knownCardCountAtRunIt ?? tableState.knownCardCount ?? 0,
+      Math.max(tableState.runCount ?? 1, runResults.length, 1),
+    );
+    setViewingRun((current) => (current < currentRun ? currentRun : current));
+  }, [
+    publicShowdownRevealComplete,
+    tableState?.handNumber,
+    tableState?.isBombPot,
+    tableState?.isRunItBoard,
+    tableState?.knownCardCount,
+    tableState?.knownCardCountAtRunIt,
+    tableState?.phase,
+    tableState?.runCount,
+    tableState?.runResults,
+  ]);
+  useEffect(() => {
+    setViewingRun(0);
+  }, [tableState?.handNumber]);
   const boundaryControl = useMemo(
     () => deriveNativeBoundaryControl({
       phase: tableState?.phase,
@@ -1063,6 +1297,8 @@ export default function TableScreen() {
   );
   const showActiveTurnTreatment = canAct && !isWaiting && !isShowdown;
   const leaveQueued = !!myPlayerId && queuedLeavePlayerIds.includes(myPlayerId);
+  const viewerPendingBoundaryUpdate =
+    myPlayerId ? (tableState?.pendingBoundaryUpdates?.[myPlayerId] ?? null) : null;
   const tablePot = (tableState?.pot ?? 0) + players.reduce((sum, p) => sum + p.currentBet, 0);
   const showRunItVotingPanel = useTimedPanelVisibility({
     visible: tableState?.phase === "voting",
@@ -1132,6 +1368,14 @@ export default function TableScreen() {
   }, [actorId, myPlayerId, showActiveTurnTreatment, tablePlayers]);
   const footerDisplayMessage = actionError ?? footerStatusMessage;
   const footerDisplayTone = actionError ? "active" : showActiveTurnTreatment ? "active" : "neutral";
+  const terminalCode = terminalError?.message ?? null;
+  const showTableNotFound = terminalCode === "TABLE_NOT_FOUND" || terminalCode === "TABLE_NOT_ACTIVE";
+  const showReconnectIndicator = connectionStatus !== "connected" && firstStateReceived && !terminalError;
+  const showBlockingConnectionOverlay = !firstStateReceived && !showTableNotFound;
+  const blockingConnectionTitle = connectionStatus === "disconnected" ? "Reconnecting table" : "Loading table";
+  const blockingConnectionMessage = connectionStatus === "disconnected"
+    ? "Your connection dropped before the table finished syncing. Restoring the latest hand now."
+    : `Joining ${roomId} and syncing the current table state.`;
 
   // Feather-light rolling purr while it's the local player's turn.
   useEffect(() => {
@@ -1202,13 +1446,10 @@ export default function TableScreen() {
     playNativeFeedbackHaptic({ kind: "local_press", key: `seat:${seatIndex}` }, { myPlayerId });
     if (player) return;
     if (viewer) {
-      sendViewerEvent((playerId) => ({
-        type: "REQUEST_BOUNDARY_UPDATE",
-        playerId,
-        leaveSeat: false,
-        moveToSeatIndex: seatIndex,
-        chipDelta: 0,
-      }), "medium");
+      setSelectedSeatIndex(seatIndex);
+      setSeatManagerMode("add");
+      setRebuyAmount("");
+      setSheet("seatManager");
       return;
     }
     setSelectedSeatIndex(seatIndex);
@@ -1339,6 +1580,16 @@ export default function TableScreen() {
     playNativeFeedbackHaptic({ kind: "local_press", key: `peek:${cardIndex}` }, { myPlayerId });
   };
 
+  const handleActiveBoardChange = useCallback((boardIndex: number) => {
+    setActiveBombPotBoard(boardIndex);
+    playNativeFeedbackHaptic({ kind: "local_press", key: `board:${boardIndex}` }, { myPlayerId });
+  }, [myPlayerId]);
+
+  const handleViewingRunChange = useCallback((runIndex: number) => {
+    setViewingRun(runIndex);
+    playNativeFeedbackHaptic({ kind: "local_press", key: `run:${runIndex}` }, { myPlayerId });
+  }, [myPlayerId]);
+
   const toggleLeave = () => {
     if (!viewer) return;
     if (leaveQueued) {
@@ -1362,6 +1613,12 @@ export default function TableScreen() {
           headerShown: false
         }} 
       />
+      {showReconnectIndicator ? (
+        <View pointerEvents="none" style={styles.reconnectPill}>
+          <Text style={styles.reconnectDot}>●</Text>
+          <Text style={styles.reconnectText}>Reconnecting</Text>
+        </View>
+      ) : null}
       {showActiveTurnTreatment ? (
         <View pointerEvents="none" style={styles.turnPerimeterLayer}>
           {/* Single bottom-anchored breathing wash. The opacity peak is timed
@@ -1378,6 +1635,26 @@ export default function TableScreen() {
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
+        </View>
+      ) : null}
+      {showTableNotFound ? (
+        <View style={styles.blockingOverlay}>
+          <View style={styles.blockingCard}>
+            <Text style={styles.blockingTitle}>Table not found</Text>
+            <Text style={styles.blockingMessage}>
+              {roomId} doesn’t exist or is no longer active.
+            </Text>
+            <NativeButton label="Go Back" onPress={() => router.back()} />
+          </View>
+        </View>
+      ) : null}
+      {showBlockingConnectionOverlay ? (
+        <View pointerEvents="none" style={styles.blockingOverlay}>
+          <View style={styles.blockingCard}>
+            <Text style={styles.blockingEyebrow}>Live Table Sync</Text>
+            <Text style={styles.blockingTitle}>{blockingConnectionTitle}</Text>
+            <Text style={styles.blockingMessage}>{blockingConnectionMessage}</Text>
+          </View>
         </View>
       ) : null}
 
@@ -1426,9 +1703,9 @@ export default function TableScreen() {
           runAnnouncement={tableState?.runAnnouncement}
           handNumber={tableState?.handNumber}
           activeBombPotBoardIndex={activeBombPotBoard}
-          onActiveBoardChange={setActiveBombPotBoard}
+          onActiveBoardChange={handleActiveBoardChange}
           viewingRunIndex={viewingRun}
-          onViewingRunChange={setViewingRun}
+          onViewingRunChange={handleViewingRunChange}
         />
       </View>
 
@@ -1514,8 +1791,10 @@ export default function TableScreen() {
           peekedCardIndices={myPeekedCardIndices}
           onIdentityPress={() => {
             if (!viewer) return;
+            setSelectedSeatIndex(viewer.seatIndex);
+            setSeatManagerMode("add");
             setRebuyAmount("");
-            setSheet("rebuy");
+            setSheet("seatManager");
           }}
           onPeekCard={(index) => peekCard(index)}
           onRevealCard={(index) => revealCard(index)}
@@ -1751,72 +2030,34 @@ export default function TableScreen() {
           </View>
         ) : null}
 
-        {sheet === "rebuy" && viewer ? (
-          <>
-            <Text style={styles.sheetTitle}>{viewer.name}</Text>
-
-            <Text style={styles.buyInSectionLabel}>ADD CHIPS</Text>
-            <View style={styles.buyInAmountRow}>
-              <Text style={styles.buyInDollarSign}>$</Text>
-              <NativeTextField
-                ref={rebuyRef}
-                value={rebuyAmount}
-                onChangeText={(text) => {
-                  const m = text.replace(/,/g, "").match(/^\d*\.?\d{0,2}/);
-                  const valid = m ? m[0] : "";
-                  if (valid !== text) rebuyRef.current?.setNativeProps({ text: valid });
-                  setRebuyAmount(valid);
-                }}
-                onBlur={() => {
-                  const n = parseFloat(rebuyAmount.replace(/,/g, "") || "0");
-                  if (!isNaN(n) && n > 0) setRebuyAmount(n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-                }}
-                keyboardType="decimal-pad"
-                placeholder="0.00"
-                containerStyle={styles.buyInFieldFlex}
-              />
-            </View>
-
-            <View style={styles.rebuyPresetRow}>
-              {getBuyInPresets(tableState?.blinds?.big ?? DEFAULT_BUY_IN_CENTS).map((preset) => {
-                const label = preset.dollars % 1 === 0
-                  ? `$${preset.dollars.toFixed(0)}`
-                  : `$${preset.dollars.toFixed(2)}`;
-                const selected = parseFloat(rebuyAmount.replace(/,/g, "")) === preset.dollars;
-                return (
-                  <Pressable
-                    key={preset.label}
-                    onPress={() => setRebuyAmount(preset.dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}
-                    style={[styles.rebuyPreset, selected && styles.rebuyPresetSelected]}
-                  >
-                    <Text style={[styles.rebuyPresetLabel, selected && styles.rebuyPresetLabelSelected]}>
-                      {label}
-                    </Text>
-                    <Text style={[styles.rebuyPresetSub, selected && styles.rebuyPresetSubSelected]}>
-                      {preset.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <NativeButton
-              label="Buy In"
-              onPress={() => {
-                const dollars = parseFloat(rebuyAmount.replace(/,/g, "") || "0");
-                const buyInCents = Math.max(0, Math.round(dollars * 100));
-                if (buyInCents <= 0) return;
-                sendViewerEvent((playerId) => ({
-                  type: "REQUEST_BOUNDARY_UPDATE",
-                  playerId,
-                  leaveSeat: false,
-                  moveToSeatIndex: null,
-                  chipDelta: buyInCents,
-                }), "medium");
-                setSheet(null);
-              }}
-            />
-          </>
+        {sheet === "seatManager" && viewer ? (
+          <NativeSeatManagerContent
+            viewer={viewer}
+            targetSeatIndex={selectedSeatIndex}
+            seatPlayers={seatPlayers}
+            bigBlind={tableState?.blinds.big ?? 25}
+            pendingUpdate={viewerPendingBoundaryUpdate}
+            applyImmediately={isWaiting || isShowdown}
+            amount={rebuyAmount}
+            onAmountChange={setRebuyAmount}
+            mode={seatManagerMode}
+            onModeChange={setSeatManagerMode}
+            onTargetSeatChange={setSelectedSeatIndex}
+            onCancelPending={() => {
+              sendViewerEvent((playerId) => ({ type: "CANCEL_BOUNDARY_UPDATE", playerId }), "light");
+            }}
+            onDismiss={() => setSheet(null)}
+            onSubmit={(update) => {
+              sendViewerEvent((playerId) => ({
+                type: "REQUEST_BOUNDARY_UPDATE",
+                playerId,
+                leaveSeat: update.leaveSeat ?? false,
+                moveToSeatIndex: update.moveToSeatIndex ?? null,
+                chipDelta: update.chipDelta ?? 0,
+              }), "medium");
+              setSheet(null);
+            }}
+          />
         ) : null}
       </NativeBottomSheet>
     </SafeAreaView>
@@ -1829,6 +2070,72 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
     backgroundColor: "#f6f5f7",
+  },
+  reconnectPill: {
+    position: "absolute",
+    top: 12,
+    alignSelf: "center",
+    zIndex: 80,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.28)",
+    backgroundColor: "rgba(127,29,29,0.84)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  reconnectDot: {
+    color: "#fecaca",
+    fontSize: 10,
+  },
+  reconnectText: {
+    color: "#fff1f2",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
+  blockingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 90,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.28)",
+    paddingHorizontal: 24,
+  },
+  blockingCard: {
+    width: "100%",
+    maxWidth: 360,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.62)",
+    backgroundColor: "rgba(255,255,255,0.92)",
+    padding: 22,
+    gap: 12,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.22,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 18 },
+    elevation: 12,
+  },
+  blockingEyebrow: {
+    color: nativeLightTheme.colors.accent,
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 3,
+    textTransform: "uppercase",
+  },
+  blockingTitle: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 24,
+    fontWeight: "900",
+  },
+  blockingMessage: {
+    color: nativeLightTheme.colors.muted,
+    fontSize: 14,
+    lineHeight: 21,
   },
   turnPerimeterLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -2107,6 +2414,77 @@ const styles = StyleSheet.create({
   },
   rebuyPresetSubSelected: {
     color: nativeLightTheme.colors.accent,
+  },
+  seatManagerContent: {
+    gap: 16,
+  },
+  pendingUpdateBox: {
+    gap: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.32)",
+    backgroundColor: "rgba(245,158,11,0.10)",
+    padding: 14,
+  },
+  pendingUpdateLabel: {
+    color: "#b45309",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
+  pendingUpdateText: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  pendingCancelButton: {
+    minHeight: 44,
+    borderRadius: 16,
+  },
+  seatChoiceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  seatChoice: {
+    width: 44,
+    height: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(148,163,184,0.28)",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(15,23,42,0.04)",
+  },
+  seatChoiceSelected: {
+    borderColor: "rgba(239,68,68,0.48)",
+    backgroundColor: "rgba(239,68,68,0.12)",
+  },
+  seatChoiceText: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  seatChoiceTextSelected: {
+    color: nativeLightTheme.colors.accent,
+  },
+  seatManagerSegment: {
+    marginTop: 2,
+  },
+  seatManagerWarning: {
+    color: "#b45309",
+    fontSize: 12,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  seatManagerActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  seatManagerButton: {
+    flex: 1,
+    minHeight: 50,
+    borderRadius: 18,
   },
 
   ledgerTable: { gap: 6 },

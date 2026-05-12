@@ -24,8 +24,10 @@ On socket open, clients send:
 { "type": "SET_AWAY", "away": false }
 ```
 
-Additional client messages are `GAME_EVENT`, `REVEAL_CARD`, `PEEK_CARD`, `SET_AWAY`, `QUEUE_LEAVE`, and `CANCEL_QUEUE_LEAVE`.
+Additional client messages are `GAME_EVENT`, `REVEAL_CARD`, `PEEK_CARD`, and `SET_AWAY`. Seat, chip, and leave changes are sent as `GAME_EVENT` payloads, primarily `REQUEST_BOUNDARY_UPDATE` and `CANCEL_BOUNDARY_UPDATE`.
 
 Server messages are `WELCOME`, `TABLE_STATE`, `PRIVATE_STATE`, `ROOM_PRESENCE`, `LEDGER_STATE`, and `ERROR`. Errors with `TABLE_NOT_FOUND`, `TABLE_NOT_ACTIVE`, `INVALID_JOIN_TOKEN`, or `PROTOCOL_VERSION_MISMATCH` are terminal for the current connection. `ACTION_REJECTED` is non-terminal and is surfaced to the table UI.
+
+Join tokens are one-time auth material. If a socket drops, the shared connection opens a new socket only after requesting a fresh join token.
 
 Web sends `SET_AWAY` from `document.hidden` plus the app idle timer. Native sends `SET_AWAY` from `AppState`: `active` means present, every other state means away.

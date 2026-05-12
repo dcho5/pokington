@@ -1,4 +1,3 @@
-import PartySocket from "partysocket";
 import { createPartyKitGameConnection, type SocketLike } from "./connection";
 import type {
   GameConnection,
@@ -45,7 +44,8 @@ export interface CreateWebGameConnectionOptions<TServerMessage, TGameAction>
   protocolVersion: number;
   join: () => Promise<JoinTokenResponse>;
   getInitialAway?: () => boolean;
-  createSocket?: (host: string, roomId: string) => SocketLike;
+  createSocket?: (url: string) => SocketLike;
+  reconnectBackoffMs?: (attempt: number) => number;
 }
 
 export function createWebGameConnection<
@@ -59,10 +59,13 @@ export function createWebGameConnection<
 
   return createPartyKitGameConnection<TServerMessage, TGameAction>({
     ...options,
-    createSocket: () => (
-      options.createSocket
-        ? options.createSocket(normalizedHost, options.roomId)
-        : new PartySocket({ host: normalizedHost, room: options.roomId })
-    ),
+    createSocket: () => {
+      const url = buildPartyKitWebSocketUrl(normalizedHost, options.roomId);
+      if (options.createSocket) return options.createSocket(url);
+      if (typeof WebSocket === "undefined") {
+        throw new Error("WEBSOCKET_UNAVAILABLE");
+      }
+      return new WebSocket(url);
+    },
   });
 }

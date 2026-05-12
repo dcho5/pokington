@@ -2,9 +2,17 @@ import type {
   CreateTableRequest,
   CreateTableResponse,
   GetTableResponse,
-  JoinTableRequest,
-  JoinTableResponse,
-} from "party/types";
+  JoinTokenResponse,
+} from "@pokington/network";
+import {
+  CLIENT_ID_STORAGE_KEY,
+  createTable as createSharedTable,
+  getTable as getSharedTable,
+  normalizePartyKitHost,
+  requestJoinToken,
+} from "@pokington/network";
+
+export { normalizePartyKitHost } from "@pokington/network";
 
 const LOCAL_PARTYKIT_HOST = "127.0.0.1:1999";
 
@@ -14,15 +22,6 @@ declare global {
       partykitHost?: string | null;
     };
   }
-}
-
-export function normalizePartyKitHost(host: string | null | undefined): string | null {
-  if (!host) return null;
-  const trimmed = host.trim();
-  if (!trimmed) return null;
-  return trimmed
-    .replace(/^(https?|wss?):\/\//i, "")
-    .replace(/\/+$/, "");
 }
 
 function isLocalHost(host: string | null | undefined): boolean {
@@ -72,64 +71,24 @@ export function getPartyKitHost(): string {
   return getServerPartyKitHost();
 }
 
-async function requestControlPlane<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`/api/${path.replace(/^\//, "")}`, {
-    cache: "no-store",
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-
-  let payload: unknown = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!response.ok) {
-    const errorCode =
-      typeof payload === "object" &&
-      payload !== null &&
-      "code" in payload &&
-      typeof (payload as { code?: unknown }).code === "string"
-        ? (payload as { code: string }).code
-        : "REQUEST_FAILED";
-    throw new Error(errorCode);
-  }
-
-  return payload as T;
-}
-
 export function getOrCreateClientId(): string {
   if (typeof window === "undefined") return "server";
-  let id = localStorage.getItem("pokington_client_id");
+  let id = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
   if (!id) {
     id = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-    localStorage.setItem("pokington_client_id", id);
+    localStorage.setItem(CLIENT_ID_STORAGE_KEY, id);
   }
   return id;
 }
 
 export async function createTable(request: CreateTableRequest): Promise<CreateTableResponse> {
-  return requestControlPlane<CreateTableResponse>("tables", {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
+  return createSharedTable(request, { explicitHost: getPartyKitHost() });
 }
 
 export async function getTable(code: string): Promise<GetTableResponse> {
-  return requestControlPlane<GetTableResponse>(`tables/${code.toUpperCase()}`, {
-    method: "GET",
-  });
+  return getSharedTable(code, { explicitHost: getPartyKitHost() });
 }
 
-export async function createJoinToken(code: string, request: JoinTableRequest): Promise<JoinTableResponse> {
-  return requestControlPlane<JoinTableResponse>(`tables/${code.toUpperCase()}/join-token`, {
-    method: "POST",
-    body: JSON.stringify(request),
-  });
+export async function createJoinToken(code: string, request: { clientId: string }): Promise<JoinTokenResponse> {
+  return requestJoinToken(code, request.clientId, { explicitHost: getPartyKitHost() });
 }

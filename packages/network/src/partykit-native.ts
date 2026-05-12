@@ -55,15 +55,17 @@ export async function getOrCreateNativeClientId(
   return clientId;
 }
 
-export interface NativeControlPlaneOptions {
+export interface DirectControlPlaneOptions {
   explicitHost?: string | null;
   requestHostname?: string | null;
   fetchImpl?: typeof fetch;
 }
 
-function buildNativeControlPlaneUrl(
+export type NativeControlPlaneOptions = DirectControlPlaneOptions;
+
+function buildDirectControlPlaneUrl(
   path: string,
-  options: NativeControlPlaneOptions = {},
+  options: DirectControlPlaneOptions = {},
 ): string {
   const host = resolveNativePartyKitHost({
     explicitHost: options.explicitHost,
@@ -73,15 +75,15 @@ function buildNativeControlPlaneUrl(
   return `${protocol}://${host}/parties/main/__control__/${path.replace(/^\/+/, "")}`;
 }
 
-async function requestNativeControlPlane<T>(
+async function requestDirectControlPlane<T>(
   path: string,
-  options: NativeControlPlaneOptions & {
+  options: DirectControlPlaneOptions & {
     method?: string;
     body?: unknown;
   } = {},
 ): Promise<T> {
   const request = options.fetchImpl ?? fetch;
-  const response = await request(buildNativeControlPlaneUrl(path, options), {
+  const response = await request(buildDirectControlPlaneUrl(path, options), {
     method: options.method ?? "GET",
     cache: "no-store",
     headers: {
@@ -104,16 +106,18 @@ async function requestNativeControlPlane<T>(
 
 export function buildNativeControlPlaneUrlForTest(
   path: string,
-  options: NativeControlPlaneOptions = {},
+  options: DirectControlPlaneOptions = {},
 ): string {
-  return buildNativeControlPlaneUrl(path, options);
+  return buildDirectControlPlaneUrl(path, options);
 }
 
-export function createNativeTable(
+export const buildDirectControlPlaneUrlForTest = buildNativeControlPlaneUrlForTest;
+
+export function createTable(
   request: CreateTableRequest,
-  options: NativeControlPlaneOptions = {},
+  options: DirectControlPlaneOptions = {},
 ): Promise<CreateTableResponse> {
-  return requestNativeControlPlane<CreateTableResponse>("tables", {
+  return requestDirectControlPlane<CreateTableResponse>("tables", {
     ...options,
     method: "POST",
     body: {
@@ -123,36 +127,41 @@ export function createNativeTable(
   });
 }
 
-export function getNativeTable(
+export function getTable(
   code: string,
-  options: NativeControlPlaneOptions = {},
+  options: DirectControlPlaneOptions = {},
 ): Promise<GetTableResponse> {
-  return requestNativeControlPlane<GetTableResponse>(`tables/${code.toUpperCase()}`, options);
+  return requestDirectControlPlane<GetTableResponse>(`tables/${code.toUpperCase()}`, options);
 }
 
-export function requestNativeJoinToken(
+export function requestJoinToken(
   roomId: string,
   clientId: string,
-  options: NativeControlPlaneOptions = {},
+  options: DirectControlPlaneOptions = {},
 ): Promise<JoinTokenResponse> {
-  return requestNativeControlPlane<JoinTokenResponse>(`tables/${roomId.toUpperCase()}/join-token`, {
+  return requestDirectControlPlane<JoinTokenResponse>(`tables/${roomId.toUpperCase()}/join-token`, {
     ...options,
     method: "POST",
     body: { clientId },
   });
 }
 
-export function requestNativeQueuedSeatLeave(
+export function requestQueuedSeatLeave(
   roomId: string,
   clientId: string,
-  options: NativeControlPlaneOptions = {},
+  options: DirectControlPlaneOptions = {},
 ): Promise<QueuedSeatLeaveResponse> {
-  return requestNativeControlPlane<QueuedSeatLeaveResponse>(`tables/${roomId.toUpperCase()}/leave-seat`, {
+  return requestDirectControlPlane<QueuedSeatLeaveResponse>(`tables/${roomId.toUpperCase()}/leave-seat`, {
     ...options,
     method: "POST",
     body: { clientId },
   });
 }
+
+export const createNativeTable = createTable;
+export const getNativeTable = getTable;
+export const requestNativeJoinToken = requestJoinToken;
+export const requestNativeQueuedSeatLeave = requestQueuedSeatLeave;
 
 export async function createNativeGameConnection<
   TServerMessage extends PartyKitServerMessage = PartyKitServerMessage,
