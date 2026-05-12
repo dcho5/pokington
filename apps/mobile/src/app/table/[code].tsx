@@ -22,7 +22,7 @@ import {
   readPersistedAutoPeelPreference,
   writePersistedAutoPeelPreference,
 } from "@pokington/ui/lib/holeCardReveal";
-import { BOMB_POT_ANTE_BB_VALUES, formatCents, getBuyInPresets } from "@pokington/shared";
+import { formatCents, getBuyInPresets } from "@pokington/shared";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   BOMB_POT_VOTING_TIMEOUT_MS,
@@ -685,7 +685,6 @@ export default function TableScreen() {
   const [detailSeatIndex, setDetailSeatIndex] = useState<number | null>(null);
   const [activeBombPotBoard, setActiveBombPotBoard] = useState(0);
   const [viewingRun, setViewingRun] = useState(0);
-  const [bombPotAnteIdx, setBombPotAnteIdx] = useState(0);
   const [bombPotDecision, setBombPotDecision] = useState<BombPotDecisionAnnouncement | null>(null);
   const [utilityRailLayout, setUtilityRailLayout] = useState<LayoutRect | null>(null);
   const [utilityChipLayout, setUtilityChipLayout] = useState<LayoutRect | null>(null);
@@ -1242,7 +1241,6 @@ export default function TableScreen() {
   };
 
   const potPanelMode = useMemo<DynamicPotMode>(() => {
-    const selectedAnteBB = BOMB_POT_ANTE_BB_VALUES[bombPotAnteIdx] ?? BOMB_POT_ANTE_BB_VALUES[0]!;
     if (tableState?.bombPotVote && showBombPotVotingPanel) {
       return {
         kind: "bombVote",
@@ -1283,13 +1281,14 @@ export default function TableScreen() {
     if (activePotTool === "bomb" && tableState && viewer) {
       return {
         kind: "bombProposal",
-        selectedAnteBB,
         bigBlind: tableState.blinds.big,
         onSelectAnte: (anteBB) => {
-          const nextIndex = BOMB_POT_ANTE_BB_VALUES.indexOf(anteBB);
-          if (nextIndex >= 0) setBombPotAnteIdx(nextIndex);
+          playNativeFeedbackHaptic({ kind: "local_press", key: `bomb_ante:${anteBB}` }, { myPlayerId });
         },
-        onPropose: () => proposeBombPot(selectedAnteBB),
+        onPropose: proposeBombPot,
+        onCancel: () => {
+          playNativeFeedbackHaptic({ kind: "local_press", key: "bomb_proposal_cancel" }, { myPlayerId });
+        },
         disabled: !viewer,
       };
     }
@@ -1308,7 +1307,6 @@ export default function TableScreen() {
     activePotTool,
     animatedRunItShowdown,
     bombPotDecision,
-    bombPotAnteIdx,
     myPlayerId,
     players,
     showBombPotVotingPanel,
@@ -1317,6 +1315,19 @@ export default function TableScreen() {
     viewer,
     viewerLedgerSummary,
   ]);
+  const activePotToolDismissible = potPanelMode.kind === "bombProposal" || potPanelMode.kind === "ledgerSummary";
+
+  const dismissActivePotTool = useCallback(() => {
+    if (activePotTool != null) {
+      playNativeFeedbackHaptic({ kind: "local_press", key: `pot_panel_exit:${activePotTool}` }, { myPlayerId });
+    }
+    setActivePotTool(null);
+    setLedgerOverlayVisible(false);
+  }, [activePotTool, myPlayerId]);
+
+  const dismissLedgerOverlay = useCallback(() => {
+    setLedgerOverlayVisible(false);
+  }, []);
 
   const revealCard = (cardIndex: 0 | 1) => {
     connection?.revealCard(cardIndex);
@@ -1422,14 +1433,27 @@ export default function TableScreen() {
       </View>
 
       {/* ── Dynamic pot island (sits just above chip rail) ── */}
-      {tableState != null && (
-        <DynamicPotPanel
-          pot={tableState.pot ?? 0}
-          total={tablePot}
-          hasContributions={players.some((p) => p.currentBet > 0)}
-          mode={potPanelMode}
-          onRootMeasure={setPotIslandRect}
+      {activePotToolDismissible ? (
+        <Pressable
+          accessibilityLabel="Close pot panel"
+          accessibilityRole="button"
+          onPress={dismissActivePotTool}
+          style={styles.potToolDismissLayer}
         />
+      ) : null}
+      {tableState != null && (
+        <View
+          onStartShouldSetResponder={() => activePotToolDismissible}
+          style={activePotToolDismissible ? styles.potPanelLayer : undefined}
+        >
+          <DynamicPotPanel
+            pot={tableState.pot ?? 0}
+            total={tablePot}
+            hasContributions={players.some((p) => p.currentBet > 0)}
+            mode={potPanelMode}
+            onRootMeasure={setPotIslandRect}
+          />
+        </View>
       )}
 
       <LedgerOverlay
@@ -1437,11 +1461,12 @@ export default function TableScreen() {
         ledgerRows={ledgerRows}
         payoutInstructions={payoutInstructions}
         sourceRect={potIslandRect}
-        onDismiss={() => setLedgerOverlayVisible(false)}
+        onDismiss={dismissLedgerOverlay}
       />
 
       {/* ── Utility rail: bomb · chip · ledger ── */}
       <View
+        pointerEvents="box-none"
         style={styles.utilityRail}
         onLayout={(e: LayoutChangeEvent) => setUtilityRailLayout(e.nativeEvent.layout)}
       >
@@ -1860,8 +1885,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     gap: 14,
   },
+  potToolDismissLayer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+  },
+  potPanelLayer: {
+    position: "relative",
+    zIndex: 31,
+  },
 
   utilityRail: {
+    position: "relative",
+    zIndex: 32,
     height: 64,
     flexDirection: "row",
     alignItems: "center",

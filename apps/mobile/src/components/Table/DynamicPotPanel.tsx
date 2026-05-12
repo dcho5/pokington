@@ -2,7 +2,7 @@ import { BOMB_POT_VOTING_TIMEOUT_MS, RUN_IT_VOTING_TIMEOUT_MS, type BombPotAnteB
 import { BOMB_POT_ANTE_BB_VALUES, formatCents } from "@pokington/shared";
 import type { PlayerSummary } from "@pokington/ui/native";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import ReAnimated, {
   Easing as ReEasing,
@@ -19,6 +19,12 @@ const POT_ISLAND_COMPACT_WIDTH = 120;
 const POT_PILL_SHIFT = 13;
 const RUN_LABELS = ["once", "twice", "three times"] as const;
 const RUN_BUTTON_LABELS = ["Once", "Twice", "3x"] as const;
+const DEFAULT_BASE_GRADIENT_COLORS = ["#0d1f38", "#060f1e", "#020609"] as const;
+const POT_BASE_GRADIENT_COLORS = ["#ff5a5f", "#dc2626", "#6f0707"] as const;
+const DEFAULT_SIDE_SHADE_COLORS = ["rgba(0,0,0,0.14)", "transparent", "rgba(0,0,0,0.18)"] as const;
+const POT_SIDE_SHADE_COLORS = ["rgba(127,29,29,0.06)", "transparent", "rgba(127,29,29,0.14)"] as const;
+const DEFAULT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(0,0,0,0.34)"] as const;
+const POT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(127,29,29,0.24)"] as const;
 
 type PotIslandTone = "pot" | "violet" | "sky" | "amber" | "gold";
 
@@ -55,10 +61,10 @@ export type DynamicPotMode =
   | { kind: "compact" }
   | {
       kind: "bombProposal";
-      selectedAnteBB: BombPotAnteBB;
       bigBlind: number;
-      onSelectAnte: (anteBB: BombPotAnteBB) => void;
-      onPropose: () => void;
+      onSelectAnte?: (anteBB: BombPotAnteBB) => void;
+      onPropose: (anteBB: BombPotAnteBB) => void;
+      onCancel?: () => void;
       disabled?: boolean;
     }
   | {
@@ -98,17 +104,17 @@ const TONE_INDEX: Record<PotIslandTone, number> = {
 };
 
 const TONE_STOPS = [0, 1, 2, 3, 4] as const;
-const ROOT_COLORS = ["#751616", "#101526", "#0b1724", "#21160c", "#1c160c"] as const;
+const ROOT_COLORS = ["#ef4444", "#101526", "#0b1724", "#21160c", "#1c160c"] as const;
 const BORDER_COLORS = [
-  "rgba(255,180,180,0.14)",
+  "rgba(248,113,113,0.52)",
   "rgba(199,210,254,0.27)",
   "rgba(186,230,253,0.26)",
   "rgba(253,230,138,0.25)",
   "rgba(253,230,138,0.3)",
 ] as const;
-const SHADOW_COLORS = ["#7f1d1d", "#818cf8", "#38bdf8", "#fb923c", "#fbbf24"] as const;
+const SHADOW_COLORS = ["#ef4444", "#818cf8", "#38bdf8", "#fb923c", "#fbbf24"] as const;
 const TINT_COLORS = [
-  "rgba(120,18,18,0.34)",
+  "rgba(255,120,120,0.16)",
   "rgba(79,70,229,0.28)",
   "rgba(14,116,144,0.28)",
   "rgba(180,83,9,0.28)",
@@ -120,12 +126,29 @@ function cents(amount: number | null | undefined): string {
   return formatCents(amount ?? 0);
 }
 
-function useAnimatedCents(value: number) {
+function areRectsEqual(a: PotIslandRect | null, b: PotIslandRect) {
+  return (
+    a != null &&
+    Math.abs(a.x - b.x) < 0.5 &&
+    Math.abs(a.y - b.y) < 0.5 &&
+    Math.abs(a.width - b.width) < 0.5 &&
+    Math.abs(a.height - b.height) < 0.5
+  );
+}
+
+function useAnimatedCents(value: number, enabled: boolean) {
   const animated = useRef(new Animated.Value(value)).current;
   const [displayed, setDisplayed] = useState(value);
   const lastValueRef = useRef(value);
 
   useEffect(() => {
+    if (!enabled) {
+      animated.stopAnimation();
+      animated.setValue(value);
+      setDisplayed(value);
+      lastValueRef.current = value;
+      return;
+    }
     if (value === lastValueRef.current) return;
     Animated.timing(animated, {
       toValue: value,
@@ -134,7 +157,7 @@ function useAnimatedCents(value: number) {
       useNativeDriver: false,
     }).start();
     lastValueRef.current = value;
-  }, [value, animated]);
+  }, [animated, enabled, value]);
 
   useEffect(() => {
     const id = animated.addListener(({ value: v }) => setDisplayed(Math.round(v)));
@@ -265,13 +288,17 @@ export function DynamicPotPanel({
   mode: DynamicPotMode;
   onRootMeasure?: (rect: PotIslandRect) => void;
 }) {
-  const animatedPot = useAnimatedCents(pot);
-  const animatedTotal = useAnimatedCents(total);
   const rootRef = useRef<any>(null);
+  const lastMeasuredRectRef = useRef<PotIslandRect | null>(null);
+  const [counterEnabled, setCounterEnabled] = useState(true);
+  const [proposalConfirmAnteBB, setProposalConfirmAnteBB] = useState<BombPotAnteBB | null>(null);
   const { width: screenWidth } = useWindowDimensions();
   const expanded = mode.kind !== "compact";
   const tone = getPotModeTone(mode);
   const toneColors = getToneColors(tone);
+  const baseGradientColors = tone === "pot" ? POT_BASE_GRADIENT_COLORS : DEFAULT_BASE_GRADIENT_COLORS;
+  const sideShadeColors = tone === "pot" ? POT_SIDE_SHADE_COLORS : DEFAULT_SIDE_SHADE_COLORS;
+  const bottomShadeColors = tone === "pot" ? POT_BOTTOM_SHADE_COLORS : DEFAULT_BOTTOM_SHADE_COLORS;
   const targetWidth = expanded ? Math.min(Math.max(screenWidth - 24, POT_ISLAND_COMPACT_WIDTH), 390) : POT_ISLAND_COMPACT_WIDTH;
   const modeKey =
     mode.kind === "bombDecision"
@@ -279,6 +306,8 @@ export function DynamicPotPanel({
       : mode.kind === "runAnnouncement"
         ? `${mode.kind}:${mode.runCount}`
         : mode.kind;
+  const animatedPot = useAnimatedCents(pot, counterEnabled);
+  const animatedTotal = useAnimatedCents(total, counterEnabled);
 
   const islandWidth = useSharedValue(targetWidth);
   const islandRadius = useSharedValue(expanded ? 32 : 12);
@@ -290,6 +319,16 @@ export function DynamicPotPanel({
     islandWidth.value = withSpring(targetWidth, { damping: 24, stiffness: 260, mass: 0.82 });
     islandRadius.value = withSpring(expanded ? 32 : 12, { damping: 24, stiffness: 260, mass: 0.82 });
   }, [expanded, islandRadius, islandWidth, targetWidth]);
+
+  useEffect(() => {
+    setCounterEnabled(false);
+    const timer = setTimeout(() => setCounterEnabled(true), 420);
+    return () => clearTimeout(timer);
+  }, [modeKey, targetWidth]);
+
+  useEffect(() => {
+    if (mode.kind !== "bombProposal") setProposalConfirmAnteBB(null);
+  }, [mode.kind]);
 
   useEffect(() => {
     toneValue.value = withTiming(TONE_INDEX[tone], {
@@ -313,18 +352,22 @@ export function DynamicPotPanel({
     });
   }, [contributionProgress, hasContributions]);
 
-  const measureRoot = () => {
+  const measureRoot = useCallback(() => {
     if (!onRootMeasure) return;
     rootRef.current?.measureInWindow?.((x: number, y: number, width: number, height: number) => {
-      if (width > 0 && height > 0) onRootMeasure({ x, y, width, height });
+      if (width <= 0 || height <= 0) return;
+      const rect = { x, y, width, height };
+      if (areRectsEqual(lastMeasuredRectRef.current, rect)) return;
+      lastMeasuredRectRef.current = rect;
+      onRootMeasure(rect);
     });
-  };
+  }, [onRootMeasure]);
 
   useEffect(() => {
     if (!onRootMeasure) return;
     const timer = setTimeout(measureRoot, 280);
     return () => clearTimeout(timer);
-  }, [modeKey, onRootMeasure, targetWidth]);
+  }, [measureRoot, modeKey, onRootMeasure, targetWidth]);
 
   const rootStyle = useAnimatedStyle(() => ({
     width: islandWidth.value,
@@ -487,53 +530,73 @@ export function DynamicPotPanel({
     }
 
     if (mode.kind === "bombProposal") {
-      const selectedAmount = mode.selectedAnteBB * mode.bigBlind;
+      const confirmAmount = proposalConfirmAnteBB != null ? proposalConfirmAnteBB * mode.bigBlind : null;
       return (
         <View style={styles.expandedContent}>
           {renderPotMini()}
           <View style={styles.centerCopy}>
-            <Text style={[styles.eyebrow, { color: toneColors.accent }]} numberOfLines={1}>Special Hand</Text>
-            <Text style={styles.title} numberOfLines={1}>Bomb Pot</Text>
+            <Text style={styles.title} numberOfLines={1}>Propose bomb pot</Text>
             <Text style={styles.detail} numberOfLines={1}>
-              {mode.selectedAnteBB}x BB · {cents(selectedAmount)} ante
+              {proposalConfirmAnteBB == null ? "Choose ante" : `${proposalConfirmAnteBB}x BB · ${cents(confirmAmount)} ante`}
             </Text>
           </View>
           <View style={styles.proposalActions}>
-            <View style={styles.anteSelector}>
-              {BOMB_POT_ANTE_BB_VALUES.map((anteBB) => {
-                const selected = anteBB === mode.selectedAnteBB;
-                return (
+            {proposalConfirmAnteBB == null ? (
+              <View style={styles.anteSelector}>
+                {BOMB_POT_ANTE_BB_VALUES.map((anteBB) => (
                   <Pressable
                     key={anteBB}
                     accessibilityRole="button"
                     disabled={mode.disabled}
-                    onPress={() => mode.onSelectAnte(anteBB)}
+                    onPress={() => {
+                      mode.onSelectAnte?.(anteBB);
+                      setProposalConfirmAnteBB(anteBB);
+                    }}
                     style={({ pressed }) => [
                       styles.anteChoice,
-                      selected && styles.anteChoiceSelected,
                       mode.disabled && styles.choiceDisabled,
                       pressed && !mode.disabled && styles.choicePressed,
                     ]}
                   >
-                    <Text style={[styles.anteChoiceText, selected && styles.anteChoiceTextSelected]}>
-                      {anteBB}x
-                    </Text>
+                    <Text style={styles.anteChoiceText}>{anteBB}x</Text>
                   </Pressable>
-                );
-              })}
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              disabled={mode.disabled}
-              onPress={mode.onPropose}
-              style={({ pressed }) => [
-                styles.proposeButton,
-                mode.disabled && styles.choiceDisabled,
-                pressed && !mode.disabled && styles.choicePressed,
-              ]}
-            >
-              <Text style={styles.proposeButtonText} numberOfLines={1}>Propose</Text>
-            </Pressable>
+                ))}
+              </View>
+            ) : (
+              <View style={styles.confirmActions}>
+                <Pressable
+                  accessibilityLabel={`Confirm ${proposalConfirmAnteBB}x bomb pot`}
+                  accessibilityRole="button"
+                  disabled={mode.disabled}
+                  onPress={() => mode.onPropose(proposalConfirmAnteBB)}
+                  style={({ pressed }) => [
+                    styles.confirmButton,
+                    styles.confirmButtonYes,
+                    mode.disabled && styles.choiceDisabled,
+                    pressed && !mode.disabled && styles.choicePressed,
+                  ]}
+                >
+                  <Text style={styles.confirmButtonText}>✓</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityLabel="Cancel bomb pot proposal"
+                  accessibilityRole="button"
+                  disabled={mode.disabled}
+                  onPress={() => {
+                    mode.onCancel?.();
+                    setProposalConfirmAnteBB(null);
+                  }}
+                  style={({ pressed }) => [
+                    styles.confirmButton,
+                    styles.confirmButtonNo,
+                    mode.disabled && styles.choiceDisabled,
+                    pressed && !mode.disabled && styles.choicePressed,
+                  ]}
+                >
+                  <Text style={styles.confirmButtonText}>×</Text>
+                </Pressable>
+              </View>
+            )}
           </View>
         </View>
       );
@@ -554,8 +617,7 @@ export function DynamicPotPanel({
         >
           {renderPotMini()}
           <View style={styles.centerCopy}>
-            <Text style={[styles.eyebrow, { color: toneColors.accent }]} numberOfLines={1}>Session Ledger</Text>
-            <Text style={styles.title} numberOfLines={1}>{mode.summary.hasLedger ? "Your ledger" : "No ledger yet"}</Text>
+            <Text style={styles.title} numberOfLines={1}>Session ledger</Text>
             <Text style={styles.detail} numberOfLines={1}>
               In {cents(mode.summary.totalBuyIn)} · Out {cents(mode.summary.totalCashOut)}
             </Text>
@@ -633,10 +695,10 @@ export function DynamicPotPanel({
 
   return (
     <View style={styles.wrap}>
-      <ReAnimated.View ref={rootRef} onLayout={measureRoot} style={[styles.root, rootStyle]}>
+      <ReAnimated.View ref={rootRef} style={[styles.root, rootStyle]}>
         {/* Same full-fill layering approach as OpponentStrip: a clipped base gradient, then light/shadow passes. */}
         <LinearGradient
-          colors={["#0d1f38", "#060f1e", "#020609"]}
+          colors={baseGradientColors}
           locations={[0, 0.55, 1]}
           style={StyleSheet.absoluteFill}
           start={{ x: 0.5, y: 0 }}
@@ -650,14 +712,14 @@ export function DynamicPotPanel({
           end={{ x: 0.5, y: 0.72 }}
         />
         <LinearGradient
-          colors={["rgba(0,0,0,0.14)", "transparent", "rgba(0,0,0,0.18)"] as const}
+          colors={sideShadeColors}
           locations={[0, 0.5, 1] as const}
           style={StyleSheet.absoluteFill}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
         />
         <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.34)"] as const}
+          colors={bottomShadeColors}
           style={StyleSheet.absoluteFill}
           start={{ x: 0.5, y: 0.55 }}
           end={{ x: 0.5, y: 1 }}
@@ -712,7 +774,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   potLabel: {
-    color: "rgba(255,200,200,0.48)",
+    color: "rgba(254,202,202,0.68)",
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 2.5,
@@ -739,7 +801,7 @@ const styles = StyleSheet.create({
     width: "100%",
     height: StyleSheet.hairlineWidth,
     marginBottom: 4,
-    backgroundColor: "rgba(255,180,180,0.18)",
+    backgroundColor: "rgba(248,113,113,0.34)",
   },
   potTotalLine: {
     color: "rgba(255,255,255,0.55)",
@@ -750,7 +812,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   potTotalLabel: {
-    color: "rgba(255,200,200,0.38)",
+    color: "rgba(254,202,202,0.56)",
     fontSize: 9,
     fontWeight: "700",
     letterSpacing: 2,
@@ -828,12 +890,11 @@ const styles = StyleSheet.create({
   },
   proposalActions: {
     width: 118,
-    height: 54,
+    height: 44,
     justifyContent: "center",
-    gap: 4,
   },
   anteSelector: {
-    height: 24,
+    height: 34,
     flexDirection: "row",
     gap: 4,
   },
@@ -858,6 +919,33 @@ const styles = StyleSheet.create({
   },
   anteChoiceTextSelected: {
     color: "#e0f2fe",
+  },
+  confirmActions: {
+    height: 34,
+    flexDirection: "row",
+    gap: 6,
+  },
+  confirmButton: {
+    flex: 1,
+    minWidth: 0,
+    borderRadius: 999,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  confirmButtonYes: {
+    borderColor: "rgba(34,197,94,0.32)",
+    backgroundColor: "rgba(34,197,94,0.18)",
+  },
+  confirmButtonNo: {
+    borderColor: "rgba(248,113,113,0.32)",
+    backgroundColor: "rgba(248,113,113,0.15)",
+  },
+  confirmButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    lineHeight: 18,
+    fontWeight: "900",
   },
   proposeButton: {
     height: 26,

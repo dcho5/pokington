@@ -75,6 +75,12 @@ export function LedgerOverlay({
     width: targetWidth,
     height: targetHeight,
   };
+  const sourceCenterX = source.x + source.width / 2;
+  const sourceCenterY = source.y + source.height / 2;
+  const targetCenterX = target.x + target.width / 2;
+  const targetCenterY = target.y + target.height / 2;
+  const sourceScaleX = Math.max(0.01, source.width / target.width);
+  const sourceScaleY = Math.max(0.01, source.height / target.height);
 
   useEffect(() => {
     if (visible) {
@@ -93,13 +99,14 @@ export function LedgerOverlay({
   }));
 
   const panelStyle = useAnimatedStyle(() => ({
-    left: source.x + (target.x - source.x) * progress.value,
-    top: source.y + (target.y - source.y) * progress.value,
-    width: source.width + (target.width - source.width) * progress.value,
-    height: source.height + (target.height - source.height) * progress.value,
     borderRadius: 32 + (24 - 32) * progress.value,
     shadowOpacity: interpolate(progress.value, [0, 1], [0.22, 0.48]),
-    transform: [{ scale: interpolate(progress.value, [0, 1], [0.98, 1]) }],
+    transform: [
+      { translateX: (sourceCenterX - targetCenterX) * (1 - progress.value) },
+      { translateY: (sourceCenterY - targetCenterY) * (1 - progress.value) },
+      { scaleX: sourceScaleX + (1 - sourceScaleX) * progress.value },
+      { scaleY: sourceScaleY + (1 - sourceScaleY) * progress.value },
+    ],
   }));
 
   const contentStyle = useAnimatedStyle(() => ({
@@ -116,7 +123,7 @@ export function LedgerOverlay({
           <ReAnimated.View style={[styles.scrim, scrimStyle]} />
         </Pressable>
 
-        <ReAnimated.View style={[styles.panel, panelStyle]}>
+        <ReAnimated.View style={[styles.panel, { left: target.x, top: target.y, width: target.width, height: target.height }, panelStyle]}>
           <LinearGradient
             colors={["#0d1f38", "#060f1e", "#020609"] as const}
             locations={[0, 0.58, 1] as const}
