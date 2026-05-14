@@ -173,14 +173,39 @@
       "first_read": "2026-05-14T03:08:38.183Z"
     },
     "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/HandPanel.tsx": {
-      "count": 1,
-      "tokens": 0,
+      "count": 2,
+      "tokens": 2457,
       "first_read": "2026-05-14T03:08:39.069Z"
     },
     "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/PlayerBubble.tsx": {
       "count": 1,
       "tokens": 0,
       "first_read": "2026-05-14T03:08:39.822Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/app/table/[code].tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:39:35.798Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/native/NativeHoleCards.tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:39:53.520Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/lib/nativePeelMotion.ts": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:40:31.017Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/web/poker/HoleCards.tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:40:43.384Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/.gitignore": {
+      "count": 1,
+      "tokens": 181,
+      "first_read": "2026-05-14T03:42:03.388Z"
     }
   },
   "files_written": [
@@ -351,6 +376,12 @@
       "action": "edit",
       "tokens": 26,
       "at": "2026-05-14T03:10:05.452Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/native/NativeHoleCards.tsx",
+      "action": "edit",
+      "tokens": 637,
+      "at": "2026-05-14T03:41:42.749Z"
     }
   ],
   "edit_counts": {
@@ -364,11 +395,12 @@
     "apps/mobile/src/components/Table/OpponentDetailSheet.tsx": 1,
     "apps/mobile/src/components/Table/HandPanel.tsx": 1,
     "apps/mobile/src/components/Table/PlayerBubble.tsx": 1,
-    "apps/mobile/src/components/Table/DynamicPotPanel.tsx": 3
+    "apps/mobile/src/components/Table/DynamicPotPanel.tsx": 3,
+    "packages/ui/src/components/native/NativeHoleCards.tsx": 1
   },
-  "anatomy_hits": 6,
-  "anatomy_misses": 30,
-  "repeated_reads_warned": 8,
+  "anatomy_hits": 7,
+  "anatomy_misses": 34,
+  "repeated_reads_warned": 9,
   "cerebrum_warnings": 0,
   "stop_count": 3
 }

@@ -675,7 +675,31 @@ export function NativeHoleCards({
     hasPeeked1Ref.current = card1StartsRevealed;
     progress0.value = card0StartsRevealed ? 1 : 0;
     progress1.value = card1StartsRevealed ? 1 : 0;
-  }, [card0StartsRevealed, card1StartsRevealed, currentCardsKey, progress0, progress1]);
+
+    // When autoReveal seeds a card open on a new hand, notify the server so
+    // peek counts surface to other players. Skip if the server already knows
+    // (already peeked, or already publicly revealed).
+    if (autoReveal) {
+      if (card0StartsRevealed && !card0IsPeeked && !card0IsRevealedToOthers) {
+        onPeekCard?.(0);
+      }
+      if (card1StartsRevealed && !card1IsPeeked && !card1IsRevealedToOthers) {
+        onPeekCard?.(1);
+      }
+    }
+  }, [
+    autoReveal,
+    card0IsPeeked,
+    card0IsRevealedToOthers,
+    card0StartsRevealed,
+    card1IsPeeked,
+    card1IsRevealedToOthers,
+    card1StartsRevealed,
+    currentCardsKey,
+    onPeekCard,
+    progress0,
+    progress1,
+  ]);
 
   useEffect(() => {
     if (card0IsPeeked) hasPeeked0Ref.current = true;
@@ -685,13 +709,31 @@ export function NativeHoleCards({
   useEffect(() => {
     if (card0ShouldForceOpen && !card0Revealed) {
       setCard0Revealed(true);
+      // If autoReveal flipped on mid-hand, send the peek for any card that
+      // wasn't already peeked or publicly revealed.
+      if (!hasPeeked0Ref.current && !card0IsPeeked && !card0IsRevealedToOthers) {
+        onPeekCard?.(0);
+      }
       hasPeeked0Ref.current = true;
     }
     if (card1ShouldForceOpen && !card1Revealed) {
       setCard1Revealed(true);
+      if (!hasPeeked1Ref.current && !card1IsPeeked && !card1IsRevealedToOthers) {
+        onPeekCard?.(1);
+      }
       hasPeeked1Ref.current = true;
     }
-  }, [card0Revealed, card0ShouldForceOpen, card1Revealed, card1ShouldForceOpen]);
+  }, [
+    card0IsPeeked,
+    card0IsRevealedToOthers,
+    card0Revealed,
+    card0ShouldForceOpen,
+    card1IsPeeked,
+    card1IsRevealedToOthers,
+    card1Revealed,
+    card1ShouldForceOpen,
+    onPeekCard,
+  ]);
 
   useEffect(() => {
     onRevealChange?.(card0Revealed && card1Revealed);
