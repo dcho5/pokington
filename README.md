@@ -22,15 +22,19 @@ A real-time multiplayer Texas Hold'em poker app for home games. Players share a 
 
 ## Repository Structure
 
-This is a **pnpm workspaces + Turborepo monorepo** with three primary packages:
+This is a **pnpm workspaces + Turborepo monorepo**:
 
 ```
 pokington/                     # Root monorepo
 ├── apps/
-│   └── web/                  # Next.js 14 frontend + PartyKit WebSocket server
+│   ├── web/                  # Next.js 15 frontend + PartyKit WebSocket server
+│   └── mobile/               # Expo / React Native app (iOS / Android)
 ├── packages/
 │   ├── engine/               # Pure game logic reducer & hand evaluator
-│   └── shared/               # Shared TypeScript types and constants
+│   ├── network/              # PartyKit client + useGameConnection hook (web + native)
+│   ├── ui/                   # Shared component library (./web and ./native subpaths)
+│   ├── shared/               # Shared TypeScript types and constants
+│   └── config/               # Env access
 ├── scripts/                  # Automation scripts
 │   ├── dev.mjs              # Multi-process dev launcher (PartyKit + Next.js)
 │   └── live-qa.mjs          # Live QA automation
@@ -41,7 +45,7 @@ pokington/                     # Root monorepo
 ```
 
 ### `apps/web` — Next.js Frontend + Real-time Server
-- **Framework:** Next.js 14 (App Router)
+- **Framework:** Next.js 15 (App Router)
 - **State Management:** Zustand
 - **Animations:** Framer Motion
 - **Styling:** Tailwind CSS + PostCSS
@@ -154,7 +158,7 @@ packages/shared/
 | Layer | Technology | Purpose |
 |---|---|---|
 | **Language** | TypeScript 5.0 | Type-safe game logic & UI |
-| **Frontend** | Next.js 14 (App Router) | React framework with server components |
+| **Frontend** | Next.js 15 (App Router) | React framework with server components |
 | **Real-time** | PartyKit + WebSocket | Multiplayer synchronization via Cloudflare Workers |
 | **State** | Zustand | Client-side game state management |
 | **UI Framework** | React 18 | Component library |

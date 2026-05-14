@@ -2,14 +2,14 @@
   "version": 1,
   "created_at": "2026-05-13T17:49:49.624Z",
   "lifetime": {
-    "total_tokens_estimated": 63952,
-    "total_reads": 24,
-    "total_writes": 50,
-    "total_sessions": 1,
-    "anatomy_hits": 0,
-    "anatomy_misses": 24,
-    "repeated_reads_blocked": 60,
-    "estimated_savings_vs_bare_cli": 422734
+    "total_tokens_estimated": 77603,
+    "total_reads": 48,
+    "total_writes": 65,
+    "total_sessions": 2,
+    "anatomy_hits": 6,
+    "anatomy_misses": 42,
+    "repeated_reads_blocked": 65,
+    "estimated_savings_vs_bare_cli": 433818
   },
   "sessions": [
     {
@@ -438,6 +438,242 @@
         "writes_count": 25,
         "repeated_reads_blocked": 30,
         "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-05-14-2105",
+      "started": "2026-05-14T02:05:05.620Z",
+      "ended": "2026-05-14T02:48:39.906Z",
+      "reads": [
+        {
+          "file": "/private/tmp/claude-501/-Users-dcho5-Desktop-coding-projects-nosync-pokington-031326/3809e427-8688-487e-b52e-97225a5a4a16/tasks/bffam6i41.output",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/NOTES.md",
+          "tokens_estimated": 283,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/QA_MANUAL_RELEASE_MATRIX.md",
+          "tokens_estimated": 325,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/QA_FINDINGS.md",
+          "tokens_estimated": 2403,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/MOBILE_APP.md",
+          "tokens_estimated": 4829,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/README.md",
+          "tokens_estimated": 5055,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/index.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/native.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/web.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/index.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/shared/src/index.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/index.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/config/src/index.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/desktopHandIndicatorLayout.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/playerPositionMarkers.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/tableLayoutMode.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/mobileShell.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/holeCardReveal.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/runAnimation.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/useTimedPanelVisibility.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/hooks/useTimedPanelVisibility.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 180,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/private/tmp/claude-501/-Users-dcho5-Desktop-coding-projects-nosync-pokington-031326/3809e427-8688-487e-b52e-97225a5a4a16/tasks/bk7pht81h.output",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/showdownTiming.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 10,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 7,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 8,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 9,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 8,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 8,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 9,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 11,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 8,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/package.json",
+          "tokens_estimated": 37,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/web.ts",
+          "tokens_estimated": 24,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/web.ts",
+          "tokens_estimated": 22,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/README.md",
+          "tokens_estimated": 336,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/README.md",
+          "tokens_estimated": 24,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/web.ts",
+          "tokens_estimated": 55,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 13075,
+        "output_tokens_estimated": 576,
+        "reads_count": 24,
+        "writes_count": 15,
+        "repeated_reads_blocked": 5,
+        "anatomy_lookups": 6
       }
     }
   ],

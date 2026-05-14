@@ -12,10 +12,6 @@
       "types": "./dist/native.d.ts",
       "default": "./dist/native.js"
     },
-    "./web": {
-      "types": "./dist/web.d.ts",
-      "default": "./dist/web.js"
-    },
     "./web/AnnouncementBanner": {
       "types": "./dist/components/web/Table/AnnouncementBanner.d.ts",
       "default": "./dist/components/web/Table/AnnouncementBanner.js"
@@ -60,10 +56,6 @@
       "types": "./dist/components/web/Table/DesktopRaisePopover.d.ts",
       "default": "./dist/components/web/Table/DesktopRaisePopover.js"
     },
-    "./web/DesktopTableDialog": {
-      "types": "./dist/components/web/Table/DesktopTableDialog.d.ts",
-      "default": "./dist/components/web/Table/DesktopTableDialog.js"
-    },
     "./web/HoleCards": {
       "types": "./dist/components/web/poker/HoleCards.d.ts",
       "default": "./dist/components/web/poker/HoleCards.js"
@@ -79,10 +71,6 @@
     "./web/JoinTableCard": {
       "types": "./dist/components/web/home/JoinTableCard.d.ts",
       "default": "./dist/components/web/home/JoinTableCard.js"
-    },
-    "./web/OptionSelector": {
-      "types": "./dist/components/web/home/OptionSelector.d.ts",
-      "default": "./dist/components/web/home/OptionSelector.js"
     },
     "./web/PeekEyeIcon": {
       "types": "./dist/components/web/poker/PeekEyeIcon.d.ts",
@@ -104,10 +92,6 @@
       "types": "./dist/components/web/Table/MobileBottomSheet.d.ts",
       "default": "./dist/components/web/Table/MobileBottomSheet.js"
     },
-    "./web/RebuySheet": {
-      "types": "./dist/components/web/Table/RebuySheet.d.ts",
-      "default": "./dist/components/web/Table/RebuySheet.js"
-    },
     "./web/RunItOddsBadge": {
       "types": "./dist/components/web/Table/RunItOddsBadge.d.ts",
       "default": "./dist/components/web/Table/RunItOddsBadge.js"
@@ -124,17 +108,9 @@
       "types": "./dist/components/web/Table/SevenTwoAnnouncement.d.ts",
       "default": "./dist/components/web/Table/SevenTwoAnnouncement.js"
     },
-    "./web/ShowdownSpotlight": {
-      "types": "./dist/components/web/Table/ShowdownSpotlight.d.ts",
-      "default": "./dist/components/web/Table/ShowdownSpotlight.js"
-    },
     "./web/SitDownForm": {
       "types": "./dist/components/web/Table/SitDownForm.d.ts",
       "default": "./dist/components/web/Table/SitDownForm.js"
-    },
-    "./web/TimerBar": {
-      "types": "./dist/components/web/Table/TimerBar.d.ts",
-      "default": "./dist/components/web/Table/TimerBar.js"
     },
     "./web/VotingPanel": {
       "types": "./dist/components/web/Table/VotingPanel.d.ts",
@@ -143,10 +119,6 @@
     "./web/WinnerBanner": {
       "types": "./dist/components/web/Table/WinnerBanner.d.ts",
       "default": "./dist/components/web/Table/WinnerBanner.js"
-    },
-    "./web/useRaiseAmount": {
-      "types": "./dist/hooks/useRaiseAmount.d.ts",
-      "default": "./dist/hooks/useRaiseAmount.js"
     },
     "./web/useColorScheme": {
       "types": "./dist/hooks/useColorScheme.d.ts",
@@ -160,14 +132,6 @@
       "types": "./dist/hooks/useIsMobileLayout.d.ts",
       "default": "./dist/hooks/useIsMobileLayout.js"
     },
-    "./web/useIsPortrait": {
-      "types": "./dist/hooks/useIsPortrait.d.ts",
-      "default": "./dist/hooks/useIsPortrait.js"
-    },
-    "./web/useRunAnimationTicker": {
-      "types": "./dist/hooks/useRunAnimationTicker.d.ts",
-      "default": "./dist/hooks/useRunAnimationTicker.js"
-    },
     "./web/useTimedPanelVisibility": {
       "types": "./dist/hooks/useTimedPanelVisibility.d.ts",
       "default": "./dist/hooks/useTimedPanelVisibility.js"
@@ -180,17 +144,9 @@
       "types": "./dist/lib/desktopHandIndicatorLayout.d.ts",
       "default": "./dist/lib/desktopHandIndicatorLayout.js"
     },
-    "./web/runAnimation": {
-      "types": "./dist/lib/runAnimation.d.ts",
-      "default": "./dist/lib/runAnimation.js"
-    },
     "./web/mobileShell": {
       "types": "./dist/lib/mobileShell.d.ts",
       "default": "./dist/lib/mobileShell.js"
-    },
-    "./native/nativeHaptics": {
-      "types": "./dist/lib/nativeHaptics.d.ts",
-      "default": "./dist/lib/nativeHaptics.js"
     }
   },
   "scripts": {
