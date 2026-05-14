@@ -62,14 +62,27 @@ function tick() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-test("web adapter authenticates and dispatches messages through the shared contract", async () => {
+/**
+ * Registers `connection.disconnect()` to run after the test finishes.
+ *
+ * The connection's heartbeat watchdog keeps a 25 s timer alive as long as the
+ * socket is open. Without this cleanup, node:test cannot drain the event loop
+ * after the run, so the whole `node --test` invocation hangs. Always wrap
+ * connections created in tests with this helper.
+ */
+function autoDisconnect(t, connection) {
+  t.after(() => connection.disconnect());
+  return connection;
+}
+
+test("web adapter authenticates and dispatches messages through the shared contract", async (t) => {
   const socket = new MockSocket();
   const statuses = [];
   const joins = [];
   const messages = [];
   const states = [];
 
-  const connection = createWebGameConnection({
+  const connection = autoDisconnect(t, createWebGameConnection({
     host: "http://localhost:1999/",
     roomId: "ABC123",
     clientId: "client-1",
@@ -83,7 +96,7 @@ test("web adapter authenticates and dispatches messages through the shared contr
     onStatusChange: (status) => statuses.push(status),
     onJoin: (join) => joins.push(join),
     onMessage: (message) => messages.push(message),
-  });
+  }));
   connection.subscribeToState((state) => states.push(state));
 
   await tick();
@@ -108,11 +121,9 @@ test("web adapter authenticates and dispatches messages through the shared contr
     { type: "PEEK_CARD", cardIndex: 0, handNumber: 12 },
   ]);
   assert.deepEqual(statuses, ["connecting", "connected"]);
-
-  connection.disconnect();
 });
 
-test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppState away updates", async () => {
+test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppState away updates", async (t) => {
   const socket = new MockSocket();
   const storage = new Map();
   const urls = [];
@@ -130,7 +141,7 @@ test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppS
     },
   };
 
-  const connection = await createNativeGameConnection({
+  const connection = autoDisconnect(t, await createNativeGameConnection({
     roomId: "ROOM 1",
     protocolVersion: 4,
     storage: {
@@ -149,7 +160,7 @@ test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppS
       urls.push(url);
       return socket;
     },
-  });
+  }));
 
   await tick();
   socket.emit("open", {});
@@ -162,16 +173,14 @@ test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppS
     { type: "SET_AWAY", away: true },
     { type: "SET_AWAY", away: false },
   ]);
-
-  connection.disconnect();
 });
 
-test("connection reconnects with a fresh join token after a non-terminal close", async () => {
+test("connection reconnects with a fresh join token after a non-terminal close", async (t) => {
   const sockets = [new MockSocket(), new MockSocket()];
   const joins = [];
   const statuses = [];
 
-  const connection = createWebGameConnection({
+  const connection = autoDisconnect(t, createWebGameConnection({
     host: "localhost:1999",
     roomId: "ABC123",
     clientId: "client-1",
@@ -184,7 +193,7 @@ test("connection reconnects with a fresh join token after a non-terminal close",
     },
     createSocket: () => sockets[joins.length - 1],
     onStatusChange: (status) => statuses.push(status),
-  });
+  }));
 
   await tick();
   sockets[0].emit("open", {});
@@ -202,16 +211,14 @@ test("connection reconnects with a fresh join token after a non-terminal close",
   ]);
   assert.equal(connection.status, "connected");
   assert.ok(statuses.includes("disconnected"));
-
-  connection.disconnect();
 });
 
-test("connection treats terminal server errors as non-retriable", async () => {
+test("connection treats terminal server errors as non-retriable", async (t) => {
   const socket = new MockSocket();
   const terminalErrors = [];
   let joinCount = 0;
 
-  const connection = createWebGameConnection({
+  const connection = autoDisconnect(t, createWebGameConnection({
     host: "localhost:1999",
     roomId: "ABC123",
     clientId: "client-1",
@@ -223,7 +230,7 @@ test("connection treats terminal server errors as non-retriable", async () => {
     },
     createSocket: () => socket,
     onTerminalError: (error) => terminalErrors.push(error.message),
-  });
+  }));
 
   await tick();
   socket.emit("open", {});
@@ -235,8 +242,6 @@ test("connection treats terminal server errors as non-retriable", async () => {
   assert.equal(connection.status, "disconnected");
   assert.equal(connection.terminalError?.message, "TABLE_NOT_ACTIVE");
   assert.deepEqual(terminalErrors, ["TABLE_NOT_ACTIVE"]);
-
-  connection.disconnect();
 });
 
 test("native helpers normalize host and persist existing client ids", async () => {
@@ -322,12 +327,12 @@ test("native control plane helpers build direct PartyKit requests and surface er
   );
 });
 
-test("heartbeat watchdog force-closes socket and reconnects after silence", async () => {
+test("heartbeat watchdog force-closes socket and reconnects after silence", async (t) => {
   let socket = new MockSocket();
   const statuses = [];
   let socketCreations = 0;
 
-  const connection = createWebGameConnection({
+  const connection = autoDisconnect(t, createWebGameConnection({
     host: "http://localhost:1999/",
     roomId: "WATCH1",
     clientId: "client-hb",
@@ -340,7 +345,7 @@ test("heartbeat watchdog force-closes socket and reconnects after silence", asyn
     },
     onStatusChange: (s) => statuses.push(s),
     heartbeatIntervalMs: 20,
-  });
+  }));
 
   await tick();
   socket.emit("open", {});
@@ -356,16 +361,14 @@ test("heartbeat watchdog force-closes socket and reconnects after silence", asyn
   assert.equal(socket.closed, true);
   // Status went disconnected then back to connecting (second socket creation imminent)
   assert.ok(statuses.includes("disconnected"), "status must have hit disconnected");
-
-  connection.disconnect();
 });
 
-test("reconnectNow skips backoff and reconnects immediately", async () => {
+test("reconnectNow skips backoff and reconnects immediately", async (t) => {
   let socket = new MockSocket();
   let socketCreations = 0;
   const statuses = [];
 
-  const connection = createWebGameConnection({
+  const connection = autoDisconnect(t, createWebGameConnection({
     host: "http://localhost:1999/",
     roomId: "RECONN",
     clientId: "client-rn",
@@ -379,7 +382,7 @@ test("reconnectNow skips backoff and reconnects immediately", async () => {
     onStatusChange: (s) => statuses.push(s),
     reconnectBackoffMs: () => 60_000,
     heartbeatIntervalMs: 0,
-  });
+  }));
 
   await tick();
   socket.emit("open", {});
@@ -397,6 +400,4 @@ test("reconnectNow skips backoff and reconnects immediately", async () => {
   await tick();
   assert.equal(socketCreations, 2, "a new socket must be created immediately");
   assert.equal(connection.status, "connecting");
-
-  connection.disconnect();
 });

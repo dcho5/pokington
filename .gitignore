@@ -20,6 +20,16 @@ engine.log
 CLAUDE.md
 **/CLAUDE.md
 
+# --- OpenWolf machine-regenerated state ---
+.wolf/hooks/
+.wolf/token-ledger.json
+.wolf/cron-state.json
+.wolf/cron-manifest.json
+.wolf/config.json
+.wolf/designqc-report.json
+.wolf/suggestions.json
+.wolf/designqc-captures/
+
 # --- Dependencies & Build ---
 node_modules/
 .turbo/

@@ -662,6 +662,9 @@ export const useGameStore = create<GameStore>((set, get) => {
 
         const handleVisibilityChange = () => {
           _connection?.setAway(document.hidden);
+          // Coming back to a foreground tab: skip backoff and reconnect now if
+          // the socket was silently dropped while we were hidden.
+          if (!document.hidden) _connection?.reconnectNow();
         };
         document.addEventListener("visibilitychange", handleVisibilityChange);
         _visibilityHandler = handleVisibilityChange;

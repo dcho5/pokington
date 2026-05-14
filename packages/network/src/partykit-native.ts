@@ -190,6 +190,9 @@ export async function createNativeGameConnection<
 
   const subscription = options.appState?.addEventListener("change", (state) => {
     connection.setAway(state !== "active");
+    // Returning to foreground: skip backoff and try to reconnect immediately
+    // in case the socket was silently dropped while backgrounded.
+    if (state === "active") connection.reconnectNow();
   });
   if (subscription) {
     const disconnect = connection.disconnect;

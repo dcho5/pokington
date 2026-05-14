@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import type { ViewStyle } from "react-native";
 import { NativeCard } from "@pokington/ui/native";
@@ -329,17 +329,20 @@ function BombPotBoards({
   const boards = [communityCards ?? [], communityCards2 ?? []];
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  function switchBoard(i: number) {
-    const direction = i >= activeBoard ? 1 : -1;
-    slideAnim.setValue(direction * 24);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start();
-    onActiveBoardChange?.(i);
-  }
+  const switchBoard = useCallback(
+    (i: number) => {
+      const direction = i >= activeBoard ? 1 : -1;
+      slideAnim.setValue(direction * 24);
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.cubic),
+      }).start();
+      onActiveBoardChange?.(i);
+    },
+    [activeBoard, onActiveBoardChange, slideAnim],
+  );
 
   return (
     <View style={boardStyles.container}>
