@@ -327,13 +327,26 @@ function BombPotBoards({
   slotHeight: number;
 }) {
   const boards = [communityCards ?? [], communityCards2 ?? []];
+  const slideAnim = useRef(new Animated.Value(0)).current;
+
+  function switchBoard(i: number) {
+    const direction = i >= activeBoard ? 1 : -1;
+    slideAnim.setValue(direction * 24);
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.cubic),
+    }).start();
+    onActiveBoardChange?.(i);
+  }
 
   return (
     <View style={boardStyles.container}>
       <TabStrip
         labels={["Board 1", "Board 2"]}
         activeIndex={activeBoard}
-        onPress={onActiveBoardChange ?? (() => {})}
+        onPress={switchBoard}
       />
       {/* Ghost layer — inactive board peeking behind */}
       <View style={boardStyles.ghostLayer}>
@@ -346,15 +359,17 @@ function BombPotBoards({
           slotHeight={slotHeight}
         />
       </View>
-      <CardRow
-        cards={boards[activeBoard] ?? []}
-        cardEmphasis={boardEmphasis[activeBoard]}
-        handNumber={handNumber}
-        boardKey={`bomb-b${activeBoard}`}
-        slotWidth={slotWidth}
-        slotHeight={slotHeight}
-        enableDealAnimation
-      />
+      <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
+        <CardRow
+          cards={boards[activeBoard] ?? []}
+          cardEmphasis={boardEmphasis[activeBoard]}
+          handNumber={handNumber}
+          boardKey={`bomb-b${activeBoard}`}
+          slotWidth={slotWidth}
+          slotHeight={slotHeight}
+          enableDealAnimation
+        />
+      </Animated.View>
     </View>
   );
 }

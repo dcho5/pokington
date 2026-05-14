@@ -27,6 +27,8 @@ export interface CreatePartyKitConnectionOptions<TServerMessage, TGameAction> ex
   createSocket: (join: JoinTokenResponse) => SocketLike;
   getInitialAway?: () => boolean;
   reconnectBackoffMs?: (attempt: number) => number;
+  /** Watchdog timeout: if no message is received within this window the socket is force-closed and reconnected. Default 25 000 ms. Set to 0 to disable. */
+  heartbeatIntervalMs?: number;
 }
 
 function parseSocketMessage<TServerMessage>(data: unknown): TServerMessage | null {
@@ -64,10 +66,31 @@ export function createPartyKitGameConnection<
   let firstStateReceived = false;
   let reconnectAttempt = 0;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   let openHandler: ((event?: unknown) => void) | null = null;
   let messageHandler: ((event: { data?: unknown }) => void) | null = null;
   let closeHandler: ((event?: unknown) => void) | null = null;
   let errorHandler: ((event: unknown) => void) | null = null;
+
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 25_000;
+
+  const clearHeartbeat = () => {
+    if (heartbeatTimer) {
+      clearTimeout(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  };
+
+  const armHeartbeat = () => {
+    clearHeartbeat();
+    if (heartbeatIntervalMs <= 0 || disconnected) return;
+    heartbeatTimer = setTimeout(() => {
+      heartbeatTimer = null;
+      closeCurrentSocket();
+      setStatus("disconnected");
+      scheduleConnect();
+    }, heartbeatIntervalMs);
+  };
 
   const messageListeners = new Set<(message: TServerMessage) => void>();
   const stateListeners = new Set<(state: SerializedGameState) => void>();
@@ -86,6 +109,7 @@ export function createPartyKitGameConnection<
   };
 
   const detachSocket = () => {
+    clearHeartbeat();
     if (socket?.removeEventListener) {
       if (openHandler) socket.removeEventListener("open", openHandler);
       if (messageHandler) socket.removeEventListener("message", messageHandler);
@@ -136,11 +160,13 @@ export function createPartyKitGameConnection<
       setStatus("connected");
       sendMessage({ type: "AUTH", token: join.token, protocolVersion: options.protocolVersion });
       sendMessage({ type: "SET_AWAY", away: options.getInitialAway?.() ?? false });
+      armHeartbeat();
     };
 
     messageHandler = (event) => {
       const message = parseSocketMessage<TServerMessage>(event.data);
       if (!message) return;
+      armHeartbeat();
       options.onMessage?.(message);
       for (const listener of messageListeners) listener(message);
       if (message.type === "TABLE_STATE") {
@@ -235,6 +261,7 @@ export function createPartyKitGameConnection<
     },
     disconnect: () => {
       disconnected = true;
+      clearHeartbeat();
       if (reconnectTimer) {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
@@ -244,6 +271,17 @@ export function createPartyKitGameConnection<
       messageListeners.clear();
       stateListeners.clear();
       statusListeners.clear();
+    },
+    reconnectNow: () => {
+      if (disconnected || terminalError) return;
+      clearHeartbeat();
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
+      closeCurrentSocket();
+      reconnectAttempt = 0;
+      connect();
     },
   };
 

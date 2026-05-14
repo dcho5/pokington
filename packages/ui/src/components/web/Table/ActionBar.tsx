@@ -5,6 +5,7 @@ import { formatCents } from "@pokington/shared";
 import { MOBILE_OVERLAY_Z, MOBILE_SHELL } from "../../../lib/mobileShell";
 import { useRaiseAmount } from "../../../hooks/useRaiseAmount";
 import MobileBottomSheet from "./MobileBottomSheet";
+import { getActionBarLayout } from "../../../lib/actionBarLayout";
 
 interface RaiseSheetProps {
   pot: number;
@@ -282,60 +283,74 @@ const ActionBar: React.FC<ActionBarProps> = ({
         }}
       >
         <div className={`flex gap-2 transition-opacity duration-200 ${!isYourTurn ? "opacity-40 pointer-events-none" : ""}`}>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={() => {
-              if (canCheck) {
-                setFoldConfirm(true);
-              } else {
-                onFold?.();
-              }
-            }}
-            className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gray-100 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold text-sm xs:text-lg whitespace-nowrap"
-          >
-            Fold
-          </motion.button>
-
-          {canCheck ? (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={() => {
-                setRaiseOpen(false);
-                onCheck?.();
-              }}
-              className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold text-sm xs:text-lg whitespace-nowrap"
-            >
-              Check
-            </motion.button>
-          ) : (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={onCall}
-              className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold text-sm xs:text-lg whitespace-nowrap"
-            >
-              Call {formatCents(callAmount)}
-            </motion.button>
-          )}
-
-          {canRaise && (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={() => setRaiseOpen(true)}
-              className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-sm xs:text-lg whitespace-nowrap shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
-            >
-              {betOrRaiseLabel}
-            </motion.button>
-          )}
-
-          {!canRaise && canAllIn && (
-            <motion.button
-              whileTap={{ scale: 0.96 }}
-              onClick={onAllIn}
-              className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-sm xs:text-lg whitespace-nowrap shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
-            >
-              All-in
-            </motion.button>
-          )}
+          {getActionBarLayout({ canCheck, canRaise, canAllIn }).map((slot) => {
+            switch (slot) {
+              case "fold":
+                return (
+                  <motion.button
+                    key="fold"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => {
+                      if (canCheck) {
+                        setFoldConfirm(true);
+                      } else {
+                        onFold?.();
+                      }
+                    }}
+                    className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gray-100 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 text-gray-800 dark:text-white font-bold text-sm xs:text-lg whitespace-nowrap"
+                  >
+                    Fold
+                  </motion.button>
+                );
+              case "check":
+                return (
+                  <motion.button
+                    key="check"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => {
+                      setRaiseOpen(false);
+                      onCheck?.();
+                    }}
+                    className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gray-200 dark:bg-gray-700/80 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white font-bold text-sm xs:text-lg whitespace-nowrap"
+                  >
+                    Check
+                  </motion.button>
+                );
+              case "call":
+                return (
+                  <motion.button
+                    key="call"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={onCall}
+                    className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-amber-400 dark:bg-amber-500 border border-amber-500 dark:border-amber-400 text-amber-950 dark:text-amber-950 font-bold text-sm xs:text-lg whitespace-nowrap shadow-[0_0_12px_rgba(245,158,11,0.25)]"
+                  >
+                    Call {formatCents(callAmount)}
+                  </motion.button>
+                );
+              case "raise":
+                return (
+                  <motion.button
+                    key="raise"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => setRaiseOpen(true)}
+                    className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-sm xs:text-lg whitespace-nowrap shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                  >
+                    {betOrRaiseLabel}
+                  </motion.button>
+                );
+              case "allin":
+                return (
+                  <motion.button
+                    key="allin"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={onAllIn}
+                    className="flex-1 h-[52px] xs:h-[56px] rounded-2xl bg-gradient-to-r from-red-500 to-red-700 text-white font-black text-sm xs:text-lg whitespace-nowrap shadow-[0_0_16px_rgba(239,68,68,0.4)] hover:shadow-[0_0_22px_rgba(239,68,68,0.6)] transition-shadow"
+                  >
+                    All-in
+                  </motion.button>
+                );
+            }
+          })}
         </div>
       </div>
 

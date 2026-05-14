@@ -736,7 +736,7 @@ export function gameReducer(
         p.currentBet = 0;
         p.totalContribution = 0;
         p.isFolded = p.sitOutUntilBB || p.stack <= 0;
-        p.isAllIn = p.stack <= 0;
+        p.isAllIn = false;
         p.lastAction = null;
       }
       state.communityCards = [];

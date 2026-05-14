@@ -26,10 +26,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 6,
     paddingHorizontal: 16,
+    overflow: "hidden",
   },
   wrapFloating: {
     alignItems: "center",
     paddingHorizontal: 16,
+    overflow: "hidden",
   },
   pill: {
     maxWidth: "80%",

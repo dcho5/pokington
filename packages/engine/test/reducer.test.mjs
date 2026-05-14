@@ -71,7 +71,7 @@ test("zero-stack players are excluded from new hands", () => {
 
   assert.equal(state.players.c.holeCards, null);
   assert.equal(state.players.c.isFolded, true);
-  assert.equal(state.players.c.isAllIn, true);
+  assert.equal(state.players.c.isAllIn, false);
   assert.deepEqual(state.needsToAct, ["a", "b"]);
   assert.equal(state.smallBlindSeatIndex, 0);
   assert.equal(state.bigBlindSeatIndex, 1);
@@ -708,4 +708,111 @@ test("multi-run aggregate winners preserve distinct winning hand labels", () => 
   assert.equal(state.winners?.length, 1);
   assert.equal(state.winners?.[0].playerId, "a");
   assert.equal(state.winners?.[0].hand, "One Pair / Full House / Two Pair");
+});
+
+test("busted player is not shown as all-in at the start of the next hand", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  // Simulate post-showdown state: player A busted (stack=0), B and C still active
+  state.phase = "showdown";
+  state.players = {
+    a: {
+      id: "a", name: "A", seatIndex: 0,
+      stack: 0,
+      holeCards: null, currentBet: 0, totalContribution: 100,
+      isFolded: false, isAllIn: true, lastAction: "call",
+      sitOutUntilBB: false,
+    },
+    b: {
+      id: "b", name: "B", seatIndex: 1,
+      stack: 1500,
+      holeCards: null, currentBet: 0, totalContribution: 100,
+      isFolded: false, isAllIn: false, lastAction: null,
+      sitOutUntilBB: false,
+    },
+    c: {
+      id: "c", name: "C", seatIndex: 2,
+      stack: 500,
+      holeCards: null, currentBet: 0, totalContribution: 0,
+      isFolded: true, isAllIn: false, lastAction: "fold",
+      sitOutUntilBB: false,
+    },
+  };
+
+  // B and C are eligible — START_HAND can proceed
+  state = gameReducer(state, { type: "START_HAND" });
+
+  assert.equal(state.players.a.isAllIn, false, "busted player must not be flagged all-in");
+  assert.equal(state.players.a.isFolded, true, "busted player must be folded");
+  assert.equal(state.players.a.lastAction, null, "busted player lastAction must be reset");
+  assert.equal(state.players.a.holeCards, null, "busted player must not receive cards");
+});
+
+test("sitOutUntilBB player has isAllIn=false at START_HAND (no regression)", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  // Waiting phase: A and B eligible, C sitting out for BB
+  state.phase = "waiting";
+  state.players = {
+    a: {
+      id: "a", name: "A", seatIndex: 0,
+      stack: 1000,
+      holeCards: null, currentBet: 0, totalContribution: 0,
+      isFolded: false, isAllIn: false, lastAction: null,
+      sitOutUntilBB: false,
+    },
+    b: {
+      id: "b", name: "B", seatIndex: 1,
+      stack: 1000,
+      holeCards: null, currentBet: 0, totalContribution: 0,
+      isFolded: false, isAllIn: false, lastAction: null,
+      sitOutUntilBB: false,
+    },
+    c: {
+      id: "c", name: "C", seatIndex: 2,
+      stack: 500,
+      holeCards: null, currentBet: 0, totalContribution: 0,
+      isFolded: false, isAllIn: false, lastAction: null,
+      sitOutUntilBB: true,
+    },
+  };
+
+  state = gameReducer(state, { type: "START_HAND" });
+
+  assert.equal(state.players.c.isAllIn, false, "sitOutUntilBB player must not be flagged all-in");
+  assert.equal(state.players.c.isFolded, true, "sitOutUntilBB player must be marked folded");
+});
+
+test("busted player who rebuys gets dealt into the next hand with isAllIn=false", () => {
+  let state = createInitialState("table", { small: 25, big: 50 });
+  state.phase = "showdown";
+  state.players = {
+    a: {
+      id: "a", name: "A", seatIndex: 0,
+      stack: 0,
+      holeCards: null,
+      currentBet: 0, totalContribution: 0,
+      isFolded: true, isAllIn: false, lastAction: null,
+      sitOutUntilBB: false,
+    },
+    b: {
+      id: "b", name: "B", seatIndex: 1,
+      stack: 2000,
+      holeCards: null,
+      currentBet: 0, totalContribution: 0,
+      isFolded: false, isAllIn: false, lastAction: null,
+      sitOutUntilBB: false,
+    },
+  };
+
+  // A rebuys (applied immediately in showdown/waiting phase)
+  state = gameReducer(state, {
+    type: "REQUEST_BOUNDARY_UPDATE",
+    playerId: "a", leaveSeat: false, moveToSeatIndex: null, chipDelta: 500,
+  });
+  assert.equal(state.players.a.stack, 500);
+
+  state = gameReducer(state, { type: "START_HAND" });
+
+  assert.equal(state.players.a.isAllIn, false);
+  assert.equal(state.players.a.isFolded, false);
+  assert.notEqual(state.players.a.holeCards, null);
 });

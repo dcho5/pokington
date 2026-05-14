@@ -313,3 +313,82 @@ test("native control plane helpers build direct PartyKit requests and surface er
     /TABLE_NOT_FOUND/,
   );
 });
+
+test("heartbeat watchdog force-closes socket and reconnects after silence", async () => {
+  let socket = new MockSocket();
+  const statuses = [];
+  let socketCreations = 0;
+
+  const connection = createWebGameConnection({
+    host: "http://localhost:1999/",
+    roomId: "WATCH1",
+    clientId: "client-hb",
+    protocolVersion: 4,
+    join: async () => ({ token: "t", tableId: "WATCH1", playerSessionId: "s", isCreator: false }),
+    createSocket: () => {
+      socketCreations += 1;
+      socket = new MockSocket();
+      return socket;
+    },
+    onStatusChange: (s) => statuses.push(s),
+    heartbeatIntervalMs: 20,
+  });
+
+  await tick();
+  socket.emit("open", {});
+  assert.equal(connection.status, "connected");
+
+  // Receive one message — watchdog should reset
+  socket.emit("message", { data: JSON.stringify({ type: "TABLE_STATE", state: { phase: "waiting" } }) });
+
+  // Wait longer than the heartbeat interval without any more messages
+  await new Promise((r) => setTimeout(r, 60));
+
+  // The watchdog should have fired: socket closed, reconnect scheduled
+  assert.equal(socket.closed, true);
+  // Status went disconnected then back to connecting (second socket creation imminent)
+  assert.ok(statuses.includes("disconnected"), "status must have hit disconnected");
+
+  connection.disconnect();
+});
+
+test("reconnectNow skips backoff and reconnects immediately", async () => {
+  let socket = new MockSocket();
+  let socketCreations = 0;
+  const statuses = [];
+
+  const connection = createWebGameConnection({
+    host: "http://localhost:1999/",
+    roomId: "RECONN",
+    clientId: "client-rn",
+    protocolVersion: 4,
+    join: async () => ({ token: "t", tableId: "RECONN", playerSessionId: "s", isCreator: false }),
+    createSocket: () => {
+      socketCreations += 1;
+      socket = new MockSocket();
+      return socket;
+    },
+    onStatusChange: (s) => statuses.push(s),
+    reconnectBackoffMs: () => 60_000,
+    heartbeatIntervalMs: 0,
+  });
+
+  await tick();
+  socket.emit("open", {});
+  assert.equal(connection.status, "connected");
+
+  // Simulate a silent disconnect (close without triggering the watch)
+  socket.emit("close", {});
+  await tick();
+  assert.equal(connection.status, "disconnected");
+  // Backoff is 60s so normally would wait a long time before reconnecting
+  assert.equal(socketCreations, 1);
+
+  // reconnectNow should bypass the backoff
+  connection.reconnectNow();
+  await tick();
+  assert.equal(socketCreations, 2, "a new socket must be created immediately");
+  assert.equal(connection.status, "connecting");
+
+  connection.disconnect();
+});

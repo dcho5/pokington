@@ -85,6 +85,7 @@ export interface GameConnection<TServerMessage = PartyKitServerMessage, TGameAct
   subscribeToMessage: (listener: (message: TServerMessage) => void) => () => void;
   subscribeToStatus: (listener: (status: ConnectionStatus) => void) => () => void;
   disconnect: () => void;
+  reconnectNow: () => void;
 }
 
 export interface GameConnectionLifecycle<TServerMessage = PartyKitServerMessage> {

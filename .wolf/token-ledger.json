@@ -1,0 +1,450 @@
+{
+  "version": 1,
+  "created_at": "2026-05-13T17:49:49.624Z",
+  "lifetime": {
+    "total_tokens_estimated": 63952,
+    "total_reads": 24,
+    "total_writes": 50,
+    "total_sessions": 1,
+    "anatomy_hits": 0,
+    "anatomy_misses": 24,
+    "repeated_reads_blocked": 60,
+    "estimated_savings_vs_bare_cli": 422734
+  },
+  "sessions": [
+    {
+      "id": "session-2026-05-13-1259",
+      "started": "2026-05-13T17:59:43.140Z",
+      "ended": "2026-05-14T01:48:05.382Z",
+      "reads": [
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts",
+          "tokens_estimated": 12291,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 6307,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/FooterStatusBanner.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/web/Table/ActionBar.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/test/nativeHaptics.test.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 2586,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/types.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/index.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/partykit-web.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/CommunityCards.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts",
+          "tokens_estimated": 23,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 56,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 977,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 739,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 3592,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 23,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 24,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 440,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 20,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 115,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/FooterStatusBanner.tsx",
+          "tokens_estimated": 62,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+          "tokens_estimated": 127,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/lib/actionBarLayout.ts",
+          "tokens_estimated": 256,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/test/actionBarLayout.test.mjs",
+          "tokens_estimated": 749,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/web/Table/ActionBar.tsx",
+          "tokens_estimated": 123,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/web/Table/ActionBar.tsx",
+          "tokens_estimated": 972,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/types.ts",
+          "tokens_estimated": 88,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 162,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 311,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 191,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 167,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 180,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+          "tokens_estimated": 777,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 86,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/CommunityCards.tsx",
+          "tokens_estimated": 532,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 21184,
+        "output_tokens_estimated": 10792,
+        "reads_count": 12,
+        "writes_count": 25,
+        "repeated_reads_blocked": 30,
+        "anatomy_lookups": 0
+      }
+    },
+    {
+      "id": "session-2026-05-13-1259",
+      "started": "2026-05-13T17:59:43.140Z",
+      "ended": "2026-05-14T02:04:11.616Z",
+      "reads": [
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts",
+          "tokens_estimated": 12291,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 6307,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/FooterStatusBanner.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/web/Table/ActionBar.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/test/nativeHaptics.test.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 2586,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/types.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/index.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/partykit-web.ts",
+          "tokens_estimated": 0,
+          "was_repeated": false,
+          "anatomy_had_description": false
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/CommunityCards.tsx",
+          "tokens_estimated": 0,
+          "was_repeated": true,
+          "anatomy_had_description": false
+        }
+      ],
+      "writes": [
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/src/reducer.ts",
+          "tokens_estimated": 23,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 56,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 977,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/reducer.test.mjs",
+          "tokens_estimated": 739,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 3592,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 23,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 24,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 440,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 20,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/engine/test/sidePots.test.mjs",
+          "tokens_estimated": 115,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/FooterStatusBanner.tsx",
+          "tokens_estimated": 62,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+          "tokens_estimated": 127,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/lib/actionBarLayout.ts",
+          "tokens_estimated": 256,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/test/actionBarLayout.test.mjs",
+          "tokens_estimated": 749,
+          "action": "create"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/web/Table/ActionBar.tsx",
+          "tokens_estimated": 123,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/ui/src/components/web/Table/ActionBar.tsx",
+          "tokens_estimated": 972,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/types.ts",
+          "tokens_estimated": 88,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 162,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 311,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 191,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 167,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 180,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+          "tokens_estimated": 777,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts",
+          "tokens_estimated": 86,
+          "action": "edit"
+        },
+        {
+          "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/CommunityCards.tsx",
+          "tokens_estimated": 532,
+          "action": "edit"
+        }
+      ],
+      "totals": {
+        "input_tokens_estimated": 21184,
+        "output_tokens_estimated": 10792,
+        "reads_count": 12,
+        "writes_count": 25,
+        "repeated_reads_blocked": 30,
+        "anatomy_lookups": 0
+      }
+    }
+  ],
+  "daemon_usage": [],
+  "waste_flags": [],
+  "optimization_report": {
+    "last_generated": null,
+    "patterns": []
+  }
+}
