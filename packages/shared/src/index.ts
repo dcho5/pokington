@@ -61,3 +61,32 @@ export function getBuyInPresets(bigBlindCents: number) {
 // ── Game state ──
 export type GamePhase = 'waiting'|'pre-flop'|'flop'|'turn'|'river'|'voting'|'showdown';
 export type LastAction = 'fold'|'check'|'call'|'raise'|'all-in'|null;
+
+// ── Avatar ──
+/** Deterministic avatar palette shared by web and native. */
+export const AVATAR_COLORS = [
+  "#436a15", // green
+  "#1d4ed8", // blue
+  "#7c3aed", // violet
+  "#0e7490", // cyan
+  "#b45309", // amber
+  "#be185d", // pink
+  "#0f766e", // teal
+  "#9f1239", // rose
+] as const;
+
+/** Returns a stable hex color from `AVATAR_COLORS` based on the player's name. */
+export function getAvatarColor(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (Math.imul(31, hash) + seed.charCodeAt(i)) | 0;
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]!;
+}
+
+/** Returns 1- or 2-letter initials from a display name. */
+export function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}

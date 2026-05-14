@@ -1,8 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import HoleCards from "@pokington/ui/web/HoleCards";
-import { getAvatarColor, getInitials } from "lib/avatarColor";
-import { formatCents } from "@pokington/shared";
+import { formatCents, getAvatarColor, getInitials } from "@pokington/shared";
 import AutoPeelToggle from "@pokington/ui/web/AutoPeelToggle";
 import type { HandIndicator } from "lib/handIndicators";
 import type { Player } from "types/player";

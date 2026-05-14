@@ -144,6 +144,70 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-14T02:41:12.755Z"
+    },
+    {
+      "id": "bug-010",
+      "timestamp": "2026-05-14T03:08:15.308Z",
+      "error_message": "Missing guard clause",
+      "file": "packages/shared/src/index.ts",
+      "root_cause": "No early return/throw for edge case: parts.length >= 2",
+      "fix": "Added guard clause: if (parts.length >= 2)",
+      "tags": [
+        "auto-detected",
+        "guard-clause",
+        "ts"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-14T03:08:15.308Z"
+    },
+    {
+      "id": "bug-011",
+      "timestamp": "2026-05-14T03:08:44.829Z",
+      "error_message": "Incorrect value in code",
+      "file": "apps/web/src/components/Table/mobile/HandPanel.tsx",
+      "root_cause": "Had \"lib/avatarColor\"",
+      "fix": "Changed to \"@pokington/shared\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-14T03:08:44.829Z"
+    },
+    {
+      "id": "bug-012",
+      "timestamp": "2026-05-14T03:08:46.618Z",
+      "error_message": "Incorrect value in code",
+      "file": "apps/web/src/components/Table/mobile/PlayerBubble.tsx",
+      "root_cause": "Had \"lib/avatarColor\"",
+      "fix": "Changed to \"@pokington/shared\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-14T03:08:52.368Z"
+    },
+    {
+      "id": "bug-013",
+      "timestamp": "2026-05-14T03:10:05.454Z",
+      "error_message": "Wrong return value",
+      "file": "apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+      "root_cause": "Was returning: \"gold\";",
+      "fix": "Now returns: \"pot\";",
+      "tags": [
+        "auto-detected",
+        "return-value",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-14T03:10:05.454Z"
     }
   ]
 }

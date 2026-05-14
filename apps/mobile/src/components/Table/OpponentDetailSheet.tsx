@@ -1,8 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { NativeBottomSheet, NativeCard, nativeLightTheme } from "@pokington/ui/native";
-import { formatCents } from "@pokington/shared";
-import { getAvatarColor, getInitials } from "./avatarColor";
+import { formatCents, getAvatarColor, getInitials } from "@pokington/shared";
 import type { TablePlayer } from "./PlayerBubble";
 
 interface OpponentDetailSheetProps {

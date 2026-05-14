@@ -53,7 +53,7 @@
       "first_read": "2026-05-14T02:26:47.758Z"
     },
     "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/shared/src/index.ts": {
-      "count": 1,
+      "count": 2,
       "tokens": 0,
       "first_read": "2026-05-14T02:26:48.146Z"
     },
@@ -121,6 +121,66 @@
       "count": 1,
       "tokens": 0,
       "first_read": "2026-05-14T02:47:07.466Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/lib/avatarColor.ts": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T02:59:08.016Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/avatarColor.ts": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T02:59:08.965Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx": {
+      "count": 3,
+      "tokens": 0,
+      "first_read": "2026-05-14T02:59:26.599Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:01:12.920Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/connection.ts": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:01:25.430Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/table-session.test.mjs": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:01:45.512Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/src/partykit-web.ts": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:05:27.860Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/components/Table/mobile/HandPanel.tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:08:35.955Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/components/Table/mobile/PlayerBubble.tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:08:36.840Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/OpponentDetailSheet.tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:08:38.183Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/HandPanel.tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:08:39.069Z"
+    },
+    "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/PlayerBubble.tsx": {
+      "count": 1,
+      "tokens": 0,
+      "first_read": "2026-05-14T03:08:39.822Z"
     }
   },
   "files_written": [
@@ -213,16 +273,102 @@
       "action": "edit",
       "tokens": 55,
       "at": "2026-05-14T02:41:12.754Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+      "action": "edit",
+      "tokens": 86,
+      "at": "2026-05-14T03:07:42.626Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+      "action": "edit",
+      "tokens": 61,
+      "at": "2026-05-14T03:07:44.833Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+      "action": "edit",
+      "tokens": 71,
+      "at": "2026-05-14T03:07:47.801Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/network/test/adapters.test.mjs",
+      "action": "edit",
+      "tokens": 69,
+      "at": "2026-05-14T03:07:50.217Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/packages/shared/src/index.ts",
+      "action": "edit",
+      "tokens": 307,
+      "at": "2026-05-14T03:08:15.308Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/components/Table/mobile/HandPanel.tsx",
+      "action": "edit",
+      "tokens": 22,
+      "at": "2026-05-14T03:08:44.828Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/web/src/components/Table/mobile/PlayerBubble.tsx",
+      "action": "edit",
+      "tokens": 27,
+      "at": "2026-05-14T03:08:46.617Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/OpponentDetailSheet.tsx",
+      "action": "edit",
+      "tokens": 22,
+      "at": "2026-05-14T03:08:48.386Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/HandPanel.tsx",
+      "action": "edit",
+      "tokens": 36,
+      "at": "2026-05-14T03:08:50.171Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/PlayerBubble.tsx",
+      "action": "edit",
+      "tokens": 32,
+      "at": "2026-05-14T03:08:52.367Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+      "action": "edit",
+      "tokens": 150,
+      "at": "2026-05-14T03:09:55.548Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+      "action": "edit",
+      "tokens": 184,
+      "at": "2026-05-14T03:10:03.600Z"
+    },
+    {
+      "file": "/Users/dcho5/Desktop/coding_projects.nosync/pokington_031326/apps/mobile/src/components/Table/DynamicPotPanel.tsx",
+      "action": "edit",
+      "tokens": 26,
+      "at": "2026-05-14T03:10:05.452Z"
     }
   ],
   "edit_counts": {
     "packages/ui/package.json": 10,
     "packages/ui/src/web.ts": 3,
-    "README.md": 2
+    "README.md": 2,
+    "packages/network/test/adapters.test.mjs": 4,
+    "packages/shared/src/index.ts": 1,
+    "apps/web/src/components/Table/mobile/HandPanel.tsx": 1,
+    "apps/web/src/components/Table/mobile/PlayerBubble.tsx": 1,
+    "apps/mobile/src/components/Table/OpponentDetailSheet.tsx": 1,
+    "apps/mobile/src/components/Table/HandPanel.tsx": 1,
+    "apps/mobile/src/components/Table/PlayerBubble.tsx": 1,
+    "apps/mobile/src/components/Table/DynamicPotPanel.tsx": 3
   },
   "anatomy_hits": 6,
-  "anatomy_misses": 18,
-  "repeated_reads_warned": 5,
+  "anatomy_misses": 30,
+  "repeated_reads_warned": 8,
   "cerebrum_warnings": 0,
-  "stop_count": 1
+  "stop_count": 3
 }

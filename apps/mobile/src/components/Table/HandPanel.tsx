@@ -2,9 +2,8 @@ import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { NativeHoleCards, nativeLightTheme } from "@pokington/ui/native";
 import { evaluateBest } from "@pokington/engine";
-import { formatCents } from "@pokington/shared";
+import { formatCents, getAvatarColor, getInitials } from "@pokington/shared";
 import type { Card } from "@pokington/shared";
-import { getAvatarColor, getInitials } from "./avatarColor";
 
 interface HandPanelPlayer {
   id: string;

@@ -4,8 +4,7 @@ import React, { useEffect } from "react";
 import { motion, AnimatePresence, useAnimation } from "framer-motion";
 
 // Internal Libs
-import { getAvatarColor, getInitials } from "lib/avatarColor";
-import { formatCents } from "@pokington/shared";
+import { formatCents, getAvatarColor, getInitials } from "@pokington/shared";
 import {
   MOBILE_SEAT_STRIP_METRICS,
   resolveMobileSeatStripPrimaryBadge,

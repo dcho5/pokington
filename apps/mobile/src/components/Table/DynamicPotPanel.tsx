@@ -20,11 +20,11 @@ const POT_PILL_SHIFT = 13;
 const RUN_LABELS = ["once", "twice", "three times"] as const;
 const RUN_BUTTON_LABELS = ["Once", "Twice", "3x"] as const;
 const DEFAULT_BASE_GRADIENT_COLORS = ["#0d1f38", "#060f1e", "#020609"] as const;
-const POT_BASE_GRADIENT_COLORS = ["#ff7a7d", "#ef4444", "#dc2626"] as const;
+const POT_BASE_GRADIENT_COLORS = ["#ef4444", "#dc2626", "#b91c1c"] as const;
 const DEFAULT_SIDE_SHADE_COLORS = ["rgba(0,0,0,0.14)", "transparent", "rgba(0,0,0,0.18)"] as const;
-const POT_SIDE_SHADE_COLORS = ["rgba(127,29,29,0.04)", "transparent", "rgba(127,29,29,0.08)"] as const;
+const POT_SIDE_SHADE_COLORS = ["rgba(127,29,29,0.06)", "transparent", "rgba(127,29,29,0.12)"] as const;
 const DEFAULT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(0,0,0,0.34)"] as const;
-const POT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(127,29,29,0.08)"] as const;
+const POT_BOTTOM_SHADE_COLORS = ["transparent", "rgba(127,29,29,0.14)"] as const;
 
 type PotIslandTone = "pot" | "violet" | "sky" | "amber" | "gold";
 
@@ -104,17 +104,17 @@ const TONE_INDEX: Record<PotIslandTone, number> = {
 };
 
 const TONE_STOPS = [0, 1, 2, 3, 4] as const;
-const ROOT_COLORS = ["#f43f5e", "#101526", "#0b1724", "#21160c", "#1c160c"] as const;
+const ROOT_COLORS = ["#e11d48", "#101526", "#0b1724", "#21160c", "#1c160c"] as const;
 const BORDER_COLORS = [
-  "rgba(248,113,113,0.52)",
+  "rgba(239,68,68,0.52)",
   "rgba(199,210,254,0.27)",
   "rgba(186,230,253,0.26)",
   "rgba(253,230,138,0.25)",
   "rgba(253,230,138,0.3)",
 ] as const;
-const SHADOW_COLORS = ["#ef4444", "#818cf8", "#38bdf8", "#fb923c", "#fbbf24"] as const;
+const SHADOW_COLORS = ["#dc2626", "#818cf8", "#38bdf8", "#fb923c", "#fbbf24"] as const;
 const TINT_COLORS = [
-  "rgba(255,120,120,0.16)",
+  "rgba(239,68,68,0.16)",
   "rgba(79,70,229,0.28)",
   "rgba(14,116,144,0.28)",
   "rgba(180,83,9,0.28)",
@@ -181,7 +181,7 @@ function getPotModeTone(mode: DynamicPotMode): PotIslandTone {
     case "bombDecision":
       return mode.announcement.kind === "canceled" ? "amber" : "sky";
     case "winner":
-      return "gold";
+      return "pot";
     case "compact":
     default:
       return "pot";

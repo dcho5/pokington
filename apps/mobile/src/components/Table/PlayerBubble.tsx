@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
-import { getAvatarColor, getInitials } from "./avatarColor";
+import { getAvatarColor, getInitials } from "@pokington/shared";
 import type { Card } from "@pokington/shared";
 
 export interface TablePlayer {

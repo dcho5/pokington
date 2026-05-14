@@ -108,6 +108,8 @@ test("web adapter authenticates and dispatches messages through the shared contr
     { type: "PEEK_CARD", cardIndex: 0, handNumber: 12 },
   ]);
   assert.deepEqual(statuses, ["connecting", "connected"]);
+
+  connection.disconnect();
 });
 
 test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppState away updates", async () => {
@@ -160,6 +162,8 @@ test("native adapter uses AsyncStorage client id, direct WebSocket URL, and AppS
     { type: "SET_AWAY", away: true },
     { type: "SET_AWAY", away: false },
   ]);
+
+  connection.disconnect();
 });
 
 test("connection reconnects with a fresh join token after a non-terminal close", async () => {
@@ -198,6 +202,8 @@ test("connection reconnects with a fresh join token after a non-terminal close",
   ]);
   assert.equal(connection.status, "connected");
   assert.ok(statuses.includes("disconnected"));
+
+  connection.disconnect();
 });
 
 test("connection treats terminal server errors as non-retriable", async () => {
@@ -229,6 +235,8 @@ test("connection treats terminal server errors as non-retriable", async () => {
   assert.equal(connection.status, "disconnected");
   assert.equal(connection.terminalError?.message, "TABLE_NOT_ACTIVE");
   assert.deepEqual(terminalErrors, ["TABLE_NOT_ACTIVE"]);
+
+  connection.disconnect();
 });
 
 test("native helpers normalize host and persist existing client ids", async () => {
