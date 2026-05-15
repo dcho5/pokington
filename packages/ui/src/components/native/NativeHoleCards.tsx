@@ -584,10 +584,10 @@ export function NativeHoleCards({
   const card0CanPeel = useSharedValue(!card0StartsRevealed);
   const card1CanPeel = useSharedValue(!card1StartsRevealed);
 
-  const [card0Revealed, setCard0Revealed] = React.useState(card0StartsRevealed);
-  const [card1Revealed, setCard1Revealed] = React.useState(card1StartsRevealed);
-  const hasPeeked0Ref = useRef(card0StartsRevealed);
-  const hasPeeked1Ref = useRef(card1StartsRevealed);
+  const [card0Revealed, setCard0Revealed] = React.useState(card0IsPeeked || card0IsRevealedToOthers);
+  const [card1Revealed, setCard1Revealed] = React.useState(card1IsPeeked || card1IsRevealedToOthers);
+  const hasPeeked0Ref = useRef(card0IsPeeked || card0IsRevealedToOthers);
+  const hasPeeked1Ref = useRef(card1IsPeeked || card1IsRevealedToOthers);
   const lastCardsKeyRef = useRef("");
 
   const card0CanArmReveal = canStartPublicReveal({

@@ -15,7 +15,7 @@ import ReAnimated, {
 
 export const POT_ISLAND_HEIGHT = 72;
 
-const POT_ISLAND_COMPACT_WIDTH = 120;
+const POT_ISLAND_COMPACT_WIDTH = 150;
 const POT_PILL_SHIFT = 13;
 const RUN_LABELS = ["once", "twice", "three times"] as const;
 const RUN_BUTTON_LABELS = ["Once", "Twice", "3x"] as const;
@@ -725,11 +725,11 @@ export function DynamicPotPanel({
     <>
       <ReAnimated.View style={[styles.potMain, mainStyle]}>
         <Text style={styles.potLabel}>POT</Text>
-        <Text style={styles.potValue}>{cents(animatedPot)}</Text>
+        <Text style={styles.potValue} numberOfLines={1}>{cents(animatedPot)}</Text>
       </ReAnimated.View>
       <ReAnimated.View style={[styles.potTotalWrap, totalStyle]}>
         <View style={styles.potDivider} />
-        <Text style={styles.potTotalLine}>
+        <Text style={styles.potTotalLine} numberOfLines={1}>
           <Text style={styles.potTotalLabel}>TOTAL </Text>
           {cents(animatedTotal)}
         </Text>
@@ -867,7 +867,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 10,
   },
   potDivider: {
     width: "100%",
