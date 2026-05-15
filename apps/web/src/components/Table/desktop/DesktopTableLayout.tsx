@@ -696,6 +696,16 @@ const DesktopTableLayout: React.FC<DesktopTableLayoutProps> = ({
           >
             <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] pointer-events-none" />
 
+            {/* Brand watermark */}
+            <div
+              className="absolute inset-x-0 pointer-events-none z-[2] flex justify-center -translate-y-1/2"
+              style={{ top: `${(centerStage.chipTopPct + centerStage.potTopPct) / 2}%` }}
+            >
+              <div className="opacity-[0.055] select-none">
+                <span className="text-white text-[105px] font-black tracking-tight">Pokington</span>
+              </div>
+            </div>
+
             {/* Floating chip */}
             <motion.div
               className="absolute z-10 pointer-events-none"

@@ -493,20 +493,28 @@ const MobileTableLayout: React.FC<MobileTableLayoutProps> = ({
         }}
       >
         <div className="flex-shrink-0 pt-5">
-          <OpponentStrip
-            players={players}
-            playerCount={seatedPlayerCount}
-            dealerIndex={dealerIndex}
-            smallBlindIndex={smallBlindIndex}
-            bigBlindIndex={bigBlindIndex}
-            seatSelectionLocked={seatSelectionLocked}
-            selectedDetailSeatIndex={selectedOpponentSeatIndex}
-            onPlayerTap={handleOpponentTap}
-            selectedSpotlightPlayerId={spotlightPlayerId}
-            spotlightHoleCardEmphasisByIndex={spotlightHoleCardEmphasis}
-            runItOddsPercentagesByPlayerId={runItOddsPercentagesByPlayerId}
-            onEmptySeatTap={handleOpenSeat}
-          />
+          <div className="relative">
+            <OpponentStrip
+              players={players}
+              playerCount={seatedPlayerCount}
+              dealerIndex={dealerIndex}
+              smallBlindIndex={smallBlindIndex}
+              bigBlindIndex={bigBlindIndex}
+              seatSelectionLocked={seatSelectionLocked}
+              selectedDetailSeatIndex={selectedOpponentSeatIndex}
+              onPlayerTap={handleOpponentTap}
+              selectedSpotlightPlayerId={spotlightPlayerId}
+              spotlightHoleCardEmphasisByIndex={spotlightHoleCardEmphasis}
+              runItOddsPercentagesByPlayerId={runItOddsPercentagesByPlayerId}
+              onEmptySeatTap={handleOpenSeat}
+            />
+            {/* Brand watermark on felt */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="opacity-[0.06] select-none">
+                <span className="text-white text-[42px] font-black tracking-tight">Pokington</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col items-center justify-start gap-0.5 pt-2">

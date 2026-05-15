@@ -1651,6 +1651,10 @@ export default function TableScreen() {
           selectedDetailSeatIndex={detailSeatIndex}
           runItOddsPercentagesByPlayerId={runItOddsPercentagesByPlayerId}
         />
+        {/* Brand watermark on felt */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.feltWatermark]}>
+          <Text style={styles.feltWatermarkText}>Pokington</Text>
+        </View>
       </View>
 
       {/* ── Middle: community cards centered between strip and pot ── */}
@@ -2137,6 +2141,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 2,
     gap: 14,
+  },
+  feltWatermark: {
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 10,
+    opacity: 0.07,
+  },
+  feltWatermarkText: {
+    color: "#ffffff",
+    fontSize: 45,
+    fontWeight: "900",
   },
   potToolDismissLayer: {
     ...StyleSheet.absoluteFillObject,
