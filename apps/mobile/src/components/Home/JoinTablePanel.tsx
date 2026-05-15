@@ -1,6 +1,7 @@
-import { NativeButton, NativeTextField, nativeLightTheme } from "@pokington/ui/native";
+import { NativeButton, NativeTextField, useNativeTheme, type NativeTheme } from "@pokington/ui/native";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { homePanelStyles } from "./homePanelStyles";
+import { createHomePanelStyles } from "./homePanelStyles";
 
 export interface JoinTablePanelProps {
   tableCode: string;
@@ -17,14 +18,17 @@ export default function JoinTablePanel({
   onChangeTableCode,
   onJoin,
 }: JoinTablePanelProps) {
+  const theme = useNativeTheme();
+  const panelStyles = useMemo(() => createHomePanelStyles(theme), [theme]);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
-    <View style={homePanelStyles.panel}>
-      <View style={homePanelStyles.header}>
+    <View style={panelStyles.panel}>
+      <View style={panelStyles.header}>
         <View>
-          <Text style={homePanelStyles.title}>Join</Text>
-          <Text style={homePanelStyles.subtitle}>Enter a 6-character code.</Text>
+          <Text style={panelStyles.title}>Join</Text>
+          <Text style={panelStyles.subtitle}>Enter a 6-character code.</Text>
         </View>
-        <Text style={homePanelStyles.badgeLabel}>Code</Text>
+        <Text style={panelStyles.badgeLabel}>Code</Text>
       </View>
       <View style={styles.row}>
         <NativeTextField
@@ -47,12 +51,12 @@ export default function JoinTablePanel({
           style={styles.joinButton}
         />
       </View>
-      {joinError ? <Text style={homePanelStyles.errorText}>{joinError}</Text> : null}
+      {joinError ? <Text style={panelStyles.errorText}>{joinError}</Text> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "stretch",
@@ -72,8 +76,8 @@ const styles = StyleSheet.create({
   joinButton: {
     minWidth: 78,
     borderRadius: 18,
-    backgroundColor: nativeLightTheme.colors.text,
+    backgroundColor: t.colors.buttonNeutral,
     shadowOpacity: 0,
     elevation: 0,
   },
-});
+}); }

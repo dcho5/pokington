@@ -19,14 +19,17 @@ export {
   PokerCard,
   StatusPill,
   nativeLightTheme,
+  nativeDarkTheme,
   type NativeButtonProps,
   type NativeIconButtonProps,
   type NativeListRowProps,
   type NativePanelProps,
   type NativeSegmentedControlProps,
   type NativeTextFieldProps,
+  type NativeTheme,
   type PlayerSummary,
 } from "./components/native/PokingtonNative";
+export { useNativeTheme } from "./hooks/useNativeTheme";
 export { nativeThemeStyles } from "./theme/stylesheet";
 export {
   resolveNativeHapticPattern,

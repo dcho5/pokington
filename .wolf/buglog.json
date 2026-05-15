@@ -742,6 +742,310 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-15T19:06:55.565Z"
+    },
+    {
+      "id": "bug-047",
+      "timestamp": "2026-05-15T19:19:49.565Z",
+      "error_message": "Type error",
+      "file": "packages/ui/src/components/native/PokingtonNative.tsx",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:19:49.565Z"
+    },
+    {
+      "id": "bug-048",
+      "timestamp": "2026-05-15T19:19:56.002Z",
+      "error_message": "CSS fix: backgroundColor",
+      "file": "packages/ui/src/components/native/PokingtonNative.tsx",
+      "root_cause": "backgroundColor: nativeLightTheme.colors.accent, → \"#ef4444\",",
+      "fix": "Changed backgroundColor: nativeLightTheme.colors.accent, → \"#ef4444\",",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 7,
+      "last_seen": "2026-05-15T19:21:08.614Z"
+    },
+    {
+      "id": "bug-049",
+      "timestamp": "2026-05-15T19:20:28.948Z",
+      "error_message": "Wrong reference: nativeLightTheme should be ef4444",
+      "file": "packages/ui/src/components/native/PokingtonNative.tsx",
+      "root_cause": "Used \"nativeLightTheme\" instead of \"ef4444\"",
+      "fix": "Changed nativeLightTheme → ef4444",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-15T19:20:42.616Z"
+    },
+    {
+      "id": "bug-050",
+      "timestamp": "2026-05-15T19:21:03.885Z",
+      "error_message": "Significant refactor of ",
+      "file": "packages/ui/src/components/native/PokingtonNative.tsx",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 11→12 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:21:03.885Z"
+    },
+    {
+      "id": "bug-051",
+      "timestamp": "2026-05-15T19:26:53.783Z",
+      "error_message": "CSS fix: backgroundColor",
+      "file": "apps/mobile/src/app/index.tsx",
+      "root_cause": "backgroundColor: nativeLightTheme.colors.background, → t.colors.background,",
+      "fix": "Changed backgroundColor: nativeLightTheme.colors.background, → t.colors.background,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-15T19:27:09.470Z"
+    },
+    {
+      "id": "bug-052",
+      "timestamp": "2026-05-15T19:42:38.349Z",
+      "error_message": "CSS fix: backgroundColor",
+      "file": "apps/mobile/src/components/Home/JoinTablePanel.tsx",
+      "root_cause": "backgroundColor: nativeLightTheme.colors.text, → t.colors.text,",
+      "fix": "Changed backgroundColor: nativeLightTheme.colors.text, → t.colors.text,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:42:38.349Z"
+    },
+    {
+      "id": "bug-053",
+      "timestamp": "2026-05-15T19:42:58.903Z",
+      "error_message": "Wrong reference: homePanelStyles should be panelStyles",
+      "file": "apps/mobile/src/components/Home/CreateTablePanel.tsx",
+      "root_cause": "Used \"homePanelStyles\" instead of \"panelStyles\"",
+      "fix": "Changed homePanelStyles → panelStyles",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:42:58.903Z"
+    },
+    {
+      "id": "bug-054",
+      "timestamp": "2026-05-15T19:43:08.817Z",
+      "error_message": "CSS fix: color",
+      "file": "apps/mobile/src/components/Home/CreateTablePanel.tsx",
+      "root_cause": "color: nativeLightTheme.colors.muted, → t.colors.muted,",
+      "fix": "Changed color: nativeLightTheme.colors.muted, → t.colors.muted,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:43:08.817Z"
+    },
+    {
+      "id": "bug-055",
+      "timestamp": "2026-05-15T19:43:50.113Z",
+      "error_message": "Wrong reference: nativeLightTheme should be t",
+      "file": "apps/mobile/src/components/Home/LiveRejoinStrip.tsx",
+      "root_cause": "Used \"nativeLightTheme\" instead of \"t\"",
+      "fix": "Changed nativeLightTheme → t",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:43:50.113Z"
+    },
+    {
+      "id": "bug-056",
+      "timestamp": "2026-05-15T19:44:31.461Z",
+      "error_message": "Wrong reference: nativeLightTheme should be t",
+      "file": "apps/mobile/src/components/Table/HandPanel.tsx",
+      "root_cause": "Used \"nativeLightTheme\" instead of \"t\"",
+      "fix": "Changed nativeLightTheme → t",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:44:31.461Z"
+    },
+    {
+      "id": "bug-057",
+      "timestamp": "2026-05-15T19:44:58.386Z",
+      "error_message": "Wrong reference: nativeLightTheme should be t",
+      "file": "apps/mobile/src/components/Table/OpponentDetailSheet.tsx",
+      "root_cause": "Used \"nativeLightTheme\" instead of \"t\"",
+      "fix": "Changed nativeLightTheme → t",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:44:58.386Z"
+    },
+    {
+      "id": "bug-058",
+      "timestamp": "2026-05-15T19:46:06.814Z",
+      "error_message": "Wrong reference: nativeLightTheme should be t",
+      "file": "apps/mobile/src/app/table/[code].tsx",
+      "root_cause": "Used \"nativeLightTheme\" instead of \"t\"",
+      "fix": "Changed nativeLightTheme → t",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T19:46:06.814Z"
+    },
+    {
+      "id": "bug-059",
+      "timestamp": "2026-05-15T20:37:05.744Z",
+      "error_message": "CSS fix: backgroundColor",
+      "file": "apps/mobile/src/components/Home/LiveRejoinStrip.tsx",
+      "root_cause": "backgroundColor: \"rgba(255,255,255,0.96)\", → t.colors.surface,",
+      "fix": "Changed backgroundColor: \"rgba(255,255,255,0.96)\", → t.colors.surface,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-15T20:37:14.100Z"
+    },
+    {
+      "id": "bug-060",
+      "timestamp": "2026-05-15T20:37:18.094Z",
+      "error_message": "CSS fix: backgroundColor",
+      "file": "apps/mobile/src/app/table/[code].tsx",
+      "root_cause": "backgroundColor: \"#f6f5f7\", → t.colors.background,",
+      "fix": "Changed backgroundColor: \"#f6f5f7\", → t.colors.background,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-05-15T20:37:35.698Z"
+    },
+    {
+      "id": "bug-061",
+      "timestamp": "2026-05-15T20:37:43.298Z",
+      "error_message": "CSS fix: borderColor, backgroundColor",
+      "file": "apps/mobile/src/components/Table/HandPanel.tsx",
+      "root_cause": "borderColor: \"rgba(148,163,184,0.18)\", → t.colors.border,; backgroundColor: \"rgba(255,255,255,0.96)\", → t.colors.surface,",
+      "fix": "Changed borderColor: \"rgba(148,163,184,0.18)\", → t.colors.border,; backgroundColor: \"rgba(255,255,255,0.96)\", → t.colors.surface,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 4,
+      "last_seen": "2026-05-15T20:37:56.987Z"
+    },
+    {
+      "id": "bug-062",
+      "timestamp": "2026-05-15T20:38:14.265Z",
+      "error_message": "CSS fix: color",
+      "file": "apps/mobile/src/components/Table/OpponentDetailSheet.tsx",
+      "root_cause": "color: \"#6b7280\", → t.colors.muted,",
+      "fix": "Changed color: \"#6b7280\", → t.colors.muted,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-15T20:38:21.942Z"
+    },
+    {
+      "id": "bug-063",
+      "timestamp": "2026-05-15T20:38:25.397Z",
+      "error_message": "Wrong reference: 6b7280 should be t",
+      "file": "apps/mobile/src/components/Table/OpponentDetailSheet.tsx",
+      "root_cause": "Used \"6b7280\" instead of \"t\"",
+      "fix": "Changed 6b7280 → t",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T20:38:25.397Z"
+    },
+    {
+      "id": "bug-064",
+      "timestamp": "2026-05-15T22:51:30.759Z",
+      "error_message": "Type error",
+      "file": "packages/ui/src/components/native/PokingtonNative.tsx",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T22:51:30.759Z"
+    },
+    {
+      "id": "bug-065",
+      "timestamp": "2026-05-15T22:51:38.174Z",
+      "error_message": "Wrong reference: text should be buttonNeutral",
+      "file": "apps/mobile/src/components/Home/JoinTablePanel.tsx",
+      "root_cause": "Used \"text\" instead of \"buttonNeutral\"",
+      "fix": "Changed text → buttonNeutral",
+      "tags": [
+        "auto-detected",
+        "wrong-reference",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T22:51:38.174Z"
     }
   ]
 }

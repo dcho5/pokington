@@ -1,7 +1,7 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useColorScheme } from "react-native";
 import { BlurView } from "expo-blur";
-import { NativeIconButton } from "@pokington/ui/native";
+import { NativeIconButton, useNativeTheme, type NativeTheme } from "@pokington/ui/native";
 import { formatCents } from "@pokington/shared";
 
 interface TableHeaderProps {
@@ -14,10 +14,18 @@ interface TableHeaderProps {
 
 export default function TableHeader({ tableName, blinds, sevenTwoBountyBB, onBack, onMenu }: TableHeaderProps) {
   const hasBounty = !!(sevenTwoBountyBB ?? 0);
+  const theme = useNativeTheme();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const styles = createStyles(theme);
 
   return (
     <View style={styles.header}>
-      <BlurView intensity={72} tint="systemUltraThinMaterialLight" style={StyleSheet.absoluteFill} />
+      <BlurView
+        intensity={72}
+        tint={isDark ? "systemUltraThinMaterialDark" : "systemUltraThinMaterialLight"}
+        style={StyleSheet.absoluteFill}
+      />
       <View pointerEvents="none" style={styles.headerBottomLine} />
 
       <NativeIconButton
@@ -56,65 +64,67 @@ export default function TableHeader({ tableName, blinds, sevenTwoBountyBB, onBac
   );
 }
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    overflow: "hidden",
-    backgroundColor: "transparent",
-  },
-  headerBottomLine: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 1,
-    backgroundColor: "rgba(0,0,0,0.06)",
-  },
-  backButtonOffset: {
-    marginLeft: -4,
-    flexShrink: 0,
-  },
-  backArrow: {
-    color: "#111827",
-    fontSize: 28,
-    lineHeight: 30,
-    fontWeight: "500",
-    marginTop: -2,
-  },
-  tableName: {
-    flexShrink: 1,
-    flexGrow: 1,
-    minWidth: 0,
-    color: "#111827",
-    fontSize: 18,
-    fontWeight: "900",
-    letterSpacing: -0.4,
-  },
-  pillStack: {
-    flexShrink: 0,
-    alignItems: "flex-end",
-    justifyContent: "center",
-    gap: 3,
-  },
-  blindsText: {
-    color: "#6b7280",
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: -0.2,
-  },
-  bountyText: {
-    color: "#ef4444",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  menuDots: {
-    color: "#111827",
-    fontSize: 22,
-    lineHeight: 24,
-    fontWeight: "900",
-  },
-});
+function createStyles(theme: NativeTheme) {
+  return StyleSheet.create({
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      overflow: "hidden",
+      backgroundColor: "transparent",
+    },
+    headerBottomLine: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 1,
+      backgroundColor: theme.colors.border,
+    },
+    backButtonOffset: {
+      marginLeft: -4,
+      flexShrink: 0,
+    },
+    backArrow: {
+      color: theme.colors.text,
+      fontSize: 28,
+      lineHeight: 30,
+      fontWeight: "500",
+      marginTop: -2,
+    },
+    tableName: {
+      flexShrink: 1,
+      flexGrow: 1,
+      minWidth: 0,
+      color: theme.colors.text,
+      fontSize: 18,
+      fontWeight: "900",
+      letterSpacing: -0.4,
+    },
+    pillStack: {
+      flexShrink: 0,
+      alignItems: "flex-end",
+      justifyContent: "center",
+      gap: 3,
+    },
+    blindsText: {
+      color: theme.colors.muted,
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: -0.2,
+    },
+    bountyText: {
+      color: "#ef4444",
+      fontSize: 10,
+      fontWeight: "800",
+    },
+    menuDots: {
+      color: theme.colors.text,
+      fontSize: 22,
+      lineHeight: 24,
+      fontWeight: "900",
+    },
+  });
+}

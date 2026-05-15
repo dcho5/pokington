@@ -9,7 +9,8 @@ import {
 import { BLIND_CENTS, BOUNTY_VALUES } from "@pokington/shared";
 import {
   NativePokerChip,
-  nativeLightTheme,
+  useNativeTheme,
+  type NativeTheme,
 } from "@pokington/ui/native";
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
@@ -23,6 +24,7 @@ import {
   ScrollView,
   StyleSheet,
   View,
+  useColorScheme,
   type LayoutRectangle,
   useWindowDimensions,
 } from "react-native";
@@ -71,6 +73,9 @@ export default function HomeScreen() {
   const [rejoinError, setRejoinError] = useState<string | null>(null);
   const [leavingCode, setLeavingCode] = useState<string | null>(null);
 
+  const theme = useNativeTheme();
+  const colorScheme = useColorScheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -519,17 +524,13 @@ export default function HomeScreen() {
         <View pointerEvents="none" style={[styles.topBlurLayer, { height: topBlurHeight }]}>
           <BlurView
             intensity={42}
-            tint="systemUltraThinMaterialLight"
+            tint={colorScheme === "dark" ? "systemUltraThinMaterialDark" : "systemUltraThinMaterialLight"}
             style={StyleSheet.absoluteFill}
           />
           <LinearGradient
-            colors={[
-              "rgba(246,245,247,0.9)",
-              "rgba(246,245,247,0.6)",
-              "rgba(246,245,247,0.28)",
-              "rgba(246,245,247,0.08)",
-              "rgba(246,245,247,0)",
-            ]}
+            colors={colorScheme === "dark"
+              ? ["rgba(7,17,29,0.9)", "rgba(7,17,29,0.6)", "rgba(7,17,29,0.28)", "rgba(7,17,29,0.08)", "rgba(7,17,29,0)"]
+              : ["rgba(246,245,247,0.9)", "rgba(246,245,247,0.6)", "rgba(246,245,247,0.28)", "rgba(246,245,247,0.08)", "rgba(246,245,247,0)"]}
             locations={[0, 0.35, 0.65, 0.88, 1]}
             style={StyleSheet.absoluteFill}
           />
@@ -539,11 +540,11 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   screen: {
     flex: 1,
     position: "relative",
-    backgroundColor: nativeLightTheme.colors.background,
+    backgroundColor: t.colors.background,
   },
   overlayLayer: {
     position: "absolute",
@@ -584,7 +585,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   brand: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 52,
     fontWeight: "900",
     lineHeight: 58,
@@ -609,6 +610,6 @@ const styles = StyleSheet.create({
     width: 42,
     height: 5,
     borderRadius: 999,
-    backgroundColor: nativeLightTheme.colors.borderStrong,
+    backgroundColor: t.colors.borderStrong,
   },
-});
+}); }

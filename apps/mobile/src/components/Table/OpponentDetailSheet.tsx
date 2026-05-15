@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import * as Haptics from "expo-haptics";
-import { NativeBottomSheet, NativeCard, nativeLightTheme } from "@pokington/ui/native";
+import { NativeBottomSheet, NativeCard, useNativeTheme, type NativeTheme } from "@pokington/ui/native";
 import { formatCents } from "@pokington/shared";
 import type { TablePlayer } from "./PlayerBubble";
 
@@ -28,6 +28,8 @@ export default function OpponentDetailSheet({
   runItOddsPercentage = null,
   onDismiss,
 }: OpponentDetailSheetProps) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const isVisible = player != null;
 
   useEffect(() => {
@@ -134,7 +136,7 @@ export default function OpponentDetailSheet({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -147,14 +149,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   seatLabel: {
-    color: "#6b7280",
+    color: t.colors.muted,
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",
     letterSpacing: 2,
   },
   playerName: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 20,
     fontWeight: "900",
     marginTop: 4,
@@ -191,14 +193,14 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.10)",
   },
   badgeDealerText: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
   },
   badgePosition: {
     backgroundColor: "rgba(255,255,255,0.08)",
     borderColor: "rgba(255,255,255,0.10)",
   },
   badgePositionText: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
   },
   badgeAway: {
     backgroundColor: "rgba(245,158,11,0.10)",
@@ -212,7 +214,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(209,213,219,0.35)",
   },
   badgeMutedText: {
-    color: "#6b7280",
+    color: t.colors.muted,
   },
 
   stackCardsRow: {
@@ -224,8 +226,8 @@ const styles = StyleSheet.create({
   box: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.07)",
-    backgroundColor: "rgba(255,255,255,0.75)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 12,
   },
@@ -234,7 +236,7 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   boxLabel: {
-    color: "#9ca3af",
+    color: t.colors.muted,
     fontSize: 10,
     fontWeight: "900",
     textTransform: "uppercase",
@@ -242,7 +244,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   stackValue: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 18,
     fontWeight: "900",
     fontVariant: ["tabular-nums"],
@@ -265,7 +267,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   stateValue: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 14,
     fontWeight: "700",
     marginTop: 2,
@@ -292,4 +294,4 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 1.2,
   },
-});
+}); }

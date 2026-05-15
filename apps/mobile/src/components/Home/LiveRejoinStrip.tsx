@@ -2,10 +2,11 @@ import { formatCents } from "@pokington/shared";
 import {
   NativeBottomSheet,
   NativeButton,
-  nativeLightTheme,
+  useNativeTheme,
+  type NativeTheme,
 } from "@pokington/ui/native";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   Pressable,
@@ -65,6 +66,8 @@ export default function LiveRejoinStrip({
   onCancelLeave,
   onConfirmLeave,
 }: LiveRejoinStripProps) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const pulse = useRef(new Animated.Value(0)).current;
   const splitAnims = useRef<Record<string, Animated.Value>>({});
 
@@ -301,7 +304,7 @@ export default function LiveRejoinStrip({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   overlay: {
     position: "absolute",
     left: 0,
@@ -335,8 +338,8 @@ const styles = StyleSheet.create({
     gap: 9,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     paddingVertical: 8,
     paddingLeft: 10,
     paddingRight: 12,
@@ -345,7 +348,7 @@ const styles = StyleSheet.create({
     opacity: 0.82,
   },
   pillRevealed: {
-    borderColor: nativeLightTheme.colors.borderStrong,
+    borderColor: t.colors.borderStrong,
   },
   liveSlot: {
     width: 15,
@@ -358,26 +361,26 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 999,
-    backgroundColor: nativeLightTheme.colors.accent,
+    backgroundColor: t.colors.accent,
   },
   liveDot: {
     width: 7,
     height: 7,
     borderRadius: 999,
-    backgroundColor: nativeLightTheme.colors.accent,
+    backgroundColor: t.colors.accent,
   },
   pillTextBlock: {
     flex: 1,
     minWidth: 0,
   },
   tableName: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 12,
     fontWeight: "900",
   },
   tableMeta: {
     marginTop: 2,
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 7,
     fontWeight: "800",
     textTransform: "uppercase",
@@ -399,14 +402,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
   },
   leaveCirclePressed: {
     opacity: 0.78,
   },
   leaveCircleGlyph: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 16,
     lineHeight: 18,
     fontWeight: "900",
@@ -417,14 +420,14 @@ const styles = StyleSheet.create({
     marginTop: -2,
     maxWidth: 330,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.96)",
+    backgroundColor: t.colors.surface,
     borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
+    borderColor: t.colors.border,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
   errorText: {
-    color: nativeLightTheme.colors.accent,
+    color: t.colors.accent,
     fontSize: 12,
     fontWeight: "900",
   },
@@ -438,13 +441,13 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   sheetTitle: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 24,
     fontWeight: "900",
   },
   sheetSubtitle: {
     marginTop: 4,
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 13,
     fontWeight: "900",
   },
@@ -454,7 +457,7 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
+    borderColor: t.colors.border,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
@@ -462,16 +465,16 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 999,
-    backgroundColor: nativeLightTheme.colors.accent,
+    backgroundColor: t.colors.accent,
   },
   sheetLiveText: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 11,
     fontWeight: "900",
     textTransform: "uppercase",
   },
   sheetText: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 15,
     lineHeight: 21,
     fontWeight: "700",
@@ -485,4 +488,4 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 18,
   },
-});
+}); }

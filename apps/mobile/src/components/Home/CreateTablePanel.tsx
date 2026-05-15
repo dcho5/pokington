@@ -3,10 +3,12 @@ import {
   NativeButton,
   NativeOptionSelector,
   NativeTextField,
-  nativeLightTheme,
+  useNativeTheme,
+  type NativeTheme,
 } from "@pokington/ui/native";
+import { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { homePanelStyles } from "./homePanelStyles";
+import { createHomePanelStyles } from "./homePanelStyles";
 
 export interface CreateTablePanelProps {
   tableName: string;
@@ -33,14 +35,17 @@ export default function CreateTablePanel({
   onChangeBountyIdx,
   onCreate,
 }: CreateTablePanelProps) {
+  const theme = useNativeTheme();
+  const panelStyles = useMemo(() => createHomePanelStyles(theme), [theme]);
+  const styles = useMemo(() => createStyles(theme), [theme]);
   return (
-    <View style={homePanelStyles.panel}>
-      <View style={homePanelStyles.header}>
+    <View style={panelStyles.panel}>
+      <View style={panelStyles.header}>
         <View>
-          <Text style={homePanelStyles.largeTitle}>Create</Text>
-          <Text style={homePanelStyles.subtitle}>Set stakes, create, share link.</Text>
+          <Text style={panelStyles.largeTitle}>Create</Text>
+          <Text style={panelStyles.subtitle}>Set stakes, create, share link.</Text>
         </View>
-        <Text style={homePanelStyles.badgeLabel}>New</Text>
+        <Text style={panelStyles.badgeLabel}>New</Text>
       </View>
 
       <NativeTextField
@@ -71,17 +76,17 @@ export default function CreateTablePanel({
         onPress={onCreate}
         style={styles.createButton}
       />
-      {createError ? <Text style={homePanelStyles.errorText}>{createError}</Text> : null}
+      {createError ? <Text style={panelStyles.errorText}>{createError}</Text> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   selectorBlock: {
     gap: 6,
   },
   selectorLabel: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 6,
@@ -91,4 +96,4 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 18,
   },
-});
+}); }

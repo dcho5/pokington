@@ -1,4 +1,5 @@
-import React from "react";
+import { useNativeTheme, type NativeTheme } from "@pokington/ui/native";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 interface FooterStatusBannerProps {
@@ -8,6 +9,9 @@ interface FooterStatusBannerProps {
 }
 
 export default function FooterStatusBanner({ message, tone = "neutral", isFloating = false }: FooterStatusBannerProps) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   if (!message) return null;
 
   return (
@@ -21,7 +25,7 @@ export default function FooterStatusBanner({ message, tone = "neutral", isFloati
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   wrap: {
     alignItems: "center",
     paddingVertical: 6,
@@ -37,8 +41,8 @@ const styles = StyleSheet.create({
     maxWidth: "80%",
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.22)",
-    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 5,
     shadowColor: "#0f172a",
@@ -48,15 +52,15 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   pillFloating: {
-    borderColor: "rgba(148,163,184,0.16)",
-    backgroundColor: "rgba(255,255,255,0.58)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surfaceSoft,
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
   activePill: {
     borderColor: "rgba(248,113,113,0.36)",
-    backgroundColor: "rgba(255,241,242,0.96)",
+    backgroundColor: t.colors.accentTint,
     shadowColor: "#ef4444",
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -65,11 +69,11 @@ const styles = StyleSheet.create({
   },
   activePillFloating: {
     borderColor: "rgba(248,113,113,0.28)",
-    backgroundColor: "rgba(255,241,242,0.62)",
+    backgroundColor: t.colors.accentTintStrong,
     shadowOpacity: 0.14,
   },
   text: {
-    color: "#6b7280",
+    color: t.colors.muted,
     fontSize: 12,
     fontWeight: "600",
     textAlign: "center",
@@ -80,4 +84,4 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     textTransform: "uppercase",
   },
-});
+}); }

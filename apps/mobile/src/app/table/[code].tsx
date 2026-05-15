@@ -14,7 +14,8 @@ import {
   NativePokerChip,
   NativeTextField,
   deriveNativeBoundaryControl,
-  nativeLightTheme,
+  useNativeTheme,
+  type NativeTheme,
   type PlayerSummary,
 } from "@pokington/ui/native";
 import { useRaiseAmount } from "@pokington/ui";
@@ -410,6 +411,8 @@ function NativeRaiseSlider({
   disabled?: boolean;
   onChange: (v: number) => void;
 }) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const [trackWidth, setTrackWidth] = useState(0);
   const widthRef = useRef(0);
   const onChangeRef = useRef(onChange);
@@ -478,6 +481,8 @@ function NativeRaiseSheetContent({
   isFirstBet: boolean;
   onConfirm: (amount: number) => void;
 }) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { amount, setAmount, increment, lowerBound, presets, clamp, allInTotal } = useRaiseAmount({
     minRaise,
     stack,
@@ -608,6 +613,8 @@ function NativeSeatManagerContent({
   onCancelPending: () => void;
   onDismiss: () => void;
 }) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const presets = getBuyInPresets(bigBlind);
   const pendingCopy = describePendingBoundaryUpdate(pendingUpdate);
   const parsedCents = parseDollarInputToCents(amount);
@@ -794,6 +801,8 @@ const screenPulseStyles = StyleSheet.create({
 // Soft glow ring rendered behind the primary (Check/Call) action button when
 // it's the user's turn. Pulses gently to draw the eye without being noisy.
 function ActionFocusRing({ active }: { active: boolean }) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const presence = useSharedValue(0);
   const pulse = useSharedValue(0);
 
@@ -850,6 +859,8 @@ function ActionRow({
   canAct: boolean;
   focusActive: boolean;
 }) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const popStyle = useActionRowPopStyle(canAct);
   return (
     <View style={styles.actionRowOuter}>
@@ -884,6 +895,8 @@ function useActionRowPopStyle(canAct: boolean) {
 }
 
 export default function TableScreen() {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const params = useLocalSearchParams<{ code?: string }>();
   const roomId = String(params.code ?? "").toUpperCase();
   const [tableState, setTableState] = useState<PublicTableState | null>(null);
@@ -2026,12 +2039,12 @@ export default function TableScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   screen: {
     flex: 1,
     position: "relative",
     overflow: "hidden",
-    backgroundColor: "#f6f5f7",
+    backgroundColor: t.colors.background,
   },
   reconnectPill: {
     position: "absolute",
@@ -2072,8 +2085,8 @@ const styles = StyleSheet.create({
     maxWidth: 360,
     borderRadius: 28,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.62)",
-    backgroundColor: "rgba(255,255,255,0.92)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     padding: 22,
     gap: 12,
     shadowColor: "#0f172a",
@@ -2083,19 +2096,19 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   blockingEyebrow: {
-    color: nativeLightTheme.colors.accent,
+    color: t.colors.accent,
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 3,
     textTransform: "uppercase",
   },
   blockingTitle: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 24,
     fontWeight: "900",
   },
   blockingMessage: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -2115,17 +2128,17 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: nativeLightTheme.colors.accent,
-    backgroundColor: "#fff7f7",
+    borderColor: t.colors.accent,
+    backgroundColor: t.colors.accentTint,
     padding: 12,
   },
   errorTitle: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 14,
     fontWeight: "900",
   },
   errorText: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 13,
   },
 
@@ -2203,15 +2216,15 @@ const styles = StyleSheet.create({
   actionDock: {
     minHeight: 84,
     borderTopWidth: 1,
-    borderTopColor: "rgba(148,163,184,0.14)",
-    backgroundColor: "rgba(255,255,255,0.88)",
+    borderTopColor: t.colors.border,
+    backgroundColor: t.colors.background,
     paddingHorizontal: 14,
     paddingTop: 12,
     paddingBottom: 14,
   },
   actionDockActive: {
     borderTopColor: "rgba(248,113,113,0.18)",
-    backgroundColor: "rgba(255,247,247,0.82)",
+    backgroundColor: t.colors.accentTint,
   },
   actionRowOuter: {
     width: "100%",
@@ -2255,13 +2268,13 @@ const styles = StyleSheet.create({
   },
 
   sheetTitle: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 22,
     fontWeight: "900",
     textAlign: "center",
   },
   sheetText: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
@@ -2295,26 +2308,26 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   rebuyEyebrow: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 11,
     fontWeight: "900",
     letterSpacing: 4,
   },
   rebuyTitle: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 26,
     fontWeight: "900",
     textAlign: "center",
   },
   rebuySubtitle: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
     paddingHorizontal: 12,
   },
   buyInSectionLabel: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 13,
     fontWeight: "900",
     letterSpacing: 1.5,
@@ -2326,7 +2339,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   buyInDollarSign: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 22,
     fontWeight: "700",
   },
@@ -2353,21 +2366,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.10)",
   },
   rebuyPresetLabel: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 18,
     fontWeight: "900",
   },
   rebuyPresetLabelSelected: {
-    color: nativeLightTheme.colors.accent,
+    color: t.colors.accent,
   },
   rebuyPresetSub: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 1.4,
   },
   rebuyPresetSubSelected: {
-    color: nativeLightTheme.colors.accent,
+    color: t.colors.accent,
   },
   seatManagerContent: {
     gap: 16,
@@ -2387,7 +2400,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   pendingUpdateText: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 14,
     fontWeight: "700",
   },
@@ -2415,12 +2428,12 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(239,68,68,0.12)",
   },
   seatChoiceText: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 15,
     fontWeight: "900",
   },
   seatChoiceTextSelected: {
-    color: nativeLightTheme.colors.accent,
+    color: t.colors.accent,
   },
   seatManagerSegment: {
     marginTop: 2,
@@ -2449,7 +2462,7 @@ const styles = StyleSheet.create({
   },
   ledgerHeaderText: {
     width: 60,
-    color: nativeLightTheme.colors.faint,
+    color: t.colors.faint,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.5,
@@ -2459,7 +2472,7 @@ const styles = StyleSheet.create({
   ledgerHeaderPlayerText: {
     flex: 1,
     minWidth: 0,
-    color: nativeLightTheme.colors.faint,
+    color: t.colors.faint,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.5,
@@ -2473,8 +2486,8 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: nativeLightTheme.colors.surfaceMuted,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surfaceMuted,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
@@ -2485,7 +2498,7 @@ const styles = StyleSheet.create({
   },
   ledgerName: {
     maxWidth: "100%",
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 14,
     fontWeight: "900",
   },
@@ -2503,7 +2516,7 @@ const styles = StyleSheet.create({
   },
   ledgerAmount: {
     width: 60,
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 12,
     fontWeight: "900",
     textAlign: "right",
@@ -2519,7 +2532,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   ledgerPayoutsTitle: {
-    color: nativeLightTheme.colors.faint,
+    color: t.colors.faint,
     fontSize: 10,
     fontWeight: "900",
     letterSpacing: 1.5,
@@ -2533,20 +2546,20 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: nativeLightTheme.colors.border,
-    backgroundColor: nativeLightTheme.colors.surfaceMuted,
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surfaceMuted,
     paddingHorizontal: 10,
     paddingVertical: 10,
   },
   ledgerPayoutFrom: {
     flex: 1,
     minWidth: 0,
-    color: nativeLightTheme.colors.accent,
+    color: t.colors.accent,
     fontSize: 13,
     fontWeight: "900",
   },
   ledgerPayoutArrow: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 11,
     fontWeight: "700",
   },
@@ -2559,14 +2572,14 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   ledgerPayoutAmount: {
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 13,
     fontWeight: "900",
     marginLeft: 4,
   },
 
   codeChip: {
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     fontSize: 12,
     fontWeight: "700",
     fontVariant: ["tabular-nums"],
@@ -2770,4 +2783,4 @@ const styles = StyleSheet.create({
     minHeight: 56,
     borderRadius: 20,
   },
-});
+}); }

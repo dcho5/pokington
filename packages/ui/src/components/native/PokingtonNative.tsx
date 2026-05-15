@@ -11,6 +11,7 @@ import {
   Text,
   TextInput,
   View,
+  useColorScheme,
   type PressableProps,
   type StyleProp,
   type TextInputProps,
@@ -144,6 +145,7 @@ export const nativeLightTheme = {
     cardInk: "#111322",
     cardRed: "#dc2626",
     yellow: "#f8e600",
+    buttonNeutral: "#111322",
   },
   shadow: {
     surface: {
@@ -169,6 +171,59 @@ export const nativeLightTheme = {
     },
   },
 } as const;
+
+export const nativeDarkTheme = {
+  colors: {
+    background: "#07111d",
+    header: "rgba(7,17,29,0.90)",
+    surface: "#102133",
+    surfaceSoft: "rgba(16,33,51,0.72)",
+    surfaceMuted: "rgba(255,255,255,0.08)",
+    border: "rgba(255,255,255,0.10)",
+    borderStrong: "rgba(255,255,255,0.18)",
+    text: "#f8fafc",
+    muted: "#94a3b8",
+    faint: "#64748b",
+    accent: "#ef4444",
+    accentStrong: "#b91c1c",
+    accentTint: "rgba(239,68,68,0.16)",
+    accentTintStrong: "rgba(239,68,68,0.22)",
+    danger: "#ef4444",
+    tableOuter: "#32384c",
+    tableInner: "#111623",
+    cardBack: "#0d1726",
+    cardBackInner: "#162236",
+    cardInk: "#111322",
+    cardRed: "#dc2626",
+    yellow: "#f8e600",
+    buttonNeutral: "rgba(255,255,255,0.14)",
+  },
+  shadow: {
+    surface: {
+      shadowColor: "#000000",
+      shadowOpacity: 0.30,
+      shadowRadius: 28,
+      shadowOffset: { width: 0, height: 14 },
+      elevation: 8,
+    },
+    soft: {
+      shadowColor: "#000000",
+      shadowOpacity: 0.20,
+      shadowRadius: 14,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 3,
+    },
+    red: {
+      shadowColor: "#ef4444",
+      shadowOpacity: 0.25,
+      shadowRadius: 24,
+      shadowOffset: { width: 0, height: 12 },
+      elevation: 6,
+    },
+  },
+} as const;
+
+export type NativeTheme = typeof nativeLightTheme | typeof nativeDarkTheme;
 
 export interface NativeButtonProps extends PressableProps {
   label: string;
@@ -258,13 +313,14 @@ export interface NativePanelProps {
 
 export function NativePanel({ children, style, variant = "plain" }: NativePanelProps) {
   const BlurView = variant === "translucent" ? getBlurView() : null;
+  const colorScheme = useColorScheme();
 
   if (BlurView) {
     return (
-      <View style={[styles.panel, styles.panelTranslucent, style]}>
+      <View style={[styles.panel, styles.panelTranslucent, colorScheme === "dark" && styles.panelTranslucentDark, style]}>
         <BlurView
           intensity={80}
-          tint="systemThinMaterialLight"
+          tint={colorScheme === "dark" ? "systemThinMaterialDark" : "systemThinMaterialLight"}
           style={StyleSheet.absoluteFill}
         />
         <View pointerEvents="none" style={styles.panelTopHighlight} />
@@ -605,7 +661,7 @@ export function NativeCard({
       style={[
         styles.card,
         compact && styles.compactCard,
-        !compact && nativeLightTheme.shadow.soft,
+        !compact && { shadowColor: "#0b1220", shadowOpacity: 0.06, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 3 },
         style,
       ]}
     >
@@ -719,6 +775,8 @@ export function NativeSegmentedControl({
   const [trackWidth, setTrackWidth] = useState(0);
   const segmentWidth = options.length > 0 ? trackWidth / options.length : 0;
   const offset = useSharedValue(value);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
 
   useEffect(() => {
     offset.value = withSpring(value, IOS_SPRING);
@@ -735,7 +793,7 @@ export function NativeSegmentedControl({
       onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
     >
       {trackWidth > 0 ? (
-        <ReAnimated.View pointerEvents="none" style={[styles.segmentedThumb, thumbStyle]} />
+        <ReAnimated.View pointerEvents="none" style={[styles.segmentedThumb, thumbStyle, { backgroundColor: isDark ? "rgba(255,255,255,0.14)" : "#FFFFFF" }]} />
       ) : null}
       {options.map((option, index) => {
         const active = index === value;
@@ -751,7 +809,7 @@ export function NativeSegmentedControl({
             style={styles.segmentedItem}
           >
             <Text
-              style={[styles.segmentedText, active && styles.segmentedTextActive]}
+              style={[styles.segmentedText, active && styles.segmentedTextActive, { color: isDark ? tokens.colors.text : tokens.ios.label }]}
               numberOfLines={1}
             >
               {option}
@@ -869,6 +927,8 @@ function NativeBottomSheetFrame({
   const keyboardOffset = useSharedValue(0);
   const sheetHeight = useRef(0);
   const BlurView = getBlurView();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
   const handleExited = useCallback(() => onExited(), [onExited]);
 
   useEffect(() => {
@@ -960,6 +1020,7 @@ function NativeBottomSheetFrame({
           }}
           style={[
             styles.bottomSheet,
+            isDark && { backgroundColor: "rgba(7,17,29,0.96)" },
             { paddingBottom: Math.max(SHEET_BOTTOM_GUTTER, insets.bottom + SHEET_BOTTOM_GUTTER) },
             sheetStyle,
           ]}
@@ -967,7 +1028,7 @@ function NativeBottomSheetFrame({
           {BlurView ? (
             <BlurView
               intensity={92}
-              tint="systemThickMaterialLight"
+              tint={isDark ? "systemThickMaterialDark" : "systemThickMaterialLight"}
               style={[StyleSheet.absoluteFill, { borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}
             />
           ) : null}
@@ -1100,10 +1161,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: tokens.radii.ios.lg,
-    backgroundColor: nativeLightTheme.colors.accent,
+    backgroundColor: "#ef4444",
     paddingHorizontal: tokens.spacing.md,
     overflow: "hidden",
-    ...nativeLightTheme.shadow.red,
+    shadowColor: "#ef4444",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
   },
   buttonGloss: {
     position: "absolute",
@@ -1141,7 +1206,7 @@ const styles = StyleSheet.create({
     padding: tokens.spacing.lg,
     gap: tokens.spacing.md,
     overflow: "hidden",
-    backgroundColor: nativeLightTheme.colors.surface,
+    backgroundColor: "#ffffff",
   },
   panelTopHighlight: {
     position: "absolute",
@@ -1153,6 +1218,9 @@ const styles = StyleSheet.create({
   },
   panelTranslucent: {
     backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  panelTranslucentDark: {
+    backgroundColor: "rgba(16,33,51,0.18)",
   },
   panelGrouped: {
     padding: 0,
@@ -1224,7 +1292,7 @@ const styles = StyleSheet.create({
     left: 5,
     right: 5,
     borderRadius: 7,
-    backgroundColor: nativeLightTheme.colors.cardBack,
+    backgroundColor: "#0d1726",
     overflow: "hidden",
   },
   cardBackStripe: {
@@ -1233,7 +1301,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: nativeLightTheme.colors.cardBackInner,
+    backgroundColor: "#162236",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1267,7 +1335,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cardRank: {
-    color: nativeLightTheme.colors.cardInk,
+    color: "#111322",
     fontSize: 15,
     lineHeight: 16,
     fontWeight: "900",
@@ -1275,14 +1343,14 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   cardCornerSuit: {
-    color: nativeLightTheme.colors.cardInk,
+    color: "#111322",
     fontSize: 12,
     lineHeight: 13,
     fontWeight: "900",
     includeFontPadding: false,
   },
   cardSuitLarge: {
-    color: nativeLightTheme.colors.cardInk,
+    color: "#111322",
     fontSize: 32,
     lineHeight: 34,
     fontWeight: "900",
@@ -1294,7 +1362,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   redCardText: {
-    color: nativeLightTheme.colors.cardRed,
+    color: "#dc2626",
   },
   playerRow: {
     minHeight: 60,
@@ -1319,7 +1387,7 @@ const styles = StyleSheet.create({
     width: 3,
     borderTopRightRadius: 2,
     borderBottomRightRadius: 2,
-    backgroundColor: nativeLightTheme.colors.accent,
+    backgroundColor: "#ef4444",
   },
   viewerRow: {
     backgroundColor: tokens.ios.tertiarySystemFill,
@@ -1349,7 +1417,7 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   playerBet: {
-    color: nativeLightTheme.colors.accent,
+    color: "#ef4444",
     fontSize: 12,
     fontWeight: "600",
     fontVariant: ["tabular-nums"],
@@ -1391,7 +1459,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#ffffff",
-    ...nativeLightTheme.shadow.red,
+    shadowColor: "#ef4444",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
   },
   chipBody: {
     alignItems: "center",
@@ -1449,7 +1521,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   optionButtonActive: {
-    backgroundColor: nativeLightTheme.colors.accentTint,
+    backgroundColor: "rgba(239,68,68,0.16)",
   },
   optionButtonPressed: {
     opacity: 0.78,
@@ -1464,7 +1536,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   optionTextActive: {
-    color: nativeLightTheme.colors.accentStrong,
+    color: "#b91c1c",
   },
   segmentedTrack: {
     position: "relative",
@@ -1524,7 +1596,11 @@ const styles = StyleSheet.create({
     paddingTop: 14,
     paddingBottom: tokens.spacing.lg,
     overflow: "hidden",
-    ...nativeLightTheme.shadow.surface,
+    shadowColor: "#0b1220",
+    shadowOpacity: 0.08,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 8,
   },
   sheetTopHighlight: {
     position: "absolute",

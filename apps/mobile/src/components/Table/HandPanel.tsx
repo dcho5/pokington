@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Haptics } from "../../lib/haptics";
-import { NativeHoleCards, nativeLightTheme } from "@pokington/ui/native";
+import { NativeHoleCards, useNativeTheme, type NativeTheme } from "@pokington/ui/native";
 import { evaluateBest } from "@pokington/engine";
 import { formatCents, getAvatarColor, getInitials } from "@pokington/shared";
 import type { Card } from "@pokington/shared";
@@ -53,6 +53,8 @@ export default function HandPanel({
   onRevealCard,
   onToggleAutoPeel,
 }: HandPanelProps) {
+  const theme = useNativeTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { width: screenWidth } = useWindowDimensions();
   // cardsArea width = screenWidth - 2*8 (panel padding) - 2*78 (side cards) - 2*8 (gaps)
   const cardAreaWidth = screenWidth - 188;
@@ -155,7 +157,7 @@ export default function HandPanel({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(t: NativeTheme) { return StyleSheet.create({
   panel: {
     height: 154,
     flexDirection: "row",
@@ -171,8 +173,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-evenly",
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
-    backgroundColor: "rgba(255,255,255,0.96)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     paddingHorizontal: 6,
     paddingVertical: 8,
     shadowColor: "#0f172a",
@@ -201,7 +203,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 7,
-    backgroundColor: nativeLightTheme.colors.accent,
+    backgroundColor: t.colors.accent,
     borderWidth: 1.5,
     borderColor: "#ffffff",
   },
@@ -213,7 +215,7 @@ const styles = StyleSheet.create({
   },
   viewerName: {
     maxWidth: "100%",
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 11,
     fontWeight: "900",
     textAlign: "center",
@@ -223,25 +225,25 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.3)",
+    borderColor: t.colors.border,
     backgroundColor: "rgba(15,23,42,0.05)",
     alignItems: "center",
     justifyContent: "center",
   },
   autoPeelToggleActive: {
-    backgroundColor: nativeLightTheme.colors.accentTintStrong,
-    borderColor: nativeLightTheme.colors.accent,
+    backgroundColor: t.colors.accentTintStrong,
+    borderColor: t.colors.accent,
   },
   autoPeelLine: {
     fontSize: 7,
     fontWeight: "900",
     letterSpacing: 1,
-    color: nativeLightTheme.colors.muted,
+    color: t.colors.muted,
     textAlign: "center",
     lineHeight: 9,
   },
   autoPeelLineActive: {
-    color: nativeLightTheme.colors.accent,
+    color: t.colors.accent,
   },
 
   cardsArea: {
@@ -255,7 +257,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   noCardsText: {
-    color: "#6b7280",
+    color: t.colors.muted,
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 2,
@@ -269,8 +271,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "rgba(148,163,184,0.18)",
-    backgroundColor: "rgba(255,255,255,0.96)",
+    borderColor: t.colors.border,
+    backgroundColor: t.colors.surface,
     paddingHorizontal: 6,
     paddingVertical: 10,
     gap: 2,
@@ -281,7 +283,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   statsLabel: {
-    color: "#9ca3af",
+    color: t.colors.muted,
     fontSize: 8,
     fontWeight: "900",
     letterSpacing: 2,
@@ -289,7 +291,7 @@ const styles = StyleSheet.create({
   },
   statsValue: {
     maxWidth: "100%",
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 12,
     fontWeight: "900",
     textAlign: "center",
@@ -316,9 +318,9 @@ const styles = StyleSheet.create({
   },
   stackValue: {
     maxWidth: "100%",
-    color: nativeLightTheme.colors.text,
+    color: t.colors.text,
     fontSize: 14,
     fontWeight: "900",
     textAlign: "center",
   },
-});
+}); }
