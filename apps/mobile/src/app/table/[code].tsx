@@ -12,7 +12,6 @@ import {
   NativeListRow,
   NativePanel,
   NativePokerChip,
-  NativeSegmentedControl,
   NativeTextField,
   deriveNativeBoundaryControl,
   nativeLightTheme,
@@ -572,7 +571,6 @@ function NativeRaiseSheetContent({
   );
 }
 
-type SeatManagerMode = "add" | "cash";
 
 function describePendingBoundaryUpdate(update: PendingBoundaryUpdate | null | undefined): string | null {
   if (!update) return null;
@@ -599,50 +597,30 @@ function formatPresetDollars(dollars: number): string {
 
 function NativeSeatManagerContent({
   viewer,
-  targetSeatIndex,
-  seatPlayers,
   bigBlind,
   pendingUpdate,
   applyImmediately,
   amount,
   onAmountChange,
-  mode,
-  onModeChange,
-  onTargetSeatChange,
   onSubmit,
   onCancelPending,
   onDismiss,
 }: {
   viewer: TablePlayer;
-  targetSeatIndex: number | null;
-  seatPlayers: Array<TablePlayer | null>;
   bigBlind: number;
   pendingUpdate: PendingBoundaryUpdate | null;
   applyImmediately: boolean;
   amount: string;
   onAmountChange: (value: string) => void;
-  mode: SeatManagerMode;
-  onModeChange: (mode: SeatManagerMode) => void;
-  onTargetSeatChange: (seatIndex: number) => void;
   onSubmit: (update: { leaveSeat?: boolean; moveToSeatIndex?: number | null; chipDelta?: number }) => void;
   onCancelPending: () => void;
   onDismiss: () => void;
 }) {
   const presets = getBuyInPresets(bigBlind);
-  const selectedSeat = targetSeatIndex != null ? targetSeatIndex : viewer.seatIndex;
-  const openSeats = seatPlayers
-    .map((player, seatIndex) => ({ player, seatIndex }))
-    .filter(({ player, seatIndex }) => !player || seatIndex === viewer.seatIndex)
-    .map(({ seatIndex }) => seatIndex);
   const pendingCopy = describePendingBoundaryUpdate(pendingUpdate);
   const parsedCents = parseDollarInputToCents(amount);
-  const signedChipDelta = mode === "cash" ? -parsedCents : parsedCents;
-  const hasSeatChange = selectedSeat !== viewer.seatIndex;
-  const hasChipChange = parsedCents > 0;
-  const cashOutTooLarge = mode === "cash" && hasChipChange && parsedCents >= viewer.stack;
-  const canSubmit = (hasSeatChange || hasChipChange) && !cashOutTooLarge;
-  const amountLabel = mode === "cash" ? "Cash Out Amount" : "Add Chips";
-  const submitLabel = applyImmediately ? "Apply Now" : "Queue Update";
+  const canSubmit = parsedCents > 0;
+  const submitLabel = applyImmediately ? "Apply Now" : "Add Chips";
 
   return (
     <View style={styles.seatManagerContent}>
@@ -664,32 +642,7 @@ function NativeSeatManagerContent({
         </View>
       ) : null}
 
-      <Text style={styles.buyInSectionLabel}>SEAT</Text>
-      <View style={styles.seatChoiceGrid}>
-        {openSeats.map((seatIndex) => {
-          const selected = seatIndex === selectedSeat;
-          return (
-            <Pressable
-              key={seatIndex}
-              onPress={() => onTargetSeatChange(seatIndex)}
-              style={[styles.seatChoice, selected && styles.seatChoiceSelected]}
-            >
-              <Text style={[styles.seatChoiceText, selected && styles.seatChoiceTextSelected]}>
-                {seatIndex + 1}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <NativeSegmentedControl
-        options={["Add", "Cash Out"]}
-        value={mode === "add" ? 0 : 1}
-        onChange={(idx) => onModeChange(idx === 0 ? "add" : "cash")}
-        style={styles.seatManagerSegment}
-      />
-
-      <Text style={styles.buyInSectionLabel}>{amountLabel}</Text>
+      <Text style={styles.buyInSectionLabel}>ADD CHIPS</Text>
       <View style={styles.buyInAmountRow}>
         <Text style={styles.buyInDollarSign}>$</Text>
         <NativeTextField
@@ -727,30 +680,14 @@ function NativeSeatManagerContent({
           );
         })}
       </View>
-      {cashOutTooLarge ? (
-        <Text style={styles.seatManagerWarning}>Leave seat to cash out the full stack.</Text>
-      ) : null}
 
-      <View style={styles.seatManagerActions}>
-        <NativeButton
-          label="Leave Seat"
-          tone="danger"
-          onPress={() => onSubmit({ leaveSeat: true, moveToSeatIndex: null, chipDelta: 0 })}
-          style={styles.seatManagerButton}
-        />
-        <NativeButton
-          label={submitLabel}
-          disabled={!canSubmit}
-          onPress={() => onSubmit({
-            leaveSeat: false,
-            moveToSeatIndex: hasSeatChange ? selectedSeat : null,
-            chipDelta: hasChipChange ? signedChipDelta : 0,
-          })}
-          style={styles.seatManagerButton}
-        />
-      </View>
+      <NativeButton
+        label={submitLabel}
+        disabled={!canSubmit}
+        onPress={() => onSubmit({ leaveSeat: false, moveToSeatIndex: null, chipDelta: parsedCents })}
+        style={styles.seatManagerButton}
+      />
 
-      <NativeButton label="Done" tone="secondary" onPress={onDismiss} />
     </View>
   );
 }
@@ -872,7 +809,6 @@ export default function TableScreen() {
   const [buyIn, setBuyIn] = useState((DEFAULT_BUY_IN_CENTS / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
   const buyInRef = useRef<any>(null);
   const [rebuyAmount, setRebuyAmount] = useState("");
-  const [seatManagerMode, setSeatManagerMode] = useState<SeatManagerMode>("add");
   const [autoPeelEnabled, setAutoPeelEnabled] = useState(false);
   const [detailSeatIndex, setDetailSeatIndex] = useState<number | null>(null);
   const [activeBombPotBoard, setActiveBombPotBoard] = useState(0);
@@ -1447,7 +1383,6 @@ export default function TableScreen() {
     if (player) return;
     if (viewer) {
       setSelectedSeatIndex(seatIndex);
-      setSeatManagerMode("add");
       setRebuyAmount("");
       setSheet("seatManager");
       return;
@@ -1789,10 +1724,9 @@ export default function TableScreen() {
           autoPeelEnabled={autoPeelEnabled}
           revealedToOthersIndices={myRevealedCardIndices}
           peekedCardIndices={myPeekedCardIndices}
-          onIdentityPress={() => {
+          onStatsPress={() => {
             if (!viewer) return;
             setSelectedSeatIndex(viewer.seatIndex);
-            setSeatManagerMode("add");
             setRebuyAmount("");
             setSheet("seatManager");
           }}
@@ -2033,16 +1967,11 @@ export default function TableScreen() {
         {sheet === "seatManager" && viewer ? (
           <NativeSeatManagerContent
             viewer={viewer}
-            targetSeatIndex={selectedSeatIndex}
-            seatPlayers={seatPlayers}
             bigBlind={tableState?.blinds.big ?? 25}
             pendingUpdate={viewerPendingBoundaryUpdate}
             applyImmediately={isWaiting || isShowdown}
             amount={rebuyAmount}
             onAmountChange={setRebuyAmount}
-            mode={seatManagerMode}
-            onModeChange={setSeatManagerMode}
-            onTargetSeatChange={setSelectedSeatIndex}
             onCancelPending={() => {
               sendViewerEvent((playerId) => ({ type: "CANCEL_BOUNDARY_UPDATE", playerId }), "light");
             }}

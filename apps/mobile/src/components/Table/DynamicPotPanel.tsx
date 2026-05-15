@@ -114,11 +114,11 @@ const BORDER_COLORS = [
 ] as const;
 const SHADOW_COLORS = ["#dc2626", "#818cf8", "#38bdf8", "#fb923c", "#fbbf24"] as const;
 const TINT_COLORS = [
-  "rgba(239,68,68,0.16)",
-  "rgba(79,70,229,0.28)",
-  "rgba(14,116,144,0.28)",
-  "rgba(180,83,9,0.28)",
-  "rgba(180,83,9,0.26)",
+  "rgba(239,68,68,0.10)",
+  "rgba(79,70,229,0.10)",
+  "rgba(14,116,144,0.10)",
+  "rgba(180,83,9,0.10)",
+  "rgba(180,83,9,0.10)",
 ] as const;
 const ACCENT_COLORS = ["#fecaca", "#c7d2fe", "#bae6fd", "#fde68a", "#fef3c7"] as const;
 
@@ -197,6 +197,8 @@ function getToneColors(tone: PotIslandTone) {
   };
 }
 
+type ToneColors = ReturnType<typeof getToneColors>;
+
 function getPlayerName(playerId: string, players: PlayerSummary[]): string {
   return players.find((p) => p.id === playerId)?.name ?? "Player";
 }
@@ -229,6 +231,55 @@ function signedCents(amount: number): string {
   if (amount < 0) return `-${cents(Math.abs(amount))}`;
   return cents(0);
 }
+
+// --- Unified pill button ---
+
+function PotPill({
+  label,
+  tone = "neutral",
+  selected,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  tone?: "neutral" | "good" | "bad" | "accent";
+  selected?: boolean;
+  disabled?: boolean;
+  onPress?: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.pill,
+        tone === "good" && styles.pillGood,
+        tone === "bad" && styles.pillBad,
+        tone === "accent" && styles.pillAccent,
+        selected && styles.pillSelected,
+        disabled && styles.pillDisabled,
+        pressed && !disabled && styles.pillPressed,
+      ]}
+    >
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.75}
+        style={[
+          styles.pillText,
+          tone === "good" && styles.pillTextGood,
+          tone === "bad" && styles.pillTextBad,
+          selected && styles.pillTextSelected,
+        ]}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+// --- Timer bar ---
 
 function SmoothTimerBar({
   startedAt,
@@ -274,6 +325,279 @@ function SmoothTimerBar({
     </View>
   );
 }
+
+// --- Shared mini pot chip ---
+
+function PotMiniChip({ animatedPot }: { animatedPot: number }) {
+  return (
+    <View style={styles.potMini}>
+      <Text style={styles.potMiniLabel}>POT</Text>
+      <Text style={styles.potMiniValue} numberOfLines={1}>{cents(animatedPot)}</Text>
+    </View>
+  );
+}
+
+// --- Per-mode expanded views ---
+
+function RunVoteView({
+  mode,
+  tone,
+  animatedPot,
+}: {
+  mode: Extract<DynamicPotMode, { kind: "runVote" }>;
+  tone: PotIslandTone;
+  animatedPot: number;
+}) {
+  const activePlayers = mode.players.filter((p) => !p.isFolded);
+  const votedCount = activePlayers.filter((p) => mode.votes[p.id] !== undefined).length;
+  const myVote = mode.viewerId ? mode.votes[mode.viewerId] : undefined;
+  return (
+    <View style={styles.expandedContent}>
+      <SmoothTimerBar startedAt={mode.votingStartedAt} durationMs={RUN_IT_VOTING_TIMEOUT_MS} tone={tone} />
+      <PotMiniChip animatedPot={animatedPot} />
+      <View style={styles.centerCopy}>
+        <Text style={styles.eyebrow} numberOfLines={1}>All-in Showdown</Text>
+        <Text style={styles.title} numberOfLines={1}>
+          {myVote ? `You voted ${RUN_LABELS[myVote - 1]}` : "Run it vote"}
+        </Text>
+        <Text style={styles.detail} numberOfLines={1}>{voteProgressLabel(activePlayers.length, votedCount)}</Text>
+      </View>
+      <View style={styles.runChoices}>
+        {([1, 2, 3] as const).map((count) => (
+          <PotPill
+            key={count}
+            label={RUN_BUTTON_LABELS[count - 1]}
+            selected={myVote === count}
+            disabled={!mode.canVote}
+            onPress={() => mode.onVote(count)}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function BombVoteView({
+  mode,
+  tone,
+  animatedPot,
+}: {
+  mode: Extract<DynamicPotMode, { kind: "bombVote" }>;
+  tone: PotIslandTone;
+  animatedPot: number;
+}) {
+  const totalPlayers = mode.players.length;
+  const votedCount = mode.players.filter((p) => mode.vote.votes[p.id] !== undefined).length;
+  const proposer = getPlayerName(mode.vote.proposedBy, mode.players);
+  const myVote = mode.viewerId ? mode.vote.votes[mode.viewerId] : undefined;
+  const hasVoted = myVote !== undefined || !mode.viewerId;
+  return (
+    <View style={styles.expandedContent}>
+      <SmoothTimerBar startedAt={mode.votingStartedAt} durationMs={BOMB_POT_VOTING_TIMEOUT_MS} tone={tone} />
+      <PotMiniChip animatedPot={animatedPot} />
+      <View style={styles.centerCopy}>
+        <Text style={styles.eyebrow} numberOfLines={1}>Special Hand</Text>
+        <Text style={styles.title} numberOfLines={1}>{mode.vote.anteBB}x BB bomb pot</Text>
+        <Text style={styles.detail} numberOfLines={1}>
+          {proposer} · {cents(mode.vote.anteBB * mode.bigBlind)} · {voteProgressLabel(totalPlayers, votedCount)}
+        </Text>
+      </View>
+      <View style={styles.bombChoices}>
+        {hasVoted ? (
+          <PotPill label={myVote === false ? "Out · waiting" : "In · waiting"} disabled />
+        ) : (
+          <>
+            <PotPill label="In" tone="good" onPress={mode.onApprove} />
+            <PotPill label="Out" tone="bad" onPress={mode.onReject} />
+          </>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function BombProposalView({
+  mode,
+  animatedPot,
+  proposalConfirmAnteBB,
+  setProposalConfirmAnteBB,
+}: {
+  mode: Extract<DynamicPotMode, { kind: "bombProposal" }>;
+  animatedPot: number;
+  proposalConfirmAnteBB: BombPotAnteBB | null;
+  setProposalConfirmAnteBB: (v: BombPotAnteBB | null) => void;
+}) {
+  const confirmAmount = proposalConfirmAnteBB != null ? proposalConfirmAnteBB * mode.bigBlind : null;
+  return (
+    <View style={styles.expandedContent}>
+      <PotMiniChip animatedPot={animatedPot} />
+      <View style={styles.centerCopy}>
+        <Text style={styles.title} numberOfLines={1}>Propose bomb pot</Text>
+        <Text style={styles.detail} numberOfLines={1}>
+          {proposalConfirmAnteBB == null ? "Choose ante" : `${proposalConfirmAnteBB}x BB · ${cents(confirmAmount)} ante`}
+        </Text>
+      </View>
+      <View style={styles.proposalActions}>
+        {proposalConfirmAnteBB == null ? (
+          <View style={styles.anteSelector}>
+            {BOMB_POT_ANTE_BB_VALUES.map((anteBB) => (
+              <PotPill
+                key={anteBB}
+                label={`${anteBB}x`}
+                disabled={mode.disabled}
+                onPress={() => {
+                  mode.onSelectAnte?.(anteBB);
+                  setProposalConfirmAnteBB(anteBB);
+                }}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.confirmActions}>
+            <PotPill
+              label="✓"
+              tone="good"
+              disabled={mode.disabled}
+              onPress={() => mode.onPropose(proposalConfirmAnteBB)}
+            />
+            <PotPill
+              label="×"
+              tone="bad"
+              disabled={mode.disabled}
+              onPress={() => {
+                mode.onCancel?.();
+                setProposalConfirmAnteBB(null);
+              }}
+            />
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+function LedgerSummaryView({
+  mode,
+  toneColors,
+  animatedPot,
+}: {
+  mode: Extract<DynamicPotMode, { kind: "ledgerSummary" }>;
+  toneColors: ToneColors;
+  animatedPot: number;
+}) {
+  const netTone =
+    mode.summary.net > 0
+      ? styles.ledgerNetPositive
+      : mode.summary.net < 0
+        ? styles.ledgerNetNegative
+        : styles.ledgerNetNeutral;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={mode.onOpenLedger}
+      style={({ pressed }) => [styles.expandedContent, styles.ledgerSummaryContent, pressed && styles.ledgerSummaryPressed]}
+    >
+      <PotMiniChip animatedPot={animatedPot} />
+      <View style={styles.ledgerDivider} />
+      <View style={styles.centerCopy}>
+        <Text style={styles.title} numberOfLines={1}>Session ledger</Text>
+        <Text style={styles.detail} numberOfLines={1}>
+          In {cents(mode.summary.totalBuyIn)} · Out {cents(mode.summary.totalCashOut)}
+        </Text>
+      </View>
+      <View style={[styles.badge, styles.ledgerNetBadge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
+        <Text style={[styles.badgeText, styles.ledgerNetBadgeText, netTone]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
+          {signedCents(mode.summary.net)}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function RunAnnouncementView({
+  mode,
+  toneColors,
+  animatedPot,
+}: {
+  mode: Extract<DynamicPotMode, { kind: "runAnnouncement" }>;
+  toneColors: ToneColors;
+  animatedPot: number;
+}) {
+  return (
+    <View style={styles.expandedContent}>
+      <PotMiniChip animatedPot={animatedPot} />
+      <View style={styles.centerCopyWide}>
+        <Text style={styles.eyebrow} numberOfLines={1}>All-in Showdown</Text>
+        <Text style={styles.title} numberOfLines={1}>Running it {RUN_LABELS[mode.runCount - 1]}</Text>
+        <Text style={styles.detail} numberOfLines={1}>
+          {mode.runCount === 1 ? "A single board settles it." : `${mode.runCount} boards decide this hand.`}
+        </Text>
+      </View>
+      <View style={[styles.badge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
+        <Text style={[styles.badgeText, { color: toneColors.accent }]} numberOfLines={1}>
+          {mode.runCount} {mode.runCount === 1 ? "board" : "boards"}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function BombDecisionView({
+  mode,
+  toneColors,
+  animatedPot,
+}: {
+  mode: Extract<DynamicPotMode, { kind: "bombDecision" }>;
+  toneColors: ToneColors;
+  animatedPot: number;
+}) {
+  return (
+    <View style={styles.expandedContent}>
+      <PotMiniChip animatedPot={animatedPot} />
+      <View style={styles.centerCopyWide}>
+        <Text style={styles.eyebrow} numberOfLines={1}>
+          {mode.announcement.kind === "canceled" ? "Table Update" : "Special Hand"}
+        </Text>
+        <Text style={styles.title} numberOfLines={1}>{mode.announcement.title}</Text>
+        <Text style={styles.detail} numberOfLines={1}>{mode.announcement.detail}</Text>
+      </View>
+      <View style={[styles.badge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
+        <Text style={[styles.badgeText, { color: toneColors.accent }]} numberOfLines={1}>
+          {mode.announcement.kind === "canceled" ? "Canceled" : "Bomb Pot"}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function WinnerView({
+  mode,
+  toneColors,
+  animatedPot,
+}: {
+  mode: Extract<DynamicPotMode, { kind: "winner" }>;
+  toneColors: ToneColors;
+  animatedPot: number;
+}) {
+  const winner = formatWinnerIsland(mode.winners, mode.players, mode.viewerId);
+  return (
+    <View style={styles.expandedContent}>
+      <PotMiniChip animatedPot={animatedPot} />
+      <View style={styles.centerCopyWide}>
+        <Text style={styles.eyebrow} numberOfLines={1}>
+          {mode.winners.length === 1 ? "Pot Awarded" : "Split Pot"}
+        </Text>
+        <Text style={styles.title} numberOfLines={1}>{winner.title}</Text>
+        <Text style={styles.detail} numberOfLines={1}>{winner.detail}</Text>
+      </View>
+      <View style={[styles.badge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
+        <Text style={[styles.badgeText, { color: toneColors.accent }]} numberOfLines={1}>{winner.badge}</Text>
+      </View>
+    </View>
+  );
+}
+
+// --- Main component ---
 
 export function DynamicPotPanel({
   pot,
@@ -413,284 +737,32 @@ export function DynamicPotPanel({
     </>
   );
 
-  const renderPotMini = () => (
-    <View style={styles.potMini}>
-      <Text style={styles.potMiniLabel}>POT</Text>
-      <Text style={styles.potMiniValue} numberOfLines={1}>{cents(animatedPot)}</Text>
-    </View>
-  );
-
-  const renderPillButton = ({
-    label,
-    selected,
-    disabled,
-    onPress,
-    tone: buttonTone = "neutral",
-  }: {
-    label: string;
-    selected?: boolean;
-    disabled?: boolean;
-    onPress?: () => void;
-    tone?: "neutral" | "good" | "bad";
-  }) => (
-    <Pressable
-      accessibilityRole="button"
-      disabled={disabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.choice,
-        selected && styles.choiceSelected,
-        buttonTone === "good" && styles.choiceGood,
-        buttonTone === "bad" && styles.choiceBad,
-        disabled && styles.choiceDisabled,
-        pressed && !disabled && styles.choicePressed,
-      ]}
-    >
-      <Text
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.75}
-        style={[
-          styles.choiceText,
-          selected && styles.choiceTextSelected,
-          buttonTone === "good" && styles.choiceTextGood,
-          buttonTone === "bad" && styles.choiceTextBad,
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-
   const renderExpanded = () => {
-    if (mode.kind === "runVote") {
-      const activePlayers = mode.players.filter((p) => !p.isFolded);
-      const votedCount = activePlayers.filter((p) => mode.votes[p.id] !== undefined).length;
-      const myVote = mode.viewerId ? mode.votes[mode.viewerId] : undefined;
-      return (
-        <View style={styles.expandedContent}>
-          <SmoothTimerBar startedAt={mode.votingStartedAt} durationMs={RUN_IT_VOTING_TIMEOUT_MS} tone={tone} />
-          {renderPotMini()}
-          <View style={styles.centerCopy}>
-            <Text style={[styles.eyebrow, { color: toneColors.accent }]} numberOfLines={1}>All-in Showdown</Text>
-            <Text style={styles.title} numberOfLines={1}>
-              {myVote ? `You voted ${RUN_LABELS[myVote - 1]}` : "Run it vote"}
-            </Text>
-            <Text style={styles.detail} numberOfLines={1}>{voteProgressLabel(activePlayers.length, votedCount)}</Text>
-          </View>
-          <View style={styles.runChoices}>
-            {([1, 2, 3] as const).map((count) => (
-              <React.Fragment key={count}>
-                {renderPillButton({
-                  label: RUN_BUTTON_LABELS[count - 1],
-                  selected: myVote === count,
-                  disabled: !mode.canVote,
-                  onPress: () => mode.onVote(count),
-                })}
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      );
+    switch (mode.kind) {
+      case "runVote":
+        return <RunVoteView mode={mode} tone={tone} animatedPot={animatedPot} />;
+      case "bombVote":
+        return <BombVoteView mode={mode} tone={tone} animatedPot={animatedPot} />;
+      case "bombProposal":
+        return (
+          <BombProposalView
+            mode={mode}
+            animatedPot={animatedPot}
+            proposalConfirmAnteBB={proposalConfirmAnteBB}
+            setProposalConfirmAnteBB={setProposalConfirmAnteBB}
+          />
+        );
+      case "ledgerSummary":
+        return <LedgerSummaryView mode={mode} toneColors={toneColors} animatedPot={animatedPot} />;
+      case "runAnnouncement":
+        return <RunAnnouncementView mode={mode} toneColors={toneColors} animatedPot={animatedPot} />;
+      case "bombDecision":
+        return <BombDecisionView mode={mode} toneColors={toneColors} animatedPot={animatedPot} />;
+      case "winner":
+        return <WinnerView mode={mode} toneColors={toneColors} animatedPot={animatedPot} />;
+      default:
+        return renderCompact();
     }
-
-    if (mode.kind === "bombVote") {
-      const totalPlayers = mode.players.length;
-      const votedCount = mode.players.filter((p) => mode.vote.votes[p.id] !== undefined).length;
-      const proposer = getPlayerName(mode.vote.proposedBy, mode.players);
-      const myVote = mode.viewerId ? mode.vote.votes[mode.viewerId] : undefined;
-      const hasVoted = myVote !== undefined || !mode.viewerId;
-      return (
-        <View style={styles.expandedContent}>
-          <SmoothTimerBar startedAt={mode.votingStartedAt} durationMs={BOMB_POT_VOTING_TIMEOUT_MS} tone={tone} />
-          {renderPotMini()}
-          <View style={styles.centerCopy}>
-            <Text style={[styles.eyebrow, { color: toneColors.accent }]} numberOfLines={1}>Special Hand</Text>
-            <Text style={styles.title} numberOfLines={1}>{mode.vote.anteBB}x BB bomb pot</Text>
-            <Text style={styles.detail} numberOfLines={1}>
-              {proposer} · {cents(mode.vote.anteBB * mode.bigBlind)} · {voteProgressLabel(totalPlayers, votedCount)}
-            </Text>
-          </View>
-          <View style={styles.bombChoices}>
-            {hasVoted ? (
-              <View style={styles.locked}>
-                <Text style={styles.lockedText} numberOfLines={1}>
-                  {myVote === false ? "Out · waiting" : "In · waiting"}
-                </Text>
-              </View>
-            ) : (
-              <>
-                {renderPillButton({ label: "In", onPress: mode.onApprove, tone: "good" })}
-                {renderPillButton({ label: "Out", onPress: mode.onReject, tone: "bad" })}
-              </>
-            )}
-          </View>
-        </View>
-      );
-    }
-
-    if (mode.kind === "bombProposal") {
-      const confirmAmount = proposalConfirmAnteBB != null ? proposalConfirmAnteBB * mode.bigBlind : null;
-      return (
-        <View style={styles.expandedContent}>
-          {renderPotMini()}
-          <View style={styles.centerCopy}>
-            <Text style={styles.title} numberOfLines={1}>Propose bomb pot</Text>
-            <Text style={styles.detail} numberOfLines={1}>
-              {proposalConfirmAnteBB == null ? "Choose ante" : `${proposalConfirmAnteBB}x BB · ${cents(confirmAmount)} ante`}
-            </Text>
-          </View>
-          <View style={styles.proposalActions}>
-            {proposalConfirmAnteBB == null ? (
-              <View style={styles.anteSelector}>
-                {BOMB_POT_ANTE_BB_VALUES.map((anteBB) => (
-                  <Pressable
-                    key={anteBB}
-                    accessibilityRole="button"
-                    disabled={mode.disabled}
-                    onPress={() => {
-                      mode.onSelectAnte?.(anteBB);
-                      setProposalConfirmAnteBB(anteBB);
-                    }}
-                    style={({ pressed }) => [
-                      styles.anteChoice,
-                      mode.disabled && styles.choiceDisabled,
-                      pressed && !mode.disabled && styles.choicePressed,
-                    ]}
-                  >
-                    <Text style={styles.anteChoiceText}>{anteBB}x</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : (
-              <View style={styles.confirmActions}>
-                <Pressable
-                  accessibilityLabel={`Confirm ${proposalConfirmAnteBB}x bomb pot`}
-                  accessibilityRole="button"
-                  disabled={mode.disabled}
-                  onPress={() => mode.onPropose(proposalConfirmAnteBB)}
-                  style={({ pressed }) => [
-                    styles.confirmButton,
-                    styles.confirmButtonYes,
-                    mode.disabled && styles.choiceDisabled,
-                    pressed && !mode.disabled && styles.choicePressed,
-                  ]}
-                >
-                  <Text style={styles.confirmButtonText}>✓</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityLabel="Cancel bomb pot proposal"
-                  accessibilityRole="button"
-                  disabled={mode.disabled}
-                  onPress={() => {
-                    mode.onCancel?.();
-                    setProposalConfirmAnteBB(null);
-                  }}
-                  style={({ pressed }) => [
-                    styles.confirmButton,
-                    styles.confirmButtonNo,
-                    mode.disabled && styles.choiceDisabled,
-                    pressed && !mode.disabled && styles.choicePressed,
-                  ]}
-                >
-                  <Text style={styles.confirmButtonText}>×</Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
-      );
-    }
-
-    if (mode.kind === "ledgerSummary") {
-      const netTone =
-        mode.summary.net > 0
-          ? styles.ledgerNetPositive
-          : mode.summary.net < 0
-            ? styles.ledgerNetNegative
-            : styles.ledgerNetNeutral;
-      return (
-        <Pressable
-          accessibilityRole="button"
-          onPress={mode.onOpenLedger}
-          style={({ pressed }) => [styles.expandedContent, styles.ledgerSummaryContent, pressed && styles.ledgerSummaryPressed]}
-        >
-          {renderPotMini()}
-          <View style={styles.centerCopy}>
-            <Text style={styles.title} numberOfLines={1}>Session ledger</Text>
-            <Text style={styles.detail} numberOfLines={1}>
-              In {cents(mode.summary.totalBuyIn)} · Out {cents(mode.summary.totalCashOut)}
-            </Text>
-          </View>
-          <View style={[styles.badge, styles.ledgerNetBadge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
-            <Text style={[styles.badgeText, styles.ledgerNetBadgeText, netTone]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-              {signedCents(mode.summary.net)}
-            </Text>
-          </View>
-        </Pressable>
-      );
-    }
-
-    if (mode.kind === "runAnnouncement") {
-      return (
-        <View style={styles.expandedContent}>
-          {renderPotMini()}
-          <View style={styles.centerCopyWide}>
-            <Text style={[styles.eyebrow, { color: toneColors.accent }]} numberOfLines={1}>All-in Showdown</Text>
-            <Text style={styles.title} numberOfLines={1}>Running it {RUN_LABELS[mode.runCount - 1]}</Text>
-            <Text style={styles.detail} numberOfLines={1}>
-              {mode.runCount === 1 ? "A single board settles it." : `${mode.runCount} boards decide this hand.`}
-            </Text>
-          </View>
-          <View style={[styles.badge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
-            <Text style={[styles.badgeText, { color: toneColors.accent }]} numberOfLines={1}>
-              {mode.runCount} {mode.runCount === 1 ? "board" : "boards"}
-            </Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (mode.kind === "bombDecision") {
-      return (
-        <View style={styles.expandedContent}>
-          {renderPotMini()}
-          <View style={styles.centerCopyWide}>
-            <Text style={[styles.eyebrow, { color: toneColors.accent }]} numberOfLines={1}>
-              {mode.announcement.kind === "canceled" ? "Table Update" : "Special Hand"}
-            </Text>
-            <Text style={styles.title} numberOfLines={1}>{mode.announcement.title}</Text>
-            <Text style={styles.detail} numberOfLines={1}>{mode.announcement.detail}</Text>
-          </View>
-          <View style={[styles.badge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
-            <Text style={[styles.badgeText, { color: toneColors.accent }]} numberOfLines={1}>
-              {mode.announcement.kind === "canceled" ? "Canceled" : "Bomb Pot"}
-            </Text>
-          </View>
-        </View>
-      );
-    }
-
-    if (mode.kind === "winner") {
-      const winner = formatWinnerIsland(mode.winners, mode.players, mode.viewerId);
-      return (
-        <View style={styles.expandedContent}>
-          {renderPotMini()}
-          <View style={styles.centerCopyWide}>
-            <Text style={[styles.eyebrow, { color: toneColors.accent }]} numberOfLines={1}>
-              {mode.winners.length === 1 ? "Pot Awarded" : "Split Pot"}
-            </Text>
-            <Text style={styles.title} numberOfLines={1}>{winner.title}</Text>
-            <Text style={styles.detail} numberOfLines={1}>{winner.detail}</Text>
-          </View>
-          <View style={[styles.badge, { borderColor: toneColors.border, backgroundColor: toneColors.soft }]}>
-            <Text style={[styles.badgeText, { color: toneColors.accent }]} numberOfLines={1}>{winner.badge}</Text>
-          </View>
-        </View>
-      );
-    }
-
-    return renderCompact();
   };
 
   return (
@@ -822,30 +894,30 @@ const styles = StyleSheet.create({
     height: POT_ISLAND_HEIGHT,
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
-    paddingVertical: 8,
+    gap: 10,
+    paddingVertical: 7,
   },
   potMini: {
-    width: 54,
-    height: 44,
-    borderRadius: 16,
+    width: 52,
+    height: 40,
+    borderRadius: 10,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.055)",
+    backgroundColor: "rgba(255,255,255,0.04)",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 5,
   },
   potMiniLabel: {
-    color: "rgba(255,255,255,0.44)",
-    fontSize: 8,
-    fontWeight: "900",
-    letterSpacing: 1.4,
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.2,
   },
   potMiniValue: {
     color: "#ffffff",
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
     fontVariant: ["tabular-nums"],
   },
   centerCopy: {
@@ -859,23 +931,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   eyebrow: {
-    fontSize: 8,
-    fontWeight: "900",
-    letterSpacing: 1.5,
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.2,
     textTransform: "uppercase",
   },
   title: {
     color: "#ffffff",
-    fontSize: 14,
-    lineHeight: 17,
-    fontWeight: "900",
-    letterSpacing: 0,
+    fontSize: 13,
+    lineHeight: 16,
+    fontWeight: "600",
+    letterSpacing: -0.1,
   },
   detail: {
-    color: "rgba(255,255,255,0.64)",
-    fontSize: 10,
-    lineHeight: 13,
-    fontWeight: "700",
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "500",
   },
   runChoices: {
     width: 104,
@@ -894,73 +967,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   anteSelector: {
-    height: 34,
+    height: 32,
     flexDirection: "row",
     gap: 4,
   },
-  anteChoice: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.13)",
-    backgroundColor: "rgba(255,255,255,0.07)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  anteChoiceSelected: {
-    borderColor: "rgba(186,230,253,0.38)",
-    backgroundColor: "rgba(14,165,233,0.2)",
-  },
-  anteChoiceText: {
-    color: "rgba(255,255,255,0.74)",
-    fontSize: 9,
-    fontWeight: "900",
-  },
-  anteChoiceTextSelected: {
-    color: "#e0f2fe",
-  },
   confirmActions: {
-    height: 34,
+    height: 32,
     flexDirection: "row",
     gap: 6,
-  },
-  confirmButton: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 999,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  confirmButtonYes: {
-    borderColor: "rgba(34,197,94,0.32)",
-    backgroundColor: "rgba(34,197,94,0.18)",
-  },
-  confirmButtonNo: {
-    borderColor: "rgba(248,113,113,0.32)",
-    backgroundColor: "rgba(248,113,113,0.15)",
-  },
-  confirmButtonText: {
-    color: "#ffffff",
-    fontSize: 16,
-    lineHeight: 18,
-    fontWeight: "900",
-  },
-  proposeButton: {
-    height: 26,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(186,230,253,0.36)",
-    backgroundColor: "rgba(14,165,233,0.23)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 10,
-  },
-  proposeButtonText: {
-    color: "#e0f2fe",
-    fontSize: 10,
-    fontWeight: "900",
   },
   ledgerSummaryContent: {
     borderRadius: 28,
@@ -968,70 +982,14 @@ const styles = StyleSheet.create({
   ledgerSummaryPressed: {
     opacity: 0.82,
   },
-  choice: {
-    flex: 1,
-    height: 34,
-    minWidth: 0,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.13)",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 4,
-  },
-  choiceSelected: {
-    borderColor: "rgba(199,210,254,0.35)",
-    backgroundColor: "rgba(129,140,248,0.24)",
-  },
-  choiceGood: {
-    borderColor: "rgba(34,197,94,0.28)",
-    backgroundColor: "rgba(34,197,94,0.16)",
-  },
-  choiceBad: {
-    borderColor: "rgba(248,113,113,0.28)",
-    backgroundColor: "rgba(248,113,113,0.13)",
-  },
-  choicePressed: {
-    opacity: 0.78,
-    transform: [{ scale: 0.97 }],
-  },
-  choiceDisabled: {
-    opacity: 0.48,
-  },
-  choiceText: {
-    color: "rgba(255,255,255,0.84)",
-    fontSize: 10,
-    fontWeight: "900",
-  },
-  choiceTextSelected: {
-    color: "#ffffff",
-  },
-  choiceTextGood: {
-    color: "#dcfce7",
-  },
-  choiceTextBad: {
-    color: "#fee2e2",
-  },
-  locked: {
-    flex: 1,
-    height: 34,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.07)",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8,
-  },
-  lockedText: {
-    color: "rgba(255,255,255,0.74)",
-    fontSize: 10,
-    fontWeight: "900",
+  ledgerDivider: {
+    width: StyleSheet.hairlineWidth,
+    height: 28,
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
   badge: {
     maxWidth: 86,
-    borderRadius: 999,
+    borderRadius: 10,
     borderWidth: 1,
     paddingHorizontal: 9,
     height: 30,
@@ -1039,19 +997,17 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   badgeText: {
-    fontSize: 9,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: "600",
+    fontVariant: ["tabular-nums"],
+    letterSpacing: 0.2,
   },
   ledgerNetBadge: {
     maxWidth: 92,
     minWidth: 72,
   },
   ledgerNetBadgeText: {
-    fontSize: 10,
-    textTransform: "none",
-    letterSpacing: 0,
+    fontSize: 11,
   },
   ledgerNetPositive: {
     color: "#bbf7d0",
@@ -1062,12 +1018,63 @@ const styles = StyleSheet.create({
   ledgerNetNeutral: {
     color: "#fef3c7",
   },
+  pill: {
+    flex: 1,
+    height: 32,
+    minWidth: 0,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.13)",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  pillGood: {
+    borderColor: "rgba(34,197,94,0.28)",
+    backgroundColor: "rgba(34,197,94,0.13)",
+  },
+  pillBad: {
+    borderColor: "rgba(248,113,113,0.28)",
+    backgroundColor: "rgba(248,113,113,0.11)",
+  },
+  pillAccent: {
+    borderColor: "rgba(199,210,254,0.28)",
+    backgroundColor: "rgba(79,70,229,0.13)",
+  },
+  pillSelected: {
+    borderColor: "rgba(199,210,254,0.35)",
+    backgroundColor: "rgba(129,140,248,0.22)",
+  },
+  pillPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.96 }],
+  },
+  pillDisabled: {
+    opacity: 0.46,
+  },
+  pillText: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  pillTextGood: {
+    color: "#dcfce7",
+  },
+  pillTextBad: {
+    color: "#fee2e2",
+  },
+  pillTextSelected: {
+    color: "#ffffff",
+  },
   timerTrack: {
     position: "absolute",
-    left: 18,
-    right: 18,
-    bottom: 5,
-    height: 2,
+    left: 14,
+    right: 14,
+    bottom: 4,
+    height: 1.5,
     borderRadius: 999,
     overflow: "hidden",
     backgroundColor: "rgba(255,255,255,0.12)",

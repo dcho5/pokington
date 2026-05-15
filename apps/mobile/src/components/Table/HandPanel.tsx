@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { Haptics } from "../../lib/haptics";
 import { NativeHoleCards, nativeLightTheme } from "@pokington/ui/native";
 import { evaluateBest } from "@pokington/engine";
 import { formatCents, getAvatarColor, getInitials } from "@pokington/shared";
@@ -21,8 +22,8 @@ interface HandPanelProps {
   autoPeelEnabled: boolean;
   revealedToOthersIndices?: Set<0 | 1>;
   peekedCardIndices?: Set<0 | 1>;
-  /** Tapping the identity card opens the add-chips / rebuy sheet. */
-  onIdentityPress: () => void;
+  /** Tapping the stats card opens the add-chips / rebuy sheet. */
+  onStatsPress: () => void;
   onPeekCard: (index: 0 | 1) => void;
   onRevealCard: (index: 0 | 1) => void;
   onToggleAutoPeel: () => void;
@@ -47,7 +48,7 @@ export default function HandPanel({
   autoPeelEnabled,
   revealedToOthersIndices,
   peekedCardIndices,
-  onIdentityPress,
+  onStatsPress,
   onPeekCard,
   onRevealCard,
   onToggleAutoPeel,
@@ -69,11 +70,7 @@ export default function HandPanel({
   return (
     <View style={styles.panel}>
       {/* Left: identity */}
-      <Pressable
-        accessibilityRole={viewer ? "button" : undefined}
-        onPress={onIdentityPress}
-        style={styles.identityCard}
-      >
+      <View style={styles.identityCard}>
         <View style={[styles.viewerAvatar, { backgroundColor: avatarColor }]}>
           <Text style={styles.viewerAvatarText}>{initials}</Text>
           {viewer ? (
@@ -88,27 +85,24 @@ export default function HandPanel({
         </Text>
 
         <Pressable
-          onPress={onToggleAutoPeel}
+          onPress={() => {
+            void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            onToggleAutoPeel();
+          }}
           accessibilityRole="switch"
           accessibilityState={{ checked: autoPeelEnabled }}
           accessibilityLabel="Auto peel"
           hitSlop={6}
           style={[styles.autoPeelToggle, autoPeelEnabled && styles.autoPeelToggleActive]}
         >
-          <Text
-            style={[
-              styles.autoPeelGlyph,
-              autoPeelEnabled && styles.autoPeelGlyphActive,
-            ]}
-          >
-            👁
+          <Text style={[styles.autoPeelLine, autoPeelEnabled && styles.autoPeelLineActive]}>
+            AUTO
+          </Text>
+          <Text style={[styles.autoPeelLine, autoPeelEnabled && styles.autoPeelLineActive]}>
+            PEEL
           </Text>
         </Pressable>
-
-        <Text style={styles.viewerMeta} numberOfLines={1}>
-          {viewer ? "ADD CHIPS" : "tap a seat"}
-        </Text>
-      </Pressable>
+      </View>
 
       {/* Center: hole cards */}
       <View style={styles.cardsArea}>
@@ -130,8 +124,13 @@ export default function HandPanel({
         )}
       </View>
 
-      {/* Right: stack / hand / bet */}
-      <View style={styles.statsCard}>
+      {/* Right: stack / hand / bet — tap to add chips */}
+      <Pressable
+        onPress={onStatsPress}
+        accessibilityRole="button"
+        accessibilityLabel="Add chips"
+        style={styles.statsCard}
+      >
         <Text style={styles.statsLabel}>STACK</Text>
         <Text style={styles.stackValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
           {viewer ? formatCents(viewer.stack) : "--"}
@@ -151,7 +150,7 @@ export default function HandPanel({
             </Text>
           </View>
         ) : null}
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -220,9 +219,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   autoPeelToggle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(148,163,184,0.3)",
     backgroundColor: "rgba(15,23,42,0.05)",
@@ -230,23 +229,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   autoPeelToggleActive: {
-    backgroundColor: "#0f172a",
-    borderColor: "transparent",
+    backgroundColor: nativeLightTheme.colors.accentTintStrong,
+    borderColor: nativeLightTheme.colors.accent,
   },
-  autoPeelGlyph: {
-    fontSize: 13,
+  autoPeelLine: {
+    fontSize: 7,
+    fontWeight: "900",
+    letterSpacing: 1,
     color: nativeLightTheme.colors.muted,
-  },
-  autoPeelGlyphActive: {
-    color: "#fbbf24",
-  },
-  viewerMeta: {
-    color: nativeLightTheme.colors.muted,
-    fontSize: 8,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
     textAlign: "center",
+    lineHeight: 9,
+  },
+  autoPeelLineActive: {
+    color: nativeLightTheme.colors.accent,
   },
 
   cardsArea: {
