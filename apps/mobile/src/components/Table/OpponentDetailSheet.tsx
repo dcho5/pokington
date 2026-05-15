@@ -228,7 +228,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.75)",
     paddingHorizontal: 12,
     paddingVertical: 12,
-    marginBottom: 16,
   },
   stackBox: {
     flex: 1,

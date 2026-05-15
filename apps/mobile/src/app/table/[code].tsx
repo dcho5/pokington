@@ -554,19 +554,11 @@ function NativeRaiseSheetContent({
         </View>
       )}
 
-      <Pressable
+      <NativeButton
+        label={`${label} ${formatCents(amount)}`}
         onPress={() => onConfirm(amount)}
-        style={({ pressed }) => [styles.raiseConfirmBtn, pressed && { opacity: 0.85 }]}
-      >
-        <LinearGradient
-          colors={["#ef4444", "#b91c1c"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.raiseConfirmGradient}
-        >
-          <Text style={styles.raiseConfirmText}>{label} {formatCents(amount)}</Text>
-        </LinearGradient>
-      </Pressable>
+        style={styles.raiseConfirmBtn}
+      />
     </View>
   );
 }
@@ -692,6 +684,113 @@ function NativeSeatManagerContent({
   );
 }
 
+const SCREEN_PULSE_PERIOD_MS = 2400;
+// Ticks at offsets within each 2400ms cycle. "light" = near peak (~1200ms),
+// "sel" = edges. Mirrors the visual amplitude so haptic intensity feathers in/out.
+const SCREEN_PULSE_TICKS: Array<[offsetMs: number, style: "sel" | "light"]> = [
+  [120,  "sel"],
+  [330,  "sel"],
+  [570,  "sel"],
+  [810,  "light"],
+  [1020, "light"],
+  [1200, "light"],
+  [1380, "light"],
+  [1590, "light"],
+  [1830, "sel"],
+  [2085, "sel"],
+  [2310, "sel"],
+];
+
+function ScreenPulseLayer({ active }: { active: boolean }) {
+  const presence = useSharedValue(0);
+  const pulse = useSharedValue(0);
+
+  useEffect(() => {
+    presence.value = withTiming(active ? 1 : 0, {
+      duration: 300,
+      easing: ReEasing.out(ReEasing.quad),
+    });
+
+    if (!active) {
+      cancelAnimation(pulse);
+      pulse.value = withTiming(0, { duration: 300 });
+      return;
+    }
+
+    pulse.value = 0;
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: SCREEN_PULSE_PERIOD_MS * 0.5, easing: ReEasing.inOut(ReEasing.sin) }),
+        withTiming(0, { duration: SCREEN_PULSE_PERIOD_MS * 0.5, easing: ReEasing.inOut(ReEasing.sin) }),
+      ),
+      -1,
+      false,
+    );
+
+    let cancelled = false;
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+
+    const schedCycle = () => {
+      if (cancelled) return;
+      for (const [offsetMs, style] of SCREEN_PULSE_TICKS) {
+        const t = setTimeout(() => {
+          timers.delete(t);
+          if (cancelled) return;
+          if (style === "light") {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+          } else {
+            Haptics.selectionAsync().catch(() => {});
+          }
+        }, offsetMs);
+        timers.add(t);
+      }
+    };
+
+    schedCycle();
+    const interval = setInterval(schedCycle, SCREEN_PULSE_PERIOD_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      for (const t of timers) clearTimeout(t);
+    };
+  }, [active, presence, pulse]);
+
+  const washStyle = useAnimatedStyle(() => ({
+    opacity: presence.value * (0.25 + pulse.value * 0.65),
+  }));
+
+  return (
+    <ReAnimated.View pointerEvents="none" style={[StyleSheet.absoluteFill, screenPulseStyles.layer]}>
+      <ReAnimated.View style={[screenPulseStyles.bottomWash, washStyle]}>
+        <LinearGradient
+          colors={[
+            "rgba(239,68,68,0)",
+            "rgba(239,68,68,0.05)",
+            "rgba(239,68,68,0.16)",
+            "rgba(239,68,68,0.34)",
+          ] as const}
+          locations={[0, 0.4, 0.78, 1] as const}
+          style={StyleSheet.absoluteFill}
+        />
+      </ReAnimated.View>
+    </ReAnimated.View>
+  );
+}
+
+const screenPulseStyles = StyleSheet.create({
+  layer: {
+    zIndex: 10,
+  },
+  bottomWash: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "55%",
+  },
+});
+
 // Soft glow ring rendered behind the primary (Check/Call) action button when
 // it's the user's turn. Pulses gently to draw the eye without being noisy.
 function ActionFocusRing({ active }: { active: boolean }) {
@@ -724,7 +823,6 @@ function ActionFocusRing({ active }: { active: boolean }) {
     return {
       opacity: presence.value,
       transform: [{ scale: 0.96 + presence.value * 0.04 * breathe }],
-      shadowOpacity: presence.value * 0.5,
     };
   });
 
@@ -819,7 +917,6 @@ export default function TableScreen() {
   const seenFeedbackKeysRef = useRef(new Set<string>());
   const myPlayerIdRef = useRef<string | null>(null);
   const actionErrorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const turnGlowAnim = useRef(new Animated.Value(0)).current;
   const requestHostname = useMemo(() => getExpoRequestHostname(), []);
 
   useEffect(() => {
@@ -1313,57 +1410,6 @@ export default function TableScreen() {
     ? "Your connection dropped before the table finished syncing. Restoring the latest hand now."
     : `Joining ${roomId} and syncing the current table state.`;
 
-  // Feather-light rolling purr while it's the local player's turn.
-  useEffect(() => {
-    if (!showActiveTurnTreatment) {
-      turnGlowAnim.stopAnimation();
-      turnGlowAnim.setValue(0);
-      return;
-    }
-
-    const PURR_LOOP_MS = 2298;
-    const PURR_TICK_OFFSETS_MS = [260, 370, 490, 620, 760, 910, 1070, 1245, 1435, 1640, 1860, 2095, 2250];
-    let cancelled = false;
-    const purrTimers = new Set<ReturnType<typeof setTimeout>>();
-
-    const clearPurrTimers = () => {
-      for (const timer of purrTimers) clearTimeout(timer);
-      purrTimers.clear();
-    };
-    const playPurrTick = () => {
-      Haptics.selectionAsync().catch(() => {});
-    };
-
-    const schedulePurrCycle = () => {
-      if (cancelled) return;
-
-      for (const offsetMs of PURR_TICK_OFFSETS_MS) {
-        const purrTimer = setTimeout(() => {
-          purrTimers.delete(purrTimer);
-          if (cancelled) return;
-          playPurrTick();
-        }, offsetMs);
-        purrTimers.add(purrTimer);
-      }
-    };
-
-    turnGlowAnim.stopAnimation();
-    turnGlowAnim.setValue(0);
-    schedulePurrCycle();
-    const purrLoop = setInterval(schedulePurrCycle, PURR_LOOP_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(purrLoop);
-      clearPurrTimers();
-    };
-  }, [showActiveTurnTreatment, turnGlowAnim]);
-
-  // Resting turn wash stays present without a periodic heartbeat pulse.
-  const turnWashOpacity = turnGlowAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.45, 1.0],
-  });
-
   const sendEvent = useCallback((event: GameEvent, strength: "light" | "medium" | "heavy" = "light") => {
     connection?.sendAction(event);
     playNativeFeedbackHaptic(
@@ -1554,24 +1600,7 @@ export default function TableScreen() {
           <Text style={styles.reconnectText}>Reconnecting</Text>
         </View>
       ) : null}
-      {showActiveTurnTreatment ? (
-        <View pointerEvents="none" style={styles.turnPerimeterLayer}>
-          {/* Single bottom-anchored breathing wash. The opacity peak is timed
-              with the heartbeat haptic so each thump is felt and seen. */}
-          <Animated.View style={[styles.turnBottomWash, { opacity: turnWashOpacity }]}>
-            <LinearGradient
-              colors={[
-                "rgba(239,68,68,0)",
-                "rgba(239,68,68,0.05)",
-                "rgba(239,68,68,0.16)",
-                "rgba(239,68,68,0.34)",
-              ] as const}
-              locations={[0, 0.4, 0.78, 1] as const}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
-        </View>
-      ) : null}
+      <ScreenPulseLayer active={showActiveTurnTreatment} />
       {showTableNotFound ? (
         <View style={styles.blockingOverlay}>
           <View style={styles.blockingCard}>
@@ -2066,18 +2095,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 21,
   },
-  turnPerimeterLayer: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  // Single soft red wash anchored at the bottom of the screen — focuses
-  // attention near the action bar without busying up the whole frame.
-  turnBottomWash: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "55%",
-  },
   bottomDock: {
     // Wrapper for HandPanel + actionDock so statusBannerAnchor is relative to this, not SafeAreaView
   },
@@ -2179,11 +2196,6 @@ const styles = StyleSheet.create({
   actionDockActive: {
     borderTopColor: "rgba(248,113,113,0.18)",
     backgroundColor: "rgba(255,247,247,0.82)",
-    shadowColor: "#ef4444",
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: -8 },
-    elevation: 4,
   },
   actionRowOuter: {
     width: "100%",
@@ -2200,15 +2212,12 @@ const styles = StyleSheet.create({
   },
   actionFocusRing: {
     position: "absolute",
-    top: -6,
-    bottom: -6,
+    top: 0,
+    bottom: 0,
     left: -4,
     right: -4,
-    borderRadius: 24,
+    borderRadius: 20,
     backgroundColor: "rgba(239,68,68,0.10)",
-    shadowColor: "#ef4444",
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 0 },
     zIndex: 0,
   },
   disabledActions: {
@@ -2411,8 +2420,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   seatManagerButton: {
-    flex: 1,
-    minHeight: 50,
+    minHeight: 56,
     borderRadius: 18,
   },
 
@@ -2743,18 +2751,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   raiseConfirmBtn: {
+    minHeight: 56,
     borderRadius: 20,
-    overflow: "hidden",
-  },
-  raiseConfirmGradient: {
-    height: 60,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  raiseConfirmText: {
-    color: "#ffffff",
-    fontSize: 17,
-    fontWeight: "900",
-    letterSpacing: 0.2,
   },
 });
