@@ -138,6 +138,25 @@ export function LedgerOverlay({
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           />
+          <LinearGradient
+            colors={["rgba(255,255,255,0.14)", "rgba(255,255,255,0.02)"] as const}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 0.72 }}
+          />
+          <LinearGradient
+            colors={["rgba(0,0,0,0.14)", "transparent", "rgba(0,0,0,0.18)"] as const}
+            locations={[0, 0.5, 1] as const}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.34)"] as const}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0.5, y: 0.55 }}
+            end={{ x: 0.5, y: 1 }}
+          />
           <View pointerEvents="none" style={styles.topGloss} />
 
           <ReAnimated.View style={[styles.content, contentStyle]}>
@@ -224,11 +243,11 @@ const styles = StyleSheet.create({
   },
   topGloss: {
     position: "absolute",
-    left: 16,
-    right: 16,
+    left: 12,
+    right: 12,
     top: 0,
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.5)",
+    backgroundColor: "rgba(255,255,255,0.48)",
   },
   content: {
     flex: 1,
@@ -247,8 +266,8 @@ const styles = StyleSheet.create({
   eyebrow: {
     color: "#fef3c7",
     fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 1.8,
+    fontWeight: "700",
+    letterSpacing: 1.2,
     textTransform: "uppercase",
   },
   title: {

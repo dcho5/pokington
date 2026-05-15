@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { StyleSheet, Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
 import { NativeBottomSheet, NativeCard, nativeLightTheme } from "@pokington/ui/native";
-import { formatCents, getAvatarColor, getInitials } from "@pokington/shared";
+import { formatCents } from "@pokington/shared";
 import type { TablePlayer } from "./PlayerBubble";
 
 interface OpponentDetailSheetProps {
@@ -9,7 +10,14 @@ interface OpponentDetailSheetProps {
   isDealer?: boolean;
   isSmallBlind?: boolean;
   isBigBlind?: boolean;
+  runItOddsPercentage?: number | null;
   onDismiss: () => void;
+}
+
+function labelizeAction(action?: string | null) {
+  if (!action) return null;
+  if (action === "all-in") return "All-in";
+  return action.charAt(0).toUpperCase() + action.slice(1);
 }
 
 export default function OpponentDetailSheet({
@@ -17,95 +25,109 @@ export default function OpponentDetailSheet({
   isDealer = false,
   isSmallBlind = false,
   isBigBlind = false,
+  runItOddsPercentage = null,
   onDismiss,
 }: OpponentDetailSheetProps) {
+  const isVisible = player != null;
+
+  useEffect(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  }, [isVisible]);
+
+  const statusLabel = player
+    ? labelizeAction(player.lastAction) ?? (player.isActor ? "ACTION" : "In Hand")
+    : null;
+  const previewCards = player?.holeCards ?? [null, null];
+
   return (
     <NativeBottomSheet visible={player != null} onDismiss={onDismiss}>
       {player ? (
         <>
-          {/* Avatar */}
-          <View style={styles.avatarRow}>
-            <View
-              style={[
-                styles.avatar,
-                { backgroundColor: getAvatarColor(player.name) },
-              ]}
-            >
-              <Text style={styles.avatarText}>{getInitials(player.name)}</Text>
+          {/* Header: name+seat left, badges right */}
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.seatLabel}>Seat {player.seatIndex + 1}</Text>
+              <Text style={styles.playerName} numberOfLines={1}>{player.name}</Text>
             </View>
-          </View>
-
-          {/* Name + seat */}
-          <Text style={styles.playerName}>{player.name}</Text>
-          <Text style={styles.seatLabel}>Seat {player.seatIndex + 1}</Text>
-
-          {/* Position markers */}
-          {(isDealer || isSmallBlind || isBigBlind) && (
-            <View style={styles.markersRow}>
+            <View style={styles.badgesWrap}>
+              {player.isViewer && (
+                <View style={[styles.badge, styles.badgeYou]}>
+                  <Text style={[styles.badgeText, styles.badgeYouText]}>You</Text>
+                </View>
+              )}
               {isDealer && (
-                <View style={[styles.marker, styles.markerDealer]}>
-                  <Text style={[styles.markerText, styles.markerDealerText]}>D</Text>
+                <View style={[styles.badge, styles.badgeDealer]}>
+                  <Text style={[styles.badgeText, styles.badgeDealerText]}>Dealer</Text>
                 </View>
               )}
               {isSmallBlind && (
-                <View style={[styles.marker, styles.markerSB]}>
-                  <Text style={[styles.markerText, styles.markerSBText]}>SB</Text>
+                <View style={[styles.badge, styles.badgePosition]}>
+                  <Text style={[styles.badgeText, styles.badgePositionText]}>Small Blind</Text>
                 </View>
               )}
               {isBigBlind && (
-                <View style={[styles.marker, styles.markerBB]}>
-                  <Text style={[styles.markerText, styles.markerBBText]}>BB</Text>
+                <View style={[styles.badge, styles.badgePosition]}>
+                  <Text style={[styles.badgeText, styles.badgePositionText]}>Big Blind</Text>
+                </View>
+              )}
+              {player.isAway && (
+                <View style={[styles.badge, styles.badgeAway]}>
+                  <Text style={[styles.badgeText, styles.badgeAwayText]}>Away</Text>
+                </View>
+              )}
+              {player.isFolded && (
+                <View style={[styles.badge, styles.badgeMuted]}>
+                  <Text style={[styles.badgeText, styles.badgeMutedText]}>Folded</Text>
+                </View>
+              )}
+              {player.isAllIn && (
+                <View style={[styles.badge, styles.badgeAway]}>
+                  <Text style={[styles.badgeText, styles.badgeAwayText]}>All-in</Text>
                 </View>
               )}
             </View>
-          )}
-
-          {/* State badges */}
-          {(player.isFolded || player.isAllIn || player.isAway) && (
-            <View style={styles.stateRow}>
-              {player.isFolded && (
-                <Text style={styles.stateBadge}>Folded</Text>
-              )}
-              {player.isAllIn && (
-                <Text style={[styles.stateBadge, styles.stateBadgeAllIn]}>
-                  All-in
-                </Text>
-              )}
-              {player.isAway && (
-                <Text style={styles.stateBadge}>Away</Text>
-              )}
-            </View>
-          )}
-
-          {/* Stack + bet */}
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statLabel}>STACK</Text>
-              <Text style={styles.statValue}>{formatCents(player.stack)}</Text>
-            </View>
-            {player.currentBet > 0 && (
-              <View style={styles.statItem}>
-                <Text style={styles.statLabel}>BET</Text>
-                <Text style={styles.statValue}>
-                  {formatCents(player.currentBet)}
-                </Text>
-              </View>
-            )}
           </View>
 
-          {/* Revealed hole cards */}
-          {player.holeCards?.some(Boolean) && (
+          {/* Stack + Cards */}
+          <View style={styles.stackCardsRow}>
+            <View style={[styles.box, styles.stackBox]}>
+              <Text style={styles.boxLabel}>Stack</Text>
+              <Text style={styles.stackValue}>{formatCents(player.stack)}</Text>
+            </View>
             <View style={styles.cardsRow}>
-              {player.holeCards.map((card, i) => (
+              {previewCards.map((card, index) => (
                 <NativeCard
-                  key={i}
+                  key={card ? `${card.rank}${card.suit}` : `hidden-${index}`}
                   card={card}
                   hidden={!card}
+                  compact
                   style={styles.card}
                 />
               ))}
             </View>
-          )}
+          </View>
+
+          {/* State box */}
+          <View style={styles.box}>
+            <View style={styles.stateBoxInner}>
+              <View>
+                <Text style={styles.boxLabel}>State</Text>
+                <Text style={styles.stateValue}>{statusLabel ?? "In Hand"}</Text>
+              </View>
+              {runItOddsPercentage != null && (
+                <View style={styles.oddsBadge}>
+                  <Text style={styles.oddsBadgeText}>
+                    {runItOddsPercentage.toFixed(1)}%
+                  </Text>
+                </View>
+              )}
+            </View>
+            {(player.currentBet ?? 0) > 0 && (
+              <Text style={styles.liveBet}>
+                Live bet {formatCents(player.currentBet ?? 0)}
+              </Text>
+            )}
+          </View>
         </>
       ) : null}
     </NativeBottomSheet>
@@ -113,133 +135,162 @@ export default function OpponentDetailSheet({
 }
 
 const styles = StyleSheet.create({
-  avatarRow: {
-    alignItems: "center",
-    marginBottom: 8,
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 16,
   },
-  avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: "center",
-    justifyContent: "center",
+  headerLeft: {
+    flex: 1,
+    minWidth: 0,
   },
-  avatarText: {
-    color: "#ffffff",
-    fontSize: 16,
+  seatLabel: {
+    color: "#6b7280",
+    fontSize: 11,
     fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 2,
   },
   playerName: {
     color: nativeLightTheme.colors.text,
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: "900",
-    textAlign: "center",
-  },
-  seatLabel: {
-    color: nativeLightTheme.colors.muted,
-    fontSize: 13,
-    fontWeight: "700",
-    textAlign: "center",
-    marginTop: 2,
-    marginBottom: 8,
+    marginTop: 4,
   },
 
-  markersRow: {
+  badgesWrap: {
     flexDirection: "row",
-    justifyContent: "center",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
     gap: 6,
-    marginBottom: 10,
+    maxWidth: "55%",
   },
-  marker: {
-    minWidth: 28,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+  badge: {
     borderRadius: 999,
     borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
-  markerDealer: {
-    backgroundColor: "#ffffff",
-    borderColor: "rgba(239,68,68,0.8)",
-  },
-  markerSB: {
-    backgroundColor: "#020617",
-    borderColor: "rgba(252,211,77,0.9)",
-  },
-  markerBB: {
-    backgroundColor: "#020617",
-    borderColor: "#facc15",
-  },
-  markerText: {
-    fontSize: 9,
-    fontWeight: "900",
-    textTransform: "uppercase",
-  },
-  markerDealerText: {
-    color: "#dc2626",
-  },
-  markerSBText: {
-    color: "#fef3c7",
-  },
-  markerBBText: {
-    color: "#fef9c3",
-  },
-
-  stateRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-    marginBottom: 12,
-  },
-  stateBadge: {
-    overflow: "hidden",
-    borderRadius: 999,
-    backgroundColor: "rgba(148,163,184,0.15)",
-    color: nativeLightTheme.colors.muted,
+  badgeText: {
     fontSize: 10,
     fontWeight: "900",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
     textTransform: "uppercase",
-    letterSpacing: 0.5,
+    letterSpacing: 1.4,
   },
-  stateBadgeAllIn: {
-    backgroundColor: "rgba(251,191,36,0.15)",
-    color: "#92400e",
+  badgeYou: {
+    backgroundColor: "rgba(254,226,226,0.95)",
+    borderColor: "rgba(252,165,165,0.6)",
+  },
+  badgeYouText: {
+    color: "#dc2626",
+  },
+  badgeDealer: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  badgeDealerText: {
+    color: nativeLightTheme.colors.text,
+  },
+  badgePosition: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  badgePositionText: {
+    color: nativeLightTheme.colors.text,
+  },
+  badgeAway: {
+    backgroundColor: "rgba(245,158,11,0.10)",
+    borderColor: "rgba(252,211,77,0.35)",
+  },
+  badgeAwayText: {
+    color: "#d97706",
+  },
+  badgeMuted: {
+    backgroundColor: "rgba(107,114,128,0.10)",
+    borderColor: "rgba(209,213,219,0.35)",
+  },
+  badgeMutedText: {
+    color: "#6b7280",
   },
 
-  statsRow: {
+  stackCardsRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 24,
+    alignItems: "center",
+    gap: 12,
     marginBottom: 16,
   },
-  statItem: {
-    alignItems: "center",
+  box: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.07)",
+    backgroundColor: "rgba(255,255,255,0.75)",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    marginBottom: 16,
   },
-  statLabel: {
+  stackBox: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  boxLabel: {
     color: "#9ca3af",
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "900",
-    letterSpacing: 2.5,
     textTransform: "uppercase",
-    marginBottom: 2,
+    letterSpacing: 2.5,
+    marginBottom: 4,
   },
-  statValue: {
+  stackValue: {
     color: nativeLightTheme.colors.text,
     fontSize: 18,
     fontWeight: "900",
+    fontVariant: ["tabular-nums"],
   },
 
   cardsRow: {
     flexDirection: "row",
-    justifyContent: "center",
-    gap: 10,
-    marginTop: 4,
-    marginBottom: 8,
+    gap: 8,
   },
   card: {
-    width: 60,
+    width: 42,
+    height: 58,
+    borderRadius: 8,
+  },
+
+  stateBoxInner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+  },
+  stateValue: {
+    color: nativeLightTheme.colors.text,
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  oddsBadge: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(252,165,165,0.30)",
+    backgroundColor: "rgba(239,68,68,0.10)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  oddsBadgeText: {
+    color: "#ef4444",
+    fontSize: 14,
+    fontWeight: "900",
+    fontVariant: ["tabular-nums"],
+  },
+  liveBet: {
+    marginTop: 8,
+    color: "#d97706",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
   },
 });

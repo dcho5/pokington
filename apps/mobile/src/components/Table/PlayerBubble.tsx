@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { getAvatarColor, getInitials } from "@pokington/shared";
 import type { Card } from "@pokington/shared";
+import { PeekEyeIcon } from "@pokington/ui/native";
 
 export interface TablePlayer {
   id: string;
@@ -314,14 +315,13 @@ export default function PlayerBubble({
         {/* Peek Eye Icon (Top Left) */}
         {player.hasCards && !player.isFolded && (() => {
           const pc = player.peekedCount ?? 0;
+          const iconColor = pc === 0 ? "#9ca3af" : pc === 1 ? "#fde047" : "#34d399";
           return (
             <View style={[
               styles.peekBadge,
               pc === 0 ? styles.peekBadgeGray : pc === 1 ? styles.peekBadgeYellow : styles.peekBadgeGreen,
             ]}>
-              <Text style={{ fontSize: 12 }}>
-                {pc === 0 ? "➖" : pc === 1 ? "👁️" : "👀"}
-              </Text>
+              <PeekEyeIcon count={pc} size={14} strokeWidth={2.5} color={iconColor} />
             </View>
           );
         })()}

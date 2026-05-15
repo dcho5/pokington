@@ -2,6 +2,7 @@ export {
   NativeHoleCards,
   type NativeHoleCardsProps,
 } from "./components/native/NativeHoleCards";
+export { PeekEyeIcon } from "./components/native/PeekEyeIcon";
 export {
   CommunityBoard,
   NativeBottomSheet,

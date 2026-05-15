@@ -164,13 +164,14 @@ function NativePeelCard({
     holdActiveRef.current = false;
     getHaptics()?.impactAsync("Medium");
     setFlipped(1);
+    holdProgress.value = 0;
     commitPulse.value = 0;
     commitPulse.value = withTiming(1, {
       duration: COMMIT_PULSE_MS,
       easing: Easing.out(Easing.quad),
     });
     if (canSendPublicReveal) onRevealToOthers?.();
-  }, [canSendPublicReveal, commitPulse, onRevealToOthers, setFlipped]);
+  }, [canSendPublicReveal, commitPulse, holdProgress, onRevealToOthers, setFlipped]);
 
   const cancelHold = useCallback(() => {
     if (!holdActiveRef.current) return;

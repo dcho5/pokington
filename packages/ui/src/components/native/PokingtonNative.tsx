@@ -620,7 +620,7 @@ export function NativeCard({
           <View pointerEvents="none" style={styles.cardHighlight} />
           <View pointerEvents="none" style={styles.cardSheen} />
           <View style={styles.cardCenterWrap} pointerEvents="none">
-            <Text style={[styles.cardSuitLarge, red && styles.redCardText]}>{suit}</Text>
+            <Text style={[styles.cardSuitLarge, compact && styles.cardSuitLargeCompact, red && styles.redCardText]}>{suit}</Text>
           </View>
           <View style={[styles.cardCorner, styles.cardCornerTopLeft]}>
             <Text style={[styles.cardRank, red && styles.redCardText]}>{rank}</Text>
@@ -1288,6 +1288,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "center",
     includeFontPadding: false,
+  },
+  cardSuitLargeCompact: {
+    fontSize: 20,
+    lineHeight: 22,
   },
   redCardText: {
     color: nativeLightTheme.colors.cardRed,

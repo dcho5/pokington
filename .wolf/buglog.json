@@ -23,7 +23,7 @@
       "error_message": "Significant refactor of ",
       "file": "packages/ui/src/components/web/Table/ActionBar.tsx",
       "root_cause": "7 lines replaced/restructured",
-      "fix": "Rewrote 56→70 lines (7 removed)",
+      "fix": "Rewrote 56\u219270 lines (7 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -103,7 +103,7 @@
       "error_message": "Significant refactor of ",
       "file": "packages/ui/package.json",
       "root_cause": "3 lines replaced/restructured",
-      "fix": "Rewrote 9→5 lines (3 removed)",
+      "fix": "Rewrote 9\u21925 lines (3 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -135,7 +135,7 @@
       "error_message": "Significant refactor of ",
       "file": "packages/ui/src/web.ts",
       "root_cause": "2 lines replaced/restructured",
-      "fix": "Rewrote 5→3 lines (2 removed)",
+      "fix": "Rewrote 5\u21923 lines (2 removed)",
       "tags": [
         "auto-detected",
         "refactor",
@@ -230,8 +230,8 @@
       "timestamp": "2026-05-14T03:42:35.543Z",
       "error_message": "CSS fix: i",
       "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
-      "root_cause": "i: number) { → number) => {",
-      "fix": "Changed i: number) { → number) => {",
+      "root_cause": "i: number) { \u2192 number) => {",
+      "fix": "Changed i: number) { \u2192 number) => {",
       "tags": [
         "auto-detected",
         "style-fix",
@@ -262,8 +262,8 @@
       "timestamp": "2026-05-15T14:18:32.536Z",
       "error_message": "CSS fix: Right",
       "file": "apps/mobile/src/components/Table/HandPanel.tsx",
-      "root_cause": "Right: stack / hand / bet */ → stack / hand / bet — tap to add chips */",
-      "fix": "Changed Right: stack / hand / bet */ → stack / hand / bet — tap to add chips */",
+      "root_cause": "Right: stack / hand / bet */ \u2192 stack / hand / bet \u2014 tap to add chips */",
+      "fix": "Changed Right: stack / hand / bet */ \u2192 stack / hand / bet \u2014 tap to add chips */",
       "tags": [
         "auto-detected",
         "style-fix",
@@ -278,8 +278,8 @@
       "timestamp": "2026-05-15T14:19:29.801Z",
       "error_message": "CSS fix: leaveSeat",
       "file": "apps/mobile/src/app/table/[code].tsx",
-      "root_cause": "leaveSeat: false, → false, moveToSeatIndex: null, chipDelta: parsedCents",
-      "fix": "Changed leaveSeat: false, → false, moveToSeatIndex: null, chipDelta: parsedCents",
+      "root_cause": "leaveSeat: false, \u2192 false, moveToSeatIndex: null, chipDelta: parsedCents",
+      "fix": "Changed leaveSeat: false, \u2192 false, moveToSeatIndex: null, chipDelta: parsedCents",
       "tags": [
         "auto-detected",
         "style-fix",
@@ -295,7 +295,7 @@
       "error_message": "Wrong reference: fbbf24 should be nativeLightTheme",
       "file": "apps/mobile/src/components/Table/HandPanel.tsx",
       "root_cause": "Used \"fbbf24\" instead of \"nativeLightTheme\"",
-      "fix": "Changed fbbf24 → nativeLightTheme",
+      "fix": "Changed fbbf24 \u2192 nativeLightTheme",
       "tags": [
         "auto-detected",
         "wrong-reference",
@@ -310,8 +310,8 @@
       "timestamp": "2026-05-15T14:37:44.198Z",
       "error_message": "CSS fix: backgroundColor, borderColor",
       "file": "apps/mobile/src/components/Table/HandPanel.tsx",
-      "root_cause": "backgroundColor: \"#0f172a\", → nativeLightTheme.colors.accentTintStrong,; borderColor: \"transparent\", → nativeLightTheme.colors.accent,",
-      "fix": "Changed backgroundColor: \"#0f172a\", → nativeLightTheme.colors.accentTintStrong,; borderColor: \"transparent\", → nativeLightTheme.colors.accent,",
+      "root_cause": "backgroundColor: \"#0f172a\", \u2192 nativeLightTheme.colors.accentTintStrong,; borderColor: \"transparent\", \u2192 nativeLightTheme.colors.accent,",
+      "fix": "Changed backgroundColor: \"#0f172a\", \u2192 nativeLightTheme.colors.accentTintStrong,; borderColor: \"transparent\", \u2192 nativeLightTheme.colors.accent,",
       "tags": [
         "auto-detected",
         "style-fix",
@@ -336,6 +336,131 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-15T14:57:22.299Z"
+    },
+    {
+      "id": "bug-022",
+      "timestamp": "2026-05-15T16:05:13.838Z",
+      "error_message": "Null/undefined access in ",
+      "file": "apps/mobile/src/components/Table/OpponentDetailSheet.tsx",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check) | Also: <Text style={styles.stateValue}>{statusLabel ?? \"In Hand\"}</",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-15T16:05:25.237Z"
+    },
+    {
+      "id": "bug-023",
+      "timestamp": "2026-05-15T16:08:55.674Z",
+      "error_message": "CSS fix: fontSize, lineHeight",
+      "file": "packages/ui/src/components/native/PokingtonNative.tsx",
+      "root_cause": "fontSize: 32, \u2192 20,; lineHeight: 34, \u2192 22,",
+      "fix": "Changed fontSize: 32, \u2192 20,; lineHeight: 34, \u2192 22,",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T16:08:55.674Z"
+    },
+    {
+      "id": "bug-024",
+      "timestamp": "2026-05-15T16:12:29.986Z",
+      "error_message": "Type error",
+      "file": "apps/mobile/src/components/Table/OpponentDetailSheet.tsx",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T16:12:29.986Z"
+    },
+    {
+      "id": "bug-025",
+      "timestamp": "2026-05-15T16:12:34.929Z",
+      "error_message": "Null/undefined access in ",
+      "file": "apps/mobile/src/components/Table/OpponentDetailSheet.tsx",
+      "root_cause": "Property access on potentially null/undefined value",
+      "fix": "Added null safety (optional chaining or null check)",
+      "tags": [
+        "auto-detected",
+        "null-safety",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T16:12:34.929Z"
+    },
+    {
+      "id": "bug-026",
+      "timestamp": "2026-05-15T16:20:16.450Z",
+      "error_message": "CSS fix: x",
+      "file": "apps/mobile/src/components/Table/LedgerOverlay.tsx",
+      "root_cause": "x: 1, y: 1 \u2192 0.5, y: 1",
+      "fix": "Changed x: 1, y: 1 \u2192 0.5, y: 1",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-15T16:20:24.800Z"
+    },
+    {
+      "id": "bug-027",
+      "timestamp": "2026-05-15T16:35:22.765Z",
+      "error_message": "Incorrect value in code",
+      "file": "apps/mobile/src/components/Table/PlayerBubble.tsx",
+      "root_cause": "Had \"@pokington/ui/native/PeekEyeIcon\"",
+      "fix": "Changed to \"@pokington/ui/native\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T16:35:22.765Z"
+    },
+    {
+      "id": "bug-029",
+      "timestamp": "2026-05-15T00:00:00Z",
+      "error_message": "Red glow from hold-to-reveal persists on subsequent unrevealed cards",
+      "file": "packages/ui/src/components/native/NativeHoleCards.tsx",
+      "root_cause": "handleHoldComplete sets holdActiveRef.current=false before onFinalize calls cancelHold; cancelHold early-returns without resetting holdProgress to 0; on next hand canHoldReveal becomes true again and the ring renders with holdProgress=1 (full red glow)",
+      "fix": "Reset holdProgress.value=0 inside handleHoldComplete immediately after reveal commits",
+      "tags": ["native", "animation", "hold-to-reveal", "glow", "hole-cards"],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T00:00:00Z"
+    },
+    {
+      "id": "bug-028",
+      "timestamp": "2026-05-15T00:00:00Z",
+      "error_message": "Unable to resolve module @pokington/ui/native/PeekEyeIcon \u2014 Metro resolved to src/native/PeekEyeIcon (wrong path)",
+      "file": "apps/mobile/src/components/Table/PlayerBubble.tsx",
+      "root_cause": "Metro unstable_enablePackageExports does not reliably resolve new subpath exports; fell back to source-based resolution at wrong path (src/native/ instead of src/components/native/)",
+      "fix": "Export PeekEyeIcon from native.ts barrel instead; import via @pokington/ui/native which is the already-working exports entry",
+      "tags": [
+        "metro",
+        "exports",
+        "package-resolution",
+        "react-native-svg"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-15T00:00:00Z"
     }
   ]
 }
