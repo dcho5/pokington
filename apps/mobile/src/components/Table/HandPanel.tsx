@@ -22,6 +22,7 @@ interface HandPanelProps {
   autoPeelEnabled: boolean;
   revealedToOthersIndices?: Set<0 | 1>;
   peekedCardIndices?: Set<0 | 1>;
+  emphasisByIndex?: Array<"neutral" | "highlighted" | "dimmed">;
   /** Tapping the stats card opens the add-chips / rebuy sheet. */
   onStatsPress: () => void;
   onPeekCard: (index: 0 | 1) => void;
@@ -48,6 +49,7 @@ export default function HandPanel({
   autoPeelEnabled,
   revealedToOthersIndices,
   peekedCardIndices,
+  emphasisByIndex,
   onStatsPress,
   onPeekCard,
   onRevealCard,
@@ -116,6 +118,7 @@ export default function HandPanel({
             canRevealToOthers
             revealedToOthersIndices={revealedToOthersIndices}
             peekedCardIndices={peekedCardIndices}
+            emphasisByIndex={emphasisByIndex}
             onPeekCard={onPeekCard}
             onRevealToOthers={onRevealCard}
           />

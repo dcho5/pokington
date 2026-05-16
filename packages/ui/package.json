@@ -68,6 +68,10 @@
       "types": "./dist/lib/holeCardReveal.d.ts",
       "default": "./dist/lib/holeCardReveal.js"
     },
+    "./lib/showdownSpotlight": {
+      "types": "./dist/lib/showdownSpotlight.d.ts",
+      "default": "./dist/lib/showdownSpotlight.js"
+    },
     "./web/JoinTableCard": {
       "types": "./dist/components/web/home/JoinTableCard.d.ts",
       "default": "./dist/components/web/home/JoinTableCard.js"

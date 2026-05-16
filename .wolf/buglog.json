@@ -1110,6 +1110,22 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-16T14:30:14.064Z"
+    },
+    {
+      "id": "bug-070",
+      "timestamp": "2026-05-16T16:05:26.589Z",
+      "error_message": "Type error",
+      "file": "apps/mobile/src/app/table/[code].tsx",
+      "root_cause": "Missing or incorrect type annotation",
+      "fix": "Added type assertion/annotation",
+      "tags": [
+        "auto-detected",
+        "type-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T16:05:26.589Z"
     }
   ]
 }

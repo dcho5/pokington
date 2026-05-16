@@ -23,6 +23,11 @@ import {
   readPersistedAutoPeelPreference,
   writePersistedAutoPeelPreference,
 } from "@pokington/ui/lib/holeCardReveal";
+import {
+  buildShowdownSpotlight,
+  mergeEmphasisArrays,
+  type Emphasis,
+} from "@pokington/ui/lib/showdownSpotlight";
 import { formatCents, getBuyInPresets } from "@pokington/shared";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -1374,6 +1379,39 @@ export default function TableScreen() {
     );
 
   const communityCards = tableState?.communityCards ?? [];
+
+  const isBombPot = tableState?.isBombPot ?? false;
+  const { spotlightHoleCardEmphasis, spotlightBoardCardEmphasis, spotlightBombPotCardEmphasis, spotlightRunCardEmphasisByRun } =
+    useMemo(() => {
+      const boards = tableState?.communityCards ?? [];
+      const boards2 = tableState?.communityCards2 ?? [];
+      const runResults = tableState?.runResults ?? [];
+      const isRunIt = runResults.length > 1;
+
+      const singleSpotlight = buildShowdownSpotlight({ holeCards, boardCards: boards });
+      const bombPotSpotlights = [
+        buildShowdownSpotlight({ holeCards, boardCards: boards }),
+        buildShowdownSpotlight({ holeCards, boardCards: boards2 }),
+      ];
+      const runSpotlights = runResults.map((r) => buildShowdownSpotlight({ holeCards, boardCards: r.board }));
+
+      const holeEmphasis: Emphasis[] = isBombPot
+        ? mergeEmphasisArrays(bombPotSpotlights.map((s) => s?.holeCards.map((e) => e.emphasis) ?? null), 2)
+        : isRunIt
+          ? mergeEmphasisArrays(runSpotlights.map((s) => s?.holeCards.map((e) => e.emphasis) ?? null), 2)
+          : (singleSpotlight?.holeCards.map((e) => e.emphasis) ?? ["neutral", "neutral"]);
+
+      return {
+        spotlightHoleCardEmphasis: holeEmphasis,
+        spotlightBoardCardEmphasis: singleSpotlight?.boardCards.map((e) => e.emphasis) ?? null,
+        spotlightBombPotCardEmphasis: [
+          bombPotSpotlights[0]?.boardCards.map((e) => e.emphasis) ?? null,
+          bombPotSpotlights[1]?.boardCards.map((e) => e.emphasis) ?? null,
+        ] as [Emphasis[] | null, Emphasis[] | null],
+        spotlightRunCardEmphasisByRun: runSpotlights.map((s) => s?.boardCards.map((e) => e.emphasis) ?? null),
+      };
+    }, [holeCards, tableState?.communityCards, tableState?.communityCards2, tableState?.isBombPot, tableState?.runResults, isBombPot]);
+
   const myRevealedCardIndices = useMemo(() => {
     const publicCards = myPlayerId ? revealedHoleCards[myPlayerId] : null;
     const indices = new Set<0 | 1>();
@@ -1698,6 +1736,9 @@ export default function TableScreen() {
           onActiveBoardChange={handleActiveBoardChange}
           viewingRunIndex={viewingRun}
           onViewingRunChange={handleViewingRunChange}
+          cardEmphasis={!isBombPot ? spotlightBoardCardEmphasis : null}
+          bombPotCardEmphasis={isBombPot ? spotlightBombPotCardEmphasis : undefined}
+          runCardEmphasisByRun={spotlightRunCardEmphasisByRun}
         />
       </View>
 
@@ -1781,6 +1822,7 @@ export default function TableScreen() {
           autoPeelEnabled={autoPeelEnabled}
           revealedToOthersIndices={myRevealedCardIndices}
           peekedCardIndices={myPeekedCardIndices}
+          emphasisByIndex={spotlightHoleCardEmphasis}
           onStatsPress={() => {
             if (!viewer) return;
             setSelectedSeatIndex(viewer.seatIndex);
