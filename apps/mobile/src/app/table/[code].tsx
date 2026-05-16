@@ -1412,7 +1412,18 @@ export default function TableScreen() {
     if (!actorName) return null;
     return `Waiting for ${actorName}…`;
   }, [actorId, myPlayerId, showActiveTurnTreatment, tablePlayers]);
-  const footerDisplayMessage = actionError ?? footerStatusMessage;
+  const nextHandStartsAt = tableState?.nextHandStartsAt ?? null;
+  const [nextHandSecondsLeft, setNextHandSecondsLeft] = useState<number | null>(null);
+  useEffect(() => {
+    if (!nextHandStartsAt) { setNextHandSecondsLeft(null); return; }
+    const tick = () => setNextHandSecondsLeft(Math.max(0, Math.ceil((nextHandStartsAt - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, 500);
+    return () => clearInterval(id);
+  }, [nextHandStartsAt]);
+
+  const nextHandMessage = nextHandSecondsLeft !== null ? `Next hand in ${nextHandSecondsLeft}s` : null;
+  const footerDisplayMessage = actionError ?? footerStatusMessage ?? nextHandMessage;
   const footerDisplayTone = actionError ? "active" : showActiveTurnTreatment ? "active" : "neutral";
   const terminalCode = terminalError?.message ?? null;
   const showTableNotFound = terminalCode === "TABLE_NOT_FOUND" || terminalCode === "TABLE_NOT_ACTIVE";
@@ -2223,8 +2234,7 @@ function createStyles(t: NativeTheme) { return StyleSheet.create({
     paddingBottom: 14,
   },
   actionDockActive: {
-    borderTopColor: "rgba(248,113,113,0.18)",
-    backgroundColor: t.colors.accentTint,
+    borderTopWidth: 0,
   },
   actionRowOuter: {
     width: "100%",

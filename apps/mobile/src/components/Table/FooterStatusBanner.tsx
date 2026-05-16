@@ -1,6 +1,7 @@
 import { useNativeTheme, type NativeTheme } from "@pokington/ui/native";
+import { BlurView } from "expo-blur";
 import React, { useMemo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useColorScheme } from "react-native";
 
 interface FooterStatusBannerProps {
   message: string | null;
@@ -10,6 +11,8 @@ interface FooterStatusBannerProps {
 
 export default function FooterStatusBanner({ message, tone = "neutral", isFloating = false }: FooterStatusBannerProps) {
   const theme = useNativeTheme();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   if (!message) return null;
@@ -17,6 +20,14 @@ export default function FooterStatusBanner({ message, tone = "neutral", isFloati
   return (
     <View style={isFloating ? styles.wrapFloating : styles.wrap}>
       <View style={[styles.pill, tone === "active" && styles.activePill, isFloating && styles.pillFloating, isFloating && tone === "active" && styles.activePillFloating]}>
+        <BlurView
+          intensity={55}
+          tint={isDark ? "systemUltraThinMaterialDark" : "systemUltraThinMaterialLight"}
+          style={StyleSheet.absoluteFill}
+        />
+        {tone === "active" && (
+          <View style={[StyleSheet.absoluteFill, styles.activeOverlay, isFloating && styles.activeOverlayFloating]} />
+        )}
         <Text style={[styles.text, tone === "active" && styles.activeText]} numberOfLines={1}>
           {message}
         </Text>
@@ -42,7 +53,7 @@ function createStyles(t: NativeTheme) { return StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: t.colors.border,
-    backgroundColor: t.colors.surface,
+    overflow: "hidden",
     paddingHorizontal: 14,
     paddingVertical: 5,
     shadowColor: "#0f172a",
@@ -53,14 +64,12 @@ function createStyles(t: NativeTheme) { return StyleSheet.create({
   },
   pillFloating: {
     borderColor: t.colors.border,
-    backgroundColor: t.colors.surfaceSoft,
     shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
   },
   activePill: {
     borderColor: "rgba(248,113,113,0.36)",
-    backgroundColor: t.colors.accentTint,
     shadowColor: "#ef4444",
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -69,8 +78,14 @@ function createStyles(t: NativeTheme) { return StyleSheet.create({
   },
   activePillFloating: {
     borderColor: "rgba(248,113,113,0.28)",
-    backgroundColor: t.colors.accentTintStrong,
     shadowOpacity: 0.14,
+  },
+  activeOverlay: {
+    backgroundColor: "rgba(239,68,68,0.10)",
+    borderRadius: 999,
+  },
+  activeOverlayFloating: {
+    backgroundColor: "rgba(239,68,68,0.14)",
   },
   text: {
     color: t.colors.muted,
