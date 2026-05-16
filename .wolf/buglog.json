@@ -1126,6 +1126,54 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-16T16:05:26.589Z"
+    },
+    {
+      "id": "bug-071",
+      "timestamp": "2026-05-16T19:45:21.983Z",
+      "error_message": "Significant refactor of ",
+      "file": "apps/mobile/src/app/table/[code].tsx",
+      "root_cause": "9 lines replaced/restructured",
+      "fix": "Rewrote 27→16 lines (9 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T19:45:21.983Z"
+    },
+    {
+      "id": "bug-072",
+      "timestamp": "2026-05-16T20:00:26.907Z",
+      "error_message": "Incorrect value in code",
+      "file": "apps/mobile/src/app/table/[code].tsx",
+      "root_cause": "Had \"../../components/Table/ReconnectOverlay\"",
+      "fix": "Changed to \"../../components/Table/FeltReconnectDim\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T20:00:26.907Z"
+    },
+    {
+      "id": "bug-073",
+      "timestamp": "2026-05-16T20:00:51.420Z",
+      "error_message": "Significant refactor of ",
+      "file": "apps/mobile/src/app/table/[code].tsx",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 3→5 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-16T20:00:51.420Z"
     }
   ]
 }

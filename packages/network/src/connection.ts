@@ -72,7 +72,7 @@ export function createPartyKitGameConnection<
   let closeHandler: ((event?: unknown) => void) | null = null;
   let errorHandler: ((event: unknown) => void) | null = null;
 
-  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 25_000;
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 5_000;
 
   const clearHeartbeat = () => {
     if (heartbeatTimer) {

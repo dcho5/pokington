@@ -91,6 +91,7 @@ import {
 } from "../../components/Table/DynamicPotPanel";
 import { LedgerOverlay } from "../../components/Table/LedgerOverlay";
 import { useTimedPanelVisibility } from "../../components/Table/useTimedPanelVisibility";
+import FeltReconnectDim from "../../components/Table/FeltReconnectDim";
 
 const PROTOCOL_VERSION = 4;
 const MAX_SEATS = 10;
@@ -1461,12 +1462,14 @@ export default function TableScreen() {
   }, [nextHandStartsAt]);
 
   const nextHandMessage = nextHandSecondsLeft !== null ? `Next hand in ${nextHandSecondsLeft}s` : null;
-  const footerDisplayMessage = actionError ?? footerStatusMessage ?? nextHandMessage;
-  const footerDisplayTone = actionError ? "active" : showActiveTurnTreatment ? "active" : "neutral";
   const terminalCode = terminalError?.message ?? null;
   const showTableNotFound = terminalCode === "TABLE_NOT_FOUND" || terminalCode === "TABLE_NOT_ACTIVE";
   const showReconnectIndicator = connectionStatus !== "connected" && firstStateReceived && !terminalError;
   const showBlockingConnectionOverlay = !firstStateReceived && !showTableNotFound;
+  const isReconnecting = showReconnectIndicator || showBlockingConnectionOverlay;
+  const reconnectMessage = isReconnecting ? "Reconnecting…" : null;
+  const footerDisplayMessage = actionError ?? reconnectMessage ?? footerStatusMessage ?? nextHandMessage;
+  const footerDisplayTone = (actionError || isReconnecting) ? "active" : showActiveTurnTreatment ? "active" : "neutral";
   const blockingConnectionTitle = connectionStatus === "disconnected" ? "Reconnecting table" : "Loading table";
   const blockingConnectionMessage = connectionStatus === "disconnected"
     ? "Your connection dropped before the table finished syncing. Restoring the latest hand now."
@@ -1656,12 +1659,6 @@ export default function TableScreen() {
           headerShown: false
         }} 
       />
-      {showReconnectIndicator ? (
-        <View pointerEvents="none" style={styles.reconnectPill}>
-          <Text style={styles.reconnectDot}>●</Text>
-          <Text style={styles.reconnectText}>Reconnecting</Text>
-        </View>
-      ) : null}
       <ScreenPulseLayer active={showActiveTurnTreatment} />
       {showTableNotFound ? (
         <View style={styles.blockingOverlay}>
@@ -1674,16 +1671,6 @@ export default function TableScreen() {
           </View>
         </View>
       ) : null}
-      {showBlockingConnectionOverlay ? (
-        <View pointerEvents="none" style={styles.blockingOverlay}>
-          <View style={styles.blockingCard}>
-            <Text style={styles.blockingEyebrow}>Live Table Sync</Text>
-            <Text style={styles.blockingTitle}>{blockingConnectionTitle}</Text>
-            <Text style={styles.blockingMessage}>{blockingConnectionMessage}</Text>
-          </View>
-        </View>
-      ) : null}
-
       {/* ── Header ── */}
       <TableHeader
         tableName={tableState?.tableName ?? `Table ${roomId}`}
@@ -1693,12 +1680,8 @@ export default function TableScreen() {
         onMenu={() => setSheet("menu")}
       />
 
-      {error ? (
-        <View style={styles.errorBanner}>
-          <Text style={styles.errorTitle}>Connection issue</Text>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
+      {/* ── Felt zone (opponent strip → utility rail) ── */}
+      <View style={styles.feltZone}>
 
       {/* ── Opponent Strip ── */}
       <View style={styles.stripWrap}>
@@ -1812,6 +1795,9 @@ export default function TableScreen() {
           <Text style={styles.utilityIcon}>💰</Text>
         </Pressable>
       </View>
+
+      <FeltReconnectDim visible={showReconnectIndicator || showBlockingConnectionOverlay} />
+      </View>{/* end feltZone */}
 
       {/* ── Bottom dock (HandPanel + action dock, banner anchored here) ── */}
       <View style={styles.bottomDock}>
@@ -2099,31 +2085,8 @@ function createStyles(t: NativeTheme) { return StyleSheet.create({
     overflow: "hidden",
     backgroundColor: t.colors.background,
   },
-  reconnectPill: {
-    position: "absolute",
-    top: 12,
-    alignSelf: "center",
-    zIndex: 80,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "rgba(248,113,113,0.28)",
-    backgroundColor: "rgba(127,29,29,0.84)",
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  reconnectDot: {
-    color: "#fecaca",
-    fontSize: 10,
-  },
-  reconnectText: {
-    color: "#fff1f2",
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 2,
-    textTransform: "uppercase",
+  feltZone: {
+    flex: 1,
   },
   blockingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -2148,13 +2111,6 @@ function createStyles(t: NativeTheme) { return StyleSheet.create({
     shadowOffset: { width: 0, height: 18 },
     elevation: 12,
   },
-  blockingEyebrow: {
-    color: t.colors.accent,
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 3,
-    textTransform: "uppercase",
-  },
   blockingTitle: {
     color: t.colors.text,
     fontSize: 24,
@@ -2176,25 +2132,6 @@ function createStyles(t: NativeTheme) { return StyleSheet.create({
     zIndex: 20,
     alignItems: "center",
   },
-  errorBanner: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: t.colors.accent,
-    backgroundColor: t.colors.accentTint,
-    padding: 12,
-  },
-  errorTitle: {
-    color: t.colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-  },
-  errorText: {
-    color: t.colors.muted,
-    fontSize: 13,
-  },
-
   stripWrap: {
     paddingHorizontal: 8,
     paddingTop: 12,
