@@ -1238,6 +1238,22 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-17T14:33:55.541Z"
+    },
+    {
+      "id": "bug-078",
+      "timestamp": "2026-05-17T20:11:43.100Z",
+      "error_message": "Incorrect value in code",
+      "file": "apps/mobile/src/components/Table/PlayerBubble.tsx",
+      "root_cause": "Had \"#9ca3af\"",
+      "fix": "Changed to \"rgba(255,255,255,0.5)\"",
+      "tags": [
+        "auto-detected",
+        "wrong-value",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-17T20:11:43.100Z"
     }
   ]
 }

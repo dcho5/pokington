@@ -315,7 +315,7 @@ export default function PlayerBubble({
         {/* Peek Eye Icon (Top Left) */}
         {player.hasCards && !player.isFolded && (() => {
           const pc = player.peekedCount ?? 0;
-          const iconColor = pc === 0 ? "#9ca3af" : pc === 1 ? "#fde047" : "#34d399";
+          const iconColor = pc === 0 ? "rgba(255,255,255,0.5)" : "#ffffff";
           return (
             <View style={[
               styles.peekBadge,

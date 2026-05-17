@@ -17,8 +17,8 @@ import {
   useNativeTheme,
   type NativeTheme,
   type PlayerSummary,
+  NativeSeatManager,
 } from "@pokington/ui/native";
-import { NativeSeatManager } from "@pokington/ui/native/NativeSeatManager";
 import { useRaiseAmount } from "@pokington/ui";
 import {
   readPersistedAutoPeelPreference,
