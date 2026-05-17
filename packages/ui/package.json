@@ -12,6 +12,10 @@
       "types": "./dist/native.d.ts",
       "default": "./dist/native.js"
     },
+    "./native/NativeSeatManager": {
+      "types": "./dist/components/native/NativeSeatManager.d.ts",
+      "default": "./dist/components/native/NativeSeatManager.js"
+    },
     "./web/AnnouncementBanner": {
       "types": "./dist/components/web/Table/AnnouncementBanner.d.ts",
       "default": "./dist/components/web/Table/AnnouncementBanner.js"

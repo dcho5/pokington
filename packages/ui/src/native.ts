@@ -42,3 +42,7 @@ export {
   type NativeBoundaryControl,
   type NativeBoundaryControlOptions,
 } from "./lib/nativeBoundaryControls";
+export {
+  NativeSeatManager,
+  type NativeSeatManagerProps,
+} from "./components/native/NativeSeatManager";

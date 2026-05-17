@@ -18,6 +18,7 @@ import {
   type NativeTheme,
   type PlayerSummary,
 } from "@pokington/ui/native";
+import { NativeSeatManager } from "@pokington/ui/native/NativeSeatManager";
 import { useRaiseAmount } from "@pokington/ui";
 import {
   readPersistedAutoPeelPreference,
@@ -575,127 +576,6 @@ function NativeRaiseSheetContent({
 }
 
 
-function describePendingBoundaryUpdate(update: PendingBoundaryUpdate | null | undefined): string | null {
-  if (!update) return null;
-  if (update.leaveSeat) return "Leaving at the next hand boundary.";
-  if (update.moveToSeatIndex != null && update.chipDelta > 0) {
-    return `Moving to Seat ${update.moveToSeatIndex + 1} and adding ${formatCents(update.chipDelta)}.`;
-  }
-  if (update.moveToSeatIndex != null && update.chipDelta < 0) {
-    return `Moving to Seat ${update.moveToSeatIndex + 1} and cashing out ${formatCents(Math.abs(update.chipDelta))}.`;
-  }
-  if (update.moveToSeatIndex != null) return `Moving to Seat ${update.moveToSeatIndex + 1}.`;
-  if (update.chipDelta > 0) return `Adding ${formatCents(update.chipDelta)}.`;
-  if (update.chipDelta < 0) return `Cashing out ${formatCents(Math.abs(update.chipDelta))}.`;
-  return null;
-}
-
-function parseDollarInputToCents(value: string): number {
-  return Math.max(0, Math.round(Number(value.replace(/,/g, "") || "0") * 100));
-}
-
-function formatPresetDollars(dollars: number): string {
-  return dollars.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function NativeSeatManagerContent({
-  viewer,
-  bigBlind,
-  pendingUpdate,
-  applyImmediately,
-  amount,
-  onAmountChange,
-  onSubmit,
-  onCancelPending,
-  onDismiss,
-}: {
-  viewer: TablePlayer;
-  bigBlind: number;
-  pendingUpdate: PendingBoundaryUpdate | null;
-  applyImmediately: boolean;
-  amount: string;
-  onAmountChange: (value: string) => void;
-  onSubmit: (update: { leaveSeat?: boolean; moveToSeatIndex?: number | null; chipDelta?: number }) => void;
-  onCancelPending: () => void;
-  onDismiss: () => void;
-}) {
-  const theme = useNativeTheme();
-  const styles = useMemo(() => createStyles(theme), [theme]);
-  const presets = getBuyInPresets(bigBlind);
-  const pendingCopy = describePendingBoundaryUpdate(pendingUpdate);
-  const parsedCents = parseDollarInputToCents(amount);
-  const canSubmit = parsedCents > 0;
-  const submitLabel = applyImmediately ? "Apply Now" : "Add Chips";
-
-  return (
-    <View style={styles.seatManagerContent}>
-      <Text style={styles.sheetTitle}>{viewer.name}</Text>
-      <Text style={styles.sheetText}>
-        Seat {viewer.seatIndex + 1} · Stack {formatCents(viewer.stack)}
-      </Text>
-
-      {pendingCopy ? (
-        <View style={styles.pendingUpdateBox}>
-          <Text style={styles.pendingUpdateLabel}>QUEUED UPDATE</Text>
-          <Text style={styles.pendingUpdateText}>{pendingCopy}</Text>
-          <NativeButton
-            label="Cancel Pending Update"
-            tone="secondary"
-            onPress={onCancelPending}
-            style={styles.pendingCancelButton}
-          />
-        </View>
-      ) : null}
-
-      <Text style={styles.buyInSectionLabel}>ADD CHIPS</Text>
-      <View style={styles.buyInAmountRow}>
-        <Text style={styles.buyInDollarSign}>$</Text>
-        <NativeTextField
-          value={amount}
-          onChangeText={(text) => {
-            const m = text.replace(/,/g, "").match(/^\d*\.?\d{0,2}/);
-            onAmountChange(m ? m[0] : "");
-          }}
-          onBlur={() => {
-            const centsValue = parseDollarInputToCents(amount);
-            if (centsValue > 0) onAmountChange(formatPresetDollars(centsValue / 100));
-          }}
-          keyboardType="decimal-pad"
-          placeholder="0.00"
-          containerStyle={styles.buyInFieldFlex}
-        />
-      </View>
-
-      <View style={styles.rebuyPresetRow}>
-        {presets.map((preset) => {
-          const selected = amount === formatPresetDollars(preset.dollars);
-          return (
-            <Pressable
-              key={preset.label}
-              onPress={() => onAmountChange(formatPresetDollars(preset.dollars))}
-              style={[styles.rebuyPreset, selected && styles.rebuyPresetSelected]}
-            >
-              <Text style={[styles.rebuyPresetLabel, selected && styles.rebuyPresetLabelSelected]}>
-                ${preset.dollars % 1 === 0 ? preset.dollars.toFixed(0) : preset.dollars.toFixed(2)}
-              </Text>
-              <Text style={[styles.rebuyPresetSub, selected && styles.rebuyPresetSubSelected]}>
-                {preset.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <NativeButton
-        label={submitLabel}
-        disabled={!canSubmit}
-        onPress={() => onSubmit({ leaveSeat: false, moveToSeatIndex: null, chipDelta: parsedCents })}
-        style={styles.seatManagerButton}
-      />
-
-    </View>
-  );
-}
 
 const SCREEN_PULSE_PERIOD_MS = 2400;
 // Ticks at offsets within each 2400ms cycle. "light" = near peak (~1200ms),
@@ -1493,9 +1373,14 @@ export default function TableScreen() {
     playNativeFeedbackHaptic({ kind: "local_press", key: `seat:${seatIndex}` }, { myPlayerId });
     if (player) return;
     if (viewer) {
-      setSelectedSeatIndex(seatIndex);
-      setRebuyAmount("");
-      setSheet("seatManager");
+      if (!isWaiting) return;
+      sendViewerEvent((playerId) => ({
+        type: "REQUEST_BOUNDARY_UPDATE",
+        playerId,
+        leaveSeat: false,
+        moveToSeatIndex: seatIndex,
+        chipDelta: 0,
+      }), "medium");
       return;
     }
     setSelectedSeatIndex(seatIndex);
@@ -2050,7 +1935,7 @@ export default function TableScreen() {
         ) : null}
 
         {sheet === "seatManager" && viewer ? (
-          <NativeSeatManagerContent
+          <NativeSeatManager
             viewer={viewer}
             bigBlind={tableState?.blinds.big ?? 25}
             pendingUpdate={viewerPendingBoundaryUpdate}
