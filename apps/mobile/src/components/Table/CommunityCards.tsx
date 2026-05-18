@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import type { ViewStyle } from "react-native";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, FlatList, Pressable, StyleSheet, Text, View, useColorScheme, useWindowDimensions } from "react-native";
+import type { LayoutChangeEvent, ViewStyle, ViewToken } from "react-native";
 import { NativeCard } from "@pokington/ui/native";
 import type { Card as CardType } from "@pokington/shared";
 import type { RunResult } from "@pokington/engine";
@@ -129,6 +129,45 @@ function CardPlaceholder({ slotWidth, slotHeight }: { slotWidth: number; slotHei
   return <View style={[cardStyles.placeholder, { width: slotWidth, height: slotHeight }]} />;
 }
 
+// ── TabStrip ──────────────────────────────────────────────────────────────────
+
+function makeTabStyles(isDark: boolean) {
+  return StyleSheet.create({
+    strip: {
+      flexDirection: "row",
+      gap: 3,
+      padding: 3,
+      borderRadius: 999,
+      backgroundColor: isDark ? "rgba(255,255,255,0.10)" : "rgba(15,23,42,0.08)",
+      borderWidth: 1,
+      borderColor: isDark ? "rgba(255,255,255,0.14)" : "rgba(15,23,42,0.12)",
+    },
+    tab: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 999,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: isDark ? "rgba(255,255,255,0.16)" : "rgba(15,23,42,0.15)",
+    },
+    tabActive: {
+      backgroundColor: "#ef4444",
+      borderColor: "#ef4444",
+    },
+    tabPressed: {
+      opacity: 0.75,
+    },
+    tabText: {
+      fontSize: 11,
+      fontWeight: "900",
+      color: isDark ? "rgba(255,255,255,0.55)" : "rgba(15,23,42,0.55)",
+      letterSpacing: 0.5,
+    },
+    tabTextActive: {
+      color: "#ffffff",
+    },
+  });
+}
+
 /** Board tab strip shared by bomb-pot and run-it modes. */
 function TabStrip({
   labels,
@@ -139,8 +178,12 @@ function TabStrip({
   activeIndex: number;
   onPress: (i: number) => void;
 }) {
+  const scheme = useColorScheme();
+  const isDark = scheme === "dark";
+  const styles = useMemo(() => makeTabStyles(isDark), [isDark]);
+
   return (
-    <View style={tabStyles.strip}>
+    <View style={styles.strip}>
       {labels.map((label, i) => {
         const isActive = i === activeIndex;
         return (
@@ -148,12 +191,12 @@ function TabStrip({
             key={label}
             onPress={() => onPress(i)}
             style={({ pressed }) => [
-              tabStyles.tab,
-              isActive && tabStyles.tabActive,
-              pressed && tabStyles.tabPressed,
+              styles.tab,
+              isActive && styles.tabActive,
+              pressed && styles.tabPressed,
             ]}
           >
-            <Text style={[tabStyles.tabText, isActive && tabStyles.tabTextActive]}>
+            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
               {label}
             </Text>
           </Pressable>
@@ -162,6 +205,8 @@ function TabStrip({
     </View>
   );
 }
+
+// ── DealSlot ──────────────────────────────────────────────────────────────────
 
 function DealSlot({
   card,
@@ -241,6 +286,8 @@ function DealSlot({
   );
 }
 
+// ── CardRow ───────────────────────────────────────────────────────────────────
+
 function CardRow({
   cards,
   cardEmphasis,
@@ -305,6 +352,140 @@ function CardRow({
   );
 }
 
+// ── BoardPager ────────────────────────────────────────────────────────────────
+
+type PageDescriptor = {
+  cards: (CardType | undefined)[];
+  emphasis: Array<Emphasis> | null;
+  boardKey: string;
+  enableDealAnimation: boolean;
+};
+
+function BoardPager({
+  labels,
+  pages,
+  activeIndex,
+  onActiveIndexChange,
+  onUserInteraction,
+  handNumber,
+}: {
+  labels: string[];
+  pages: PageDescriptor[];
+  activeIndex: number;
+  onActiveIndexChange: (i: number) => void;
+  onUserInteraction?: () => void;
+  handNumber: number;
+}) {
+  // Measure the real viewport — tableMiddle has paddingHorizontal: 2, so the
+  // available width is screenWidth − 4, not screenWidth. Using window width
+  // causes snap drift that prevents reaching page ≥ 1.
+  const [pageWidth, setPageWidth] = useState(0);
+  const listRef = useRef<FlatList<PageDescriptor>>(null);
+  const lastScrolledToRef = useRef(activeIndex);
+  const isUserScrollingRef = useRef(false);
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
+  // Keep callbacks in refs so onViewableItemsChanged is reference-stable for
+  // FlatList's lifetime (changing it triggers a runtime error).
+  const onActiveIndexChangeRef = useRef(onActiveIndexChange);
+  const onUserInteractionRef = useRef(onUserInteraction);
+  useEffect(() => {
+    onActiveIndexChangeRef.current = onActiveIndexChange;
+    onUserInteractionRef.current = onUserInteraction;
+  });
+
+  const handleLayout = useCallback((e: LayoutChangeEvent) => {
+    const w = Math.round(e.nativeEvent.layout.width);
+    if (w > 0) setPageWidth((prev) => (prev === w ? prev : w));
+  }, []);
+
+  // Re-snap after a width change (rotation) so the active page stays aligned.
+  useEffect(() => {
+    if (pageWidth === 0) return;
+    listRef.current?.scrollToIndex({ index: activeIndex, animated: false });
+  }, [pageWidth]); // eslint-disable-line react-hooks/exhaustive-deps -- activeIndex intentionally omitted; width-change only
+
+  // Programmatic scroll: pill tap or auto-snap from RunItBoards
+  useEffect(() => {
+    if (pageWidth === 0) return;
+    if (lastScrolledToRef.current === activeIndex) return;
+    lastScrolledToRef.current = activeIndex;
+    listRef.current?.scrollToIndex({ index: activeIndex, animated: true });
+  }, [activeIndex, pageWidth]);
+
+  const slotWidth = pageWidth > 0
+    ? Math.floor((pageWidth - 4 * CARD_GAP_PX) / 5)
+    : 0;
+  const slotHeight = Math.round(slotWidth / 0.72);
+
+  const renderItem = useCallback(
+    ({ item }: { item: PageDescriptor }) => (
+      <View style={{ width: pageWidth }}>
+        <CardRow
+          cards={item.cards}
+          cardEmphasis={item.emphasis}
+          handNumber={handNumber}
+          boardKey={item.boardKey}
+          slotWidth={slotWidth}
+          slotHeight={slotHeight}
+          enableDealAnimation={item.enableDealAnimation}
+        />
+      </View>
+    ),
+    [pageWidth, handNumber, slotWidth, slotHeight],
+  );
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (!isUserScrollingRef.current) return;
+      if (viewableItems.length === 0) return;
+      const index = viewableItems[0]!.index;
+      if (index === null) return;
+      isUserScrollingRef.current = false;
+      lastScrolledToRef.current = index;
+      onUserInteractionRef.current?.();
+      onActiveIndexChangeRef.current(index);
+    },
+    [],
+  );
+
+  const onScrollBeginDrag = useCallback(() => {
+    isUserScrollingRef.current = true;
+    onUserInteractionRef.current?.();
+  }, []);
+
+  return (
+    <View style={boardStyles.container} onLayout={handleLayout}>
+      <TabStrip
+        labels={labels}
+        activeIndex={activeIndex}
+        onPress={onActiveIndexChange}
+      />
+      {pageWidth > 0 ? (
+        <FlatList
+          ref={listRef}
+          data={pages}
+          keyExtractor={(item) => item.boardKey}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          decelerationRate="fast"
+          snapToInterval={pageWidth}
+          snapToAlignment="start"
+          getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
+          renderItem={renderItem}
+          initialNumToRender={pages.length}
+          windowSize={Math.max(pages.length + 1, 3)}
+          onScrollBeginDrag={onScrollBeginDrag}
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          style={{ width: pageWidth }}
+        />
+      ) : null}
+    </View>
+  );
+}
+
 // ── BombPotBoards ─────────────────────────────────────────────────────────────
 
 function BombPotBoards({
@@ -314,8 +495,6 @@ function BombPotBoards({
   onActiveBoardChange,
   boardEmphasis,
   handNumber,
-  slotWidth,
-  slotHeight,
 }: {
   communityCards?: CardType[];
   communityCards2?: CardType[];
@@ -323,57 +502,28 @@ function BombPotBoards({
   onActiveBoardChange?: (i: number) => void;
   boardEmphasis: [Array<Emphasis> | null, Array<Emphasis> | null];
   handNumber: number;
-  slotWidth: number;
-  slotHeight: number;
 }) {
   const boards = [communityCards ?? [], communityCards2 ?? []];
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const pages: PageDescriptor[] = boards.map((board, i) => ({
+    cards: Array.from({ length: CARD_COUNT }, (_, j) => board[j] as CardType | undefined),
+    emphasis: boardEmphasis[i],
+    boardKey: `bomb-b${i}`,
+    enableDealAnimation: true,
+  }));
 
-  const switchBoard = useCallback(
-    (i: number) => {
-      const direction = i >= activeBoard ? 1 : -1;
-      slideAnim.setValue(direction * 24);
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-        easing: Easing.out(Easing.cubic),
-      }).start();
-      onActiveBoardChange?.(i);
-    },
-    [activeBoard, onActiveBoardChange, slideAnim],
+  const handleActiveIndexChange = useCallback(
+    (i: number) => onActiveBoardChange?.(i),
+    [onActiveBoardChange],
   );
 
   return (
-    <View style={boardStyles.container}>
-      <TabStrip
-        labels={["Board 1", "Board 2"]}
-        activeIndex={activeBoard}
-        onPress={switchBoard}
-      />
-      {/* Ghost layer — inactive board peeking behind */}
-      <View style={boardStyles.ghostLayer}>
-        <CardRow
-          cards={boards[1 - activeBoard] ?? []}
-          cardEmphasis={boardEmphasis[1 - activeBoard]}
-          handNumber={handNumber}
-          boardKey={`bomb-ghost-${activeBoard}`}
-          slotWidth={slotWidth}
-          slotHeight={slotHeight}
-        />
-      </View>
-      <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
-        <CardRow
-          cards={boards[activeBoard] ?? []}
-          cardEmphasis={boardEmphasis[activeBoard]}
-          handNumber={handNumber}
-          boardKey={`bomb-b${activeBoard}`}
-          slotWidth={slotWidth}
-          slotHeight={slotHeight}
-          enableDealAnimation
-        />
-      </Animated.View>
-    </View>
+    <BoardPager
+      labels={["Board 1", "Board 2"]}
+      pages={pages}
+      activeIndex={activeBoard}
+      onActiveIndexChange={handleActiveIndexChange}
+      handNumber={handNumber}
+    />
   );
 }
 
@@ -388,8 +538,6 @@ function RunItBoards({
   highlightedRunIndex,
   runCardEmphasis,
   runCardEmphasisByRun,
-  slotWidth,
-  slotHeight,
 }: {
   runResults: RunResult[];
   knownCardCount: number;
@@ -399,26 +547,25 @@ function RunItBoards({
   highlightedRunIndex?: number | null;
   runCardEmphasis?: Array<Emphasis> | null;
   runCardEmphasisByRun?: Array<Array<Emphasis> | null> | null;
-  slotWidth: number;
-  slotHeight: number;
 }) {
   const { currentRun, revealedCount } = deriveVisibleRunState(runResults, knownCardCount);
-  const prevViewingRun = useRef(viewingRun);
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const prevCurrentRunRef = useRef<number | null>(null);
+  const userInteractionAtRef = useRef(0);
 
-  // Slide animation when switching tabs
-  function switchTo(r: number) {
-    const direction = r >= viewingRun ? 1 : -1;
-    slideAnim.setValue(direction * 24);
-    Animated.timing(slideAnim, {
-      toValue: 0,
-      duration: 180,
-      useNativeDriver: true,
-      easing: Easing.out(Easing.cubic),
-    }).start();
-    prevViewingRun.current = viewingRun;
-    onViewingRunChange?.(r);
-  }
+  // Auto-snap to the currently dealing run when it advances, unless user recently swiped
+  useEffect(() => {
+    if (prevCurrentRunRef.current === null) {
+      prevCurrentRunRef.current = currentRun;
+      return;
+    }
+    if (currentRun === prevCurrentRunRef.current) return;
+    prevCurrentRunRef.current = currentRun;
+
+    const timeSinceInteraction = Date.now() - userInteractionAtRef.current;
+    if (timeSinceInteraction < 3000) return;
+
+    onViewingRunChange?.(currentRun);
+  }, [currentRun, onViewingRunChange]);
 
   function emphasisForRun(runIndex: number): Array<Emphasis> | null {
     return (
@@ -427,48 +574,39 @@ function RunItBoards({
     );
   }
 
-  const ghostRun = viewingRun > 0 ? viewingRun - 1 : null;
-
-  const visibleCards: (CardType | undefined)[] = Array.from({ length: CARD_COUNT }, (_, i) => {
-    const isKnown = i < knownCardCount;
-    const isPast = viewingRun < currentRun;
-    const isCurrent = viewingRun === currentRun;
-    const isRevealed = isKnown || isPast || (isCurrent && i < revealedCount);
-    return isRevealed ? runResults[viewingRun]?.board[i] : undefined;
+  const pages: PageDescriptor[] = runResults.map((_, r) => {
+    const isPast = r < currentRun;
+    const isCurrent = r === currentRun;
+    const cards = Array.from({ length: CARD_COUNT }, (_, i) => {
+      const isKnown = i < knownCardCount;
+      const isRevealed = isKnown || isPast || (isCurrent && i < revealedCount);
+      return isRevealed ? (runResults[r]!.board[i] as CardType | undefined) : undefined;
+    });
+    return {
+      cards,
+      emphasis: emphasisForRun(r),
+      boardKey: `run-${r}`,
+      enableDealAnimation: r === currentRun,
+    };
   });
 
+  const handleActiveIndexChange = useCallback(
+    (i: number) => onViewingRunChange?.(i),
+    [onViewingRunChange],
+  );
+  const handleUserInteraction = useCallback(() => {
+    userInteractionAtRef.current = Date.now();
+  }, []);
+
   return (
-    <View style={boardStyles.container}>
-      <TabStrip
-        labels={runResults.map((_, r) => `Run ${r + 1}`)}
-        activeIndex={viewingRun}
-        onPress={switchTo}
-      />
-      {/* Ghost layer */}
-      {ghostRun !== null && (
-        <View style={boardStyles.ghostLayer}>
-          <CardRow
-            cards={runResults[ghostRun]?.board ?? []}
-            cardEmphasis={emphasisForRun(ghostRun)}
-            handNumber={handNumber}
-            boardKey={`run-ghost-${ghostRun}`}
-            slotWidth={slotWidth}
-            slotHeight={slotHeight}
-          />
-        </View>
-      )}
-      <Animated.View style={{ transform: [{ translateX: slideAnim }] }}>
-        <CardRow
-          cards={visibleCards}
-          cardEmphasis={emphasisForRun(viewingRun)}
-          handNumber={handNumber}
-          boardKey={`run-${viewingRun}`}
-          slotWidth={slotWidth}
-          slotHeight={slotHeight}
-          enableDealAnimation
-        />
-      </Animated.View>
-    </View>
+    <BoardPager
+      labels={runResults.map((_, r) => `Run ${r + 1}`)}
+      pages={pages}
+      activeIndex={viewingRun}
+      onActiveIndexChange={handleActiveIndexChange}
+      onUserInteraction={handleUserInteraction}
+      handNumber={handNumber}
+    />
   );
 }
 
@@ -520,7 +658,6 @@ export default function CommunityCards({
   style,
 }: CommunityCardsProps) {
   const { width: screenWidth } = useWindowDimensions();
-  // tableMiddle has paddingHorizontal: 20 on each side — subtract 40 so cards fill and center correctly
   const slotWidth = Math.floor((screenWidth - 4 * CARD_GAP_PX) / 5);
   const slotHeight = Math.round(slotWidth / 0.72);
 
@@ -553,8 +690,6 @@ export default function CommunityCards({
           highlightedRunIndex={highlightedRunIndex}
           runCardEmphasis={runCardEmphasis}
           runCardEmphasisByRun={runCardEmphasisByRun}
-          slotWidth={slotWidth}
-          slotHeight={slotHeight}
         />
       </View>
     );
@@ -570,8 +705,6 @@ export default function CommunityCards({
           onActiveBoardChange={onActiveBoardChange}
           boardEmphasis={bombPotCardEmphasis}
           handNumber={handNumber}
-          slotWidth={slotWidth}
-          slotHeight={slotHeight}
         />
       </View>
     );
@@ -626,54 +759,16 @@ const cardStyles = StyleSheet.create({
 
 const boardStyles = StyleSheet.create({
   container: {
+    alignSelf: "stretch",
     alignItems: "center",
     gap: 8,
-  },
-  ghostLayer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    opacity: 0.18,
-    transform: [{ translateY: 8 }, { scaleX: 0.95 }],
-    zIndex: 0,
   },
 });
 
 const rootStyles = StyleSheet.create({
   container: {
+    alignSelf: "stretch",
+    width: "100%",
     alignItems: "center",
-  },
-});
-
-const tabStyles = StyleSheet.create({
-  strip: {
-    flexDirection: "row",
-    gap: 3,
-    padding: 3,
-    borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)",
-  },
-  tab: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  tabActive: {
-    backgroundColor: "#ef4444",
-  },
-  tabPressed: {
-    opacity: 0.75,
-  },
-  tabText: {
-    fontSize: 11,
-    fontWeight: "900",
-    color: "rgba(255,255,255,0.35)",
-    letterSpacing: 0.5,
-  },
-  tabTextActive: {
-    color: "#ffffff",
   },
 });

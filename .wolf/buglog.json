@@ -1254,6 +1254,138 @@
       "related_bugs": [],
       "occurrences": 1,
       "last_seen": "2026-05-17T20:11:43.100Z"
+    },
+    {
+      "id": "bug-079",
+      "timestamp": "2026-05-17T20:48:13.772Z",
+      "error_message": "Significant refactor of ",
+      "file": "../../../.claude/plans/image-1-double-board-linear-thompson.md",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 5→11 lines (2 removed) | Also: ### 3. Restyle `TabStrip` for visibility + carouse; Restyle pills so they read against the light app b",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "md"
+      ],
+      "related_bugs": [],
+      "occurrences": 2,
+      "last_seen": "2026-05-17T20:48:50.182Z"
+    },
+    {
+      "id": "bug-080",
+      "timestamp": "2026-05-17T21:05:23.173Z",
+      "error_message": "CSS fix: width",
+      "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
+      "root_cause": "width: pageWidth, overflow: \"hidden\" → pageWidth",
+      "fix": "Changed width: pageWidth, overflow: \"hidden\" → pageWidth",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-17T21:05:23.173Z"
+    },
+    {
+      "id": "bug-081",
+      "timestamp": "2026-05-17T21:05:52.093Z",
+      "error_message": "Significant refactor of ",
+      "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
+      "root_cause": "3 lines replaced/restructured",
+      "fix": "Rewrote 6→3 lines (3 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-17T21:05:52.093Z"
+    },
+    {
+      "id": "bug-082",
+      "timestamp": "2026-05-18T14:59:13.961Z",
+      "error_message": "Significant refactor of ",
+      "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
+      "root_cause": "19 lines replaced/restructured",
+      "fix": "Rewrote 80→104 lines (19 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-18T14:59:13.961Z"
+    },
+    {
+      "id": "bug-083",
+      "timestamp": "2026-05-18T16:27:50.975Z",
+      "error_message": "CSS fix: width, length",
+      "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
+      "root_cause": "width: pageWidth → screenWidth; length: pageWidth, offset: pageWidth * i, index: i → screenWidth, offset: screenWidth * i, index: i",
+      "fix": "Changed width: pageWidth → screenWidth; length: pageWidth, offset: pageWidth * i, index: i → screenWidth, offset: screenWidth * i, index: i",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-18T16:27:50.975Z"
+    },
+    {
+      "id": "bug-084",
+      "timestamp": "2026-05-18T16:27:56.511Z",
+      "error_message": "Significant refactor of ",
+      "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
+      "root_cause": "2 lines replaced/restructured",
+      "fix": "Rewrote 7→5 lines (2 removed)",
+      "tags": [
+        "auto-detected",
+        "refactor",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 1,
+      "last_seen": "2026-05-18T16:27:56.511Z"
+    },
+    {
+      "id": "bug-085",
+      "timestamp": "2026-05-18T17:06:06.424Z",
+      "error_message": "CSS fix: width, length",
+      "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
+      "root_cause": "width: screenWidth → pageWidth; length: screenWidth, offset: screenWidth * i, index: i → pageWidth, offset: pageWidth * i, index: i",
+      "fix": "Changed width: screenWidth → pageWidth; length: screenWidth, offset: screenWidth * i, index: i → pageWidth, offset: pageWidth * i, index: i",
+      "tags": [
+        "auto-detected",
+        "style-fix",
+        "tsx"
+      ],
+      "related_bugs": [],
+      "occurrences": 3,
+      "last_seen": "2026-05-18T17:06:45.516Z"
+    },
+    {
+      "id": "bug-086",
+      "timestamp": "2026-05-18T17:30:00.000Z",
+      "error_message": "Run-it carousel on native: only Run 1 visible, can't swipe to Run 2/3, pill taps no-op",
+      "file": "apps/mobile/src/components/Table/CommunityCards.tsx",
+      "root_cause": "Two coupled regressions in commit e6ede52's FlatList BoardPager: (1) page width came from useWindowDimensions() but tableMiddle's paddingHorizontal:2 makes the real viewport screenWidth-4 — snap targets drift past the viewport; (2) RunItBoards passed inline onActiveIndexChange={(i) => ...} and onUserInteraction={() => ...} lambdas, so BoardPager's onViewableItemsChanged (which listed them as deps) got a new identity every render, which RN FlatList rejects ('Changing onViewableItemsChanged on the fly is not supported'). Additionally rootStyles.container had no width anchoring, so alignSelf: stretch on boardStyles.container couldn't resolve.",
+      "fix": "BoardPager now measures actual width via onLayout into a pageWidth state and gates FlatList rendering on pageWidth > 0; uses pageWidth for item width, FlatList style, snapToInterval, and getItemLayout. onViewableItemsChanged/onScrollBeginDrag are useCallback(_, []) and read latest callbacks from refs updated in a useEffect, keeping references stable for FlatList's lifetime. rootStyles.container gains alignSelf: 'stretch' + width: '100%' so it inherits tableMiddle's inner width. slotWidth/slotHeight are derived inside BoardPager from pageWidth and dropped from BombPotBoards/RunItBoards props.",
+      "tags": [
+        "react-native",
+        "flatlist",
+        "run-it",
+        "carousel",
+        "layout",
+        "callback-stability",
+        "regression"
+      ],
+      "related_bugs": ["bug-085"],
+      "occurrences": 1,
+      "last_seen": "2026-05-18T17:30:00.000Z"
     }
   ]
 }
